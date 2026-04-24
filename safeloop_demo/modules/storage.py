@@ -768,6 +768,44 @@ def cleanup_old_cache(days: int = 30) -> tuple[int, int]:
     return removed, bytes_freed
 
 
+def cleanup_school_storage(days: int = 90) -> tuple[int, int]:
+    """8-6 수정: 학교 클라우드(`school_storage/{학교코드}/{세션ID}/`) 에서
+    N일 이상 된 세션 폴더를 통째로 삭제.
+
+    반환: (삭제된 세션 수, 회수된 바이트)
+
+    **주의**: 이 함수는 실제 점검 이력을 삭제하므로 호출 측에서 반드시
+    사용자 확인(confirm) 을 거쳐야 한다. `_ai_cache`, `_drafts` 등
+    밑줄로 시작하는 시스템 디렉터리는 보호한다.
+    """
+    if not STORAGE_DIR.exists():
+        return 0, 0
+    cutoff = datetime.datetime.now().timestamp() - days * 86400
+    removed_sessions = 0
+    bytes_freed = 0
+    for school_dir in STORAGE_DIR.iterdir():
+        # `_ai_cache`, `_drafts` 등 시스템 디렉터리 보호
+        if school_dir.name.startswith("_") or not school_dir.is_dir():
+            continue
+        for sess in list(school_dir.iterdir()):
+            if not sess.is_dir() or sess.name.startswith("_"):
+                continue
+            try:
+                mtime = sess.stat().st_mtime
+                if mtime >= cutoff:
+                    continue
+                # 세션 폴더 크기 계산
+                sess_size = _dir_size(sess)
+                # 삭제
+                import shutil
+                shutil.rmtree(sess)
+                bytes_freed += sess_size
+                removed_sessions += 1
+            except Exception:
+                continue
+    return removed_sessions, bytes_freed
+
+
 def list_recent_sessions(limit: int = 20) -> list[dict]:
     items: list[dict] = []
     for school_dir in STORAGE_DIR.iterdir():

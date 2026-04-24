@@ -236,6 +236,26 @@ def has_cached_demo_results() -> bool:
         return False
 
 
+def samples_hit_cache(images: list[bytes]) -> bool:
+    """현재 업로드된 사진 해시가 실제 캐시 stage1 파일과 일치할 때만 True.
+
+    2-12 수정: `has_cached_demo_results` 는 "어떤 캐시라도 있으면 True" 라
+    사용자가 다른 사진을 올려도 '캐시 폴백 활성화' 배너가 떴다.
+    여기선 stage1 캐시 키(광각 3장 해시)와 정확 매칭만 허용.
+    """
+    if not images:
+        return False
+    try:
+        cache_inputs = images[:3] if len(images) >= 3 else images
+        key = _hash_images(cache_inputs)
+        for provider_id in ("anthropic", "openai"):
+            if (CACHE_DIR / f"stage1_{provider_id}_{key}.json").exists():
+                return True
+        return False
+    except Exception:
+        return False
+
+
 def load_demo_pipeline_for_samples(images: list[bytes]) -> Optional[dict]:
     """샘플 사진 해시와 일치하는 캐시가 있으면 단계 1·2·3 결과를 한꺼번에 반환."""
     if not images:

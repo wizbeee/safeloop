@@ -44,6 +44,20 @@ with col_b:
     )
     st.session_state["role"] = "학교" if role == "학교 담당자" else "교육청"
 
+# 0-6 수정: 온보딩 다시 보기 버튼
+st.markdown("---")
+oc1, oc2 = st.columns([3, 1])
+with oc1:
+    st.caption(
+        "첫 방문 시 홈에 표시된 3단계 플로우 안내를 다시 보고 싶을 때 사용하세요."
+    )
+with oc2:
+    if st.button("온보딩 다시 보기", key="show_onboarding_again",
+                  use_container_width=True):
+        st.session_state["_onboarding_done"] = False
+        st.toast("홈으로 이동하면 온보딩 안내가 다시 표시됩니다.", icon="ℹ️")
+        st.switch_page("app.py")
+
 # ─────────────────────────────────────────
 # 결재라인 기본값
 # ─────────────────────────────────────────
@@ -254,6 +268,32 @@ with st.expander("관리자 도구 열기", expanded=False):
             st.success(f"{n}개 파일 삭제 · {_fmt(freed)} 회수")
         else:
             st.info("정리할 파일이 없습니다.")
+        st.rerun()
+
+    # 8-6 수정: 학교 클라우드 정리 (위험 경고 + confirm_button)
+    st.markdown("---")
+    st.markdown(
+        "<div style='border:1px solid #F8D0D0;background:#FFF6F6;"
+        "border-radius:6px;padding:10px 14px;font-size:12px;color:#D50000;'>"
+        "⚠ <b>학교 클라우드 정리</b>는 실제 점검 이력 폴더를 통째로 삭제합니다. "
+        "복구 불가 — 신중히 사용하세요. (`_ai_cache`, `_drafts` 등 시스템 폴더는 보호됩니다.)"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    sdays = st.slider("학교 클라우드 보존 기간(일)", 30, 365, 90, step=10,
+                       key="school_storage_days")
+    from modules.storage import cleanup_school_storage
+    if confirm_button(
+        f"{sdays}일 이전 학교 클라우드 점검 이력 삭제",
+        key="cleanup_school_storage",
+        message=f"⚠ {sdays}일 이상 지난 모든 학교의 점검 세션 폴더를 삭제합니다. "
+                f"이 작업은 되돌릴 수 없습니다.",
+    ):
+        n_s, freed_s = cleanup_school_storage(days=sdays)
+        if n_s:
+            st.success(f"세션 폴더 {n_s}개 삭제 · {_fmt(freed_s)} 회수")
+        else:
+            st.info("정리할 세션 폴더가 없습니다.")
         st.rerun()
 
 divider()

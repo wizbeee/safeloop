@@ -36,6 +36,27 @@ render_sidebar(active_key="inspect")
 
 hero("STEP 01", "점검 시작", "학교를 찾아 인증한 뒤, 점검할 공간을 선택하세요.")
 
+# 1-7 수정: 공간이 이미 선택된 경우 상단에 즉시 이동 가능한 바로가기 표시
+_active_sp = st.session_state.get("active_space")
+if _active_sp and st.session_state.get("auth_verified") and st.session_state.get("school"):
+    _nick = _active_sp.get("nickname") or "별칭 없음"
+    colQ1, colQ2 = st.columns([3, 2])
+    with colQ1:
+        st.markdown(
+            f"<div style='border:1px solid #E5E5E8;border-left:3px solid #D50000;"
+            f"border-radius:6px;padding:10px 14px;background:#FFF;margin-bottom:10px;'>"
+            f"<span style='font-size:11px;letter-spacing:0.2em;color:#D50000;font-weight:600;'>"
+            f"진행 중</span> "
+            f"<b style='margin-left:6px;'>{_active_sp['type']}</b>"
+            f"<span style='color:#6B6B70;'> · {_nick}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with colQ2:
+        if st.button("→ AI 점검으로 바로 이동", type="primary",
+                      key="quick_goto_ai", use_container_width=True):
+            st.switch_page("pages/2_AI점검.py")
+
 # ─────────────────────────────────────────
 # 1) 학교 찾기
 # ─────────────────────────────────────────
@@ -71,8 +92,24 @@ if not current:
             if df.empty:
                 st.info("검색 결과가 없습니다. 다른 키워드로 시도하세요.")
             else:
-                st.caption(f"{len(df)}개 일치")
-                for i, row in df.iterrows():
+                # 1-2 수정: 결과가 많을 때 페이지네이션 + 정렬
+                total_hits = len(df)
+                df = df.sort_values("학교명").reset_index(drop=True)
+                PAGE_SIZE = 20
+                page_key = f"_page_search_{q}"
+                cur_page = int(st.session_state.get(page_key, 1))
+                total_pages = max(1, (total_hits + PAGE_SIZE - 1) // PAGE_SIZE)
+                cur_page = max(1, min(cur_page, total_pages))
+
+                caption_txt = f"{total_hits}개 일치"
+                if total_hits > PAGE_SIZE:
+                    caption_txt += f" · {cur_page}/{total_pages} 페이지 (페이지당 {PAGE_SIZE}개)"
+                st.caption(caption_txt)
+
+                start = (cur_page - 1) * PAGE_SIZE
+                page_df = df.iloc[start:start + PAGE_SIZE]
+
+                for i, row in page_df.iterrows():
                     c1, c2 = st.columns([5, 1])
                     with c1:
                         st.markdown(
@@ -88,6 +125,29 @@ if not current:
                             full = get_school_by_code(row["정보공시 학교코드"])
                             st.session_state["school"] = full
                             st.session_state["auth_verified"] = False
+                            st.rerun()
+
+                # 페이지네이션 컨트롤
+                if total_hits > PAGE_SIZE:
+                    nav_prev, nav_info, nav_next = st.columns([1, 2, 1])
+                    with nav_prev:
+                        if st.button("← 이전", key=f"pg_prev_{q}",
+                                      disabled=(cur_page <= 1),
+                                      use_container_width=True):
+                            st.session_state[page_key] = cur_page - 1
+                            st.rerun()
+                    with nav_info:
+                        st.caption(
+                            f"<div style='text-align:center;padding-top:6px;'>"
+                            f"{cur_page} / {total_pages}"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with nav_next:
+                        if st.button("다음 →", key=f"pg_next_{q}",
+                                      disabled=(cur_page >= total_pages),
+                                      use_container_width=True):
+                            st.session_state[page_key] = cur_page + 1
                             st.rerun()
 
     # -- 지역 단계 검색 --
@@ -212,9 +272,27 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
                 f"</div>",
                 unsafe_allow_html=True,
             )
-            if st.button("↓ 자동 입력", key="auto_fill_auth", use_container_width=True):
-                st.session_state["_auth_prefill"] = expected
-                st.rerun()
+            # 1-3 수정: 사용자가 이미 입력한 값이 있으면 자동 입력 시 확인 요구
+            user_has_typed = (
+                auth_input
+                and auth_input != default_val
+                and auth_input != expected
+            )
+            if user_has_typed and not st.session_state.get("_confirm_autofill"):
+                st.caption(
+                    "⚠ 이미 입력된 번호가 있습니다 — 자동 입력 시 덮어씁니다."
+                )
+                if st.button("확인하고 덮어쓰기", key="auto_fill_auth_confirm",
+                              use_container_width=True):
+                    st.session_state["_auth_prefill"] = expected
+                    st.session_state["_confirm_autofill"] = False
+                    st.rerun()
+            else:
+                if st.button("↓ 자동 입력", key="auto_fill_auth",
+                              use_container_width=True):
+                    st.session_state["_auth_prefill"] = expected
+                    st.session_state["_confirm_autofill"] = False
+                    st.rerun()
         else:
             st.caption("시연 모드 OFF — 인증번호는 교육청·학교장 발급분을 사용하세요.")
 

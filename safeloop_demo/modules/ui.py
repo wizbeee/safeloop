@@ -124,6 +124,26 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
     h1 { font-size: 24px; }
     div.stButton > button, .stDownloadButton > button { min-height: 48px; font-size: 15px; }
     [data-testid="stMetricValue"] { font-size: 22px !important; }
+
+    /* G-4 수정: 모바일에서 4+컬럼 메트릭이 너무 좁아지는 문제 완화 —
+       Streamlit 컬럼은 기본적으로 가로 유지되지만, 폭이 좁아지면 자동 래핑되지 않음.
+       강제 flex-wrap 처리로 2×2 또는 세로 스택 유도. */
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 160px !important;
+        min-width: 140px !important;
+    }
+    /* 2×2 그리드를 위해 메트릭 컨테이너 폭 조절 */
+    [data-testid="stMetric"] { padding: 12px 14px; }
+    [data-testid="stMetricLabel"] { font-size: 10px !important; }
+}
+
+/* 아주 좁은 화면(~480px 이하)에서는 메트릭을 세로 스택 */
+@media (max-width: 480px) {
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
 }
 
 /* ───────── 사이드바 — 정제된 내비게이션 ───────── */
@@ -264,6 +284,16 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
     div[data-testid="stToolbar"] {
         display: none !important;
     }
+    /* G-6 수정: 인쇄 시에도 page_link 는 가려도 되지만 hero/섹션은 보여야
+       제목이 남는다. page_link 만 표적 숨김. */
+    [data-testid="stPageLink"] { display: none !important; }
+
+    /* hero 영역은 반드시 인쇄에 보이도록 명시 */
+    .sl-hero, .sl-section, .sl-kicker, .sl-title, .sl-num, .sl-h, .sl-h-sub {
+        display: block !important;
+        visibility: visible !important;
+    }
+
     .main .block-container {
         padding: 0 !important;
         max-width: 100% !important;
@@ -440,13 +470,35 @@ def desktop_columns(spec: list[float] | int = 2):
 # ─────────────────────────────────────────
 # 확인 모달 (2단계 클릭) — 파괴적 액션 안전
 # ─────────────────────────────────────────
+def _page_key_prefix() -> str:
+    """호출 프레임에서 파일명을 추출해 페이지 prefix 로 사용.
+
+    같은 `key` 를 여러 페이지에서 써도 Streamlit 위젯 키 충돌이 나지 않도록,
+    호출 위치의 파일명(stem)을 자동으로 prefix 에 섞어준다.
+    """
+    import inspect, os
+    try:
+        frame = inspect.stack()[2]  # 0=여기, 1=confirm_button, 2=호출자
+        fname = os.path.basename(frame.filename)
+        stem = os.path.splitext(fname)[0]
+        # 한글 파일명 등 특수문자는 hash 로 안정화
+        import hashlib
+        return hashlib.md5(stem.encode("utf-8")).hexdigest()[:6]
+    except Exception:
+        return "x"
+
+
 def confirm_button(label: str, key: str, message: str = "이 작업은 되돌릴 수 없습니다.",
                     use_container_width: bool = False) -> bool:
     """2단계 확인 버튼 — 첫 클릭 시 인라인 카드로 변환, 두 번째 클릭 시 실행.
 
     버튼 디자인이 갑자기 폭증하지 않도록 카드 안에 작게 배치.
+
+    G-7 수정: 호출한 페이지별로 key 에 자동 prefix 를 추가해 여러 페이지에서
+    같은 `key` 이름을 써도 Streamlit 위젯 키 충돌을 일으키지 않도록 함.
     """
-    confirm_key = f"_confirm_{key}"
+    scoped = f"{_page_key_prefix()}_{key}"
+    confirm_key = f"_confirm_{scoped}"
     if st.session_state.get(confirm_key):
         st.markdown(
             f"<div style='border:1px solid #F8D0D0; background:#FFF2F2; "
@@ -458,16 +510,16 @@ def confirm_button(label: str, key: str, message: str = "이 작업은 되돌릴
         )
         cc1, cc2 = st.columns(2, gap="small")
         with cc1:
-            if st.button(f"진행", key=f"{key}_yes", type="primary",
+            if st.button(f"진행", key=f"{scoped}_yes", type="primary",
                           use_container_width=True):
                 st.session_state[confirm_key] = False
                 return True
         with cc2:
-            if st.button("취소", key=f"{key}_no", use_container_width=True):
+            if st.button("취소", key=f"{scoped}_no", use_container_width=True):
                 st.session_state[confirm_key] = False
                 st.rerun()
         return False
-    if st.button(label, key=f"{key}_init", use_container_width=use_container_width):
+    if st.button(label, key=f"{scoped}_init", use_container_width=use_container_width):
         st.session_state[confirm_key] = True
         st.rerun()
     return False

@@ -61,9 +61,9 @@ if not sr:
 
 hero(
     "STEP 03",
-    "결과 저장 · 발송",
+    "결과 저장",
     f"{school['학교명']} · {active_space.get('type', '-')} "
-    f"({active_space.get('nickname') or '-'})",
+    f"({active_space.get('nickname') or '-'}) · 에듀파인/교육청 발송 포함",
 )
 
 # ─────────────────────────────────────────
@@ -308,16 +308,25 @@ with col_pkg1:
         if not st.session_state.get("saved_session_id"):
             save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
         st.session_state["edu_package_ready"] = True
+        # 3-3 수정: 세션 내 ZIP 캐시 초기화 (새로 빌드 필요 플래그)
+        st.session_state["_edufine_zip_cache"] = None
+        st.session_state["_edufine_letter_cache"] = None
         st.success("패키지가 준비되었습니다. 아래에서 다운로드하세요.")
 
 with col_pkg2:
     if st.session_state.get("edu_package_ready"):
-        zip_bytes = build_edufine_zip({**st.session_state,
-                                        "session_id": st.session_state.get("saved_session_id")})
+        # 3-3 수정: 세션 캐시 — rerun 시마다 매번 ZIP 재빌드하지 않음
+        sid = st.session_state.get("saved_session_id", "")
+        cache = st.session_state.get("_edufine_zip_cache") or {}
+        if cache.get("sid") != sid or cache.get("bytes") is None:
+            zip_bytes = build_edufine_zip({**st.session_state, "session_id": sid})
+            st.session_state["_edufine_zip_cache"] = {"sid": sid, "bytes": zip_bytes}
+        else:
+            zip_bytes = cache["bytes"]
         st.download_button(
             "에듀파인 ZIP 다운로드",
             zip_bytes,
-            file_name=f"에듀파인_패키지_{st.session_state.get('saved_session_id','')}.zip",
+            file_name=f"에듀파인_패키지_{sid}.zip",
             mime="application/zip",
             use_container_width=True,
             type="primary",
@@ -325,11 +334,17 @@ with col_pkg2:
 
 # 공문 품의서 단독 미리보기
 if st.session_state.get("edu_package_ready"):
-    master = build_master_record({**st.session_state,
-                                   "session_id": st.session_state.get("saved_session_id")})
+    sid = st.session_state.get("saved_session_id", "")
+    letter_cache = st.session_state.get("_edufine_letter_cache") or {}
+    if letter_cache.get("sid") != sid or letter_cache.get("bytes") is None:
+        master = build_master_record({**st.session_state, "session_id": sid})
+        letter_bytes = build_official_letter_pdf(master)
+        st.session_state["_edufine_letter_cache"] = {"sid": sid, "bytes": letter_bytes}
+    else:
+        letter_bytes = letter_cache["bytes"]
     st.download_button(
         "공문(품의서) PDF만 다운로드",
-        build_official_letter_pdf(master),
+        letter_bytes,
         file_name="에듀파인_품의서.pdf",
         mime="application/pdf",
     )

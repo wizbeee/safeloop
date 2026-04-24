@@ -14,7 +14,7 @@ import streamlit as st
 
 from modules.ai_vision import (
     api_key_available, current_provider_label,
-    has_cached_demo_results, load_demo_pipeline_for_samples,
+    has_cached_demo_results, load_demo_pipeline_for_samples, samples_hit_cache,
     run_stage1, run_stage1_cross_check, run_stage2, run_stage3,
 )
 from modules.image_quality import analyze_and_optimize
@@ -48,9 +48,32 @@ if not space:
 
 hero(
     "STEP 02",
-    "AI 맞춤 점검",
+    "AI 점검",
     f"{school['학교명']} · {space['type']}"
     + (f" · {space.get('nickname')}" if space.get("nickname") else ""),
+)
+
+# 카메라 capture 속성 주입 — 페이지당 1회만 (샷 카드마다 재삽입 시 DOM 중복)
+st.markdown(
+    """
+    <script>
+    (function(){
+        function patch(){
+            const inputs = window.parent.document.querySelectorAll('section[data-testid="stFileUploaderDropzone"] input[type="file"]');
+            inputs.forEach(el => {
+                if (!el.hasAttribute('capture')) {
+                    el.setAttribute('accept', 'image/*');
+                    el.setAttribute('capture', 'environment');
+                }
+            });
+        }
+        patch();
+        setTimeout(patch, 300);
+        setTimeout(patch, 1000);
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
 )
 
 # ─────────────────────────────────────────
@@ -196,14 +219,21 @@ if "wizard_step" not in st.session_state:
 if st.session_state["wizard_step"] not in _STEP_KEYS:
     st.session_state["wizard_step"] = "shoot_1"
 
-# 클래식 모드 토글 (한 번에 전체 보기)
-col_toggle_l, col_toggle_r = st.columns([3, 1])
+# 2-3 수정: 토글 라벨을 명확히 하고, 현재 모드를 보조 안내로 함께 표시
+col_toggle_l, col_toggle_r = st.columns([3, 2])
+with col_toggle_l:
+    _mode_hint = (
+        "모드: 전체 한 번에 보기 (모든 구도가 한 화면)"
+        if st.session_state.get("classic_mode", False)
+        else "모드: 위저드 (한 구도씩 단계별 진행)"
+    )
+    st.caption(_mode_hint)
 with col_toggle_r:
     classic_mode = st.toggle(
-        "전체 한 번에 보기",
+        "클래식 모드 (전체 한 번에 보기)",
         value=st.session_state.get("classic_mode", False),
         key="classic_mode",
-        help="위저드 대신 기존 방식(모든 구도가 한 화면).",
+        help="OFF(기본): 한 구도씩 단계별 위저드. ON: 모든 구도가 한 화면에 보임.",
     )
 step = st.session_state["wizard_step"]
 
@@ -282,27 +312,6 @@ def _render_shot_card(s: dict) -> None:
         cam_widget_key = f"cam_{key}_{st.session_state[counter_key]}"
 
         st.markdown(
-            """
-            <script>
-            (function(){
-                function patch(){
-                    const inputs = window.parent.document.querySelectorAll('section[data-testid="stFileUploaderDropzone"] input[type="file"]');
-                    inputs.forEach(el => {
-                        if (!el.hasAttribute('capture')) {
-                            el.setAttribute('accept', 'image/*');
-                            el.setAttribute('capture', 'environment');
-                        }
-                    });
-                }
-                patch();
-                setTimeout(patch, 300);
-                setTimeout(patch, 1000);
-            })();
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown(
             "<div style='font-size:12px;color:#6B6B70;margin-bottom:4px;'>"
             "버튼을 누르면 <b>카메라가 바로 실행</b>됩니다 (PC는 파일 선택 창)."
             "</div>",
@@ -316,7 +325,8 @@ def _render_shot_card(s: dict) -> None:
             label_visibility="collapsed",
         )
         if snap:
-            added = False
+            added = 0
+            rejected = 0
             existing_bytes = {p["bytes"] for p in photos}
             for f in snap:
                 new_bytes = f.getvalue()
@@ -327,10 +337,22 @@ def _render_shot_card(s: dict) -> None:
                         "source": "camera",
                     })
                     existing_bytes.add(new_bytes)
-                    added = True
+                    added += 1
+                else:
+                    rejected += 1
+            # 2-7 수정: 중복으로 거부된 사진을 toast 로 명시
+            if rejected:
+                st.toast(
+                    f"중복 사진 {rejected}장은 건너뜀 (같은 바이트)",
+                    icon="ℹ️",
+                )
             if added:
                 st.session_state[counter_key] += 1
                 _persist_draft()
+                st.rerun()
+            elif rejected:
+                # 중복만 있었던 경우에도 입력 위젯은 리셋해줘야 반복 업로드 가능
+                st.session_state[counter_key] += 1
                 st.rerun()
 
         if photos:
@@ -393,17 +415,20 @@ if st.session_state.get("demo_mode"):
             horizontal=True,
             key="sample_choice",
         )
+        st.caption(
+            "광각 3장만 업로드합니다 (AI 분석에 필요한 최소 입력). "
+            "나머지 근접 사진은 AI 실행 후 '보완' 단계에서 직접 선택해 업로드하세요."
+        )
         if st.button("샘플 불러와서 구도별 분배", use_container_width=True):
             root = Path(__file__).resolve().parent.parent / "sample_images"
             sub = "chemistry_lab" if "화학실" in sample_choice else "physics_lab"
             paths = sorted((root / sub).glob("*.jpg"))
-            # 리셋 후 분배: 앞 3장은 광각 3샷에 1:1, 나머지는 보완 샷에 누적
+            # 2-5 수정: 광각 3장만 분배 · 나머지는 무시 (보완은 사용자가 직접 선택)
             for s in SHOTS:
                 shots_state[s["key"]] = []
             wide_keys = [s["key"] for s in SHOTS if s["required"]]
-            for i, p in enumerate(paths):
-                target = wide_keys[i] if i < len(wide_keys) else "close_supplement"
-                shots_state[target].append({
+            for i, p in enumerate(paths[:len(wide_keys)]):
+                shots_state[wide_keys[i]].append({
                     "name": p.name, "bytes": p.read_bytes(), "source": "sample",
                 })
             for k in ["stage1_result", "stage2_result", "stage2_confirmed", "stage3_result"]:
@@ -580,12 +605,28 @@ if _show_ai_run:
     )
 
     key_ok = api_key_available()
-    cached_demo = has_cached_demo_results() and st.session_state.get("demo_mode", True)
+    # 2-12 수정: 단순히 "캐시 파일이 있음" 이 아니라 "현재 사진이 캐시와 정확 매칭" 인지 확인
+    _opt_for_cache = (
+        [analyze_and_optimize(b).optimized_bytes for b in all_photos[:3]]
+        if len(all_photos) >= 3 else []
+    )
+    cache_match = samples_hit_cache(_opt_for_cache)
+    cached_demo = cache_match and st.session_state.get("demo_mode", True)
+    cached_possible = (
+        has_cached_demo_results()
+        and st.session_state.get("demo_mode", True)
+        and not cache_match
+    )
 
     if not key_ok and not cached_demo:
         provider_id = st.session_state.get("ai_provider") or "anthropic"
         env_var = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}.get(
             provider_id, "API_KEY"
+        )
+        hint_cache = (
+            "\n\n💡 이전에 분석한 샘플 캐시가 남아 있습니다 — "
+            "**샘플 사진(화학실/물리실)을 그대로 불러오면** 즉시 재현됩니다."
+            if cached_possible else ""
         )
         st.warning(
             f"**AI 키가 감지되지 않았습니다** ({provider_id})\n\n"
@@ -593,12 +634,13 @@ if _show_ai_run:
             f"- `safeloop_demo/.env` 에 `{env_var}=sk-...` 추가\n"
             f"- 사이드바 **설정 → AI 공급자** 에서 키 입력\n"
             f"- 시연 모드: 샘플 사진을 한 번 분석해두면 다음부턴 캐시로 즉시 재현"
+            + hint_cache
         )
     elif not key_ok and cached_demo:
         st.info(
             "🎬 **시연 모드 — 캐시 폴백 활성화**\n\n"
-            "API 키가 없지만 이전에 분석한 샘플 사진의 결과가 캐시되어 있어 "
-            "동일 사진은 즉시 재현됩니다."
+            "현재 업로드된 사진이 이전에 분석된 캐시와 일치합니다. "
+            "API 호출 없이 즉시 결과를 재현합니다."
         )
     if key_ok or cached_demo:
         col_a, col_b = st.columns([1, 3])
@@ -912,24 +954,83 @@ if s3 and _show_checklist_and_score:
 
     # (E) 점수 계산
     divider()
-    if st.button("안전 점수 계산 · 추천 생성", type="primary", use_container_width=True):
-        from modules.laws import STANDARD_ITEMS
-        title_to_std = {}
-        for itm in items:
-            title = (itm.get("title", "") + " " + itm.get("category", ""))
+
+    # 2-16 수정: 매핑 결과 미리보기 + 매핑 실패 시 수동 매핑 UI
+    from modules.laws import STANDARD_ITEMS
+
+    def _map_items_to_std(items_list: list[dict]) -> tuple[dict, list[str]]:
+        """AI 점검표 항목 → 표준 항목 매핑 + 매핑 실패 목록 반환."""
+        t2s = {}
+        unmapped_items = []
+        for itm in items_list:
+            haystack = (itm.get("title", "") + " " + itm.get("category", "")
+                        + " " + (itm.get("basis") or ""))
+            matched_std = None
             for std in STANDARD_ITEMS:
-                if std in title:
-                    title_to_std[str(itm.get("no"))] = std
+                if std in haystack:
+                    matched_std = std
                     break
+            if matched_std:
+                t2s[str(itm.get("no"))] = matched_std
+            else:
+                unmapped_items.append(str(itm.get("no")))
+        return t2s, unmapped_items
+
+    auto_map, unmapped = _map_items_to_std(items)
+    total_items = len(items)
+    mapped_ratio = (len(auto_map) / total_items) if total_items else 0
+
+    # 매핑 실패가 있으면 수동 매핑 UI 노출
+    if total_items and (mapped_ratio < 0.7 or unmapped):
+        pct = int(mapped_ratio * 100)
+        st.warning(
+            f"⚠ 자동 매핑 결과: **{len(auto_map)}/{total_items}** 항목만 표준 설비에 자동 연결되었습니다 "
+            f"({pct}%). 미매핑 항목을 수동으로 지정하면 점수·추천 정확도가 향상됩니다."
+        )
+        with st.expander(f"수동 매핑 · 미매핑 {len(unmapped)}건 지정", expanded=False):
+            manual_map = dict(st.session_state.get("_manual_std_map") or {})
+            for itm in items:
+                no = str(itm.get("no"))
+                if no not in unmapped:
+                    continue
+                current = manual_map.get(no, "(미지정)")
+                opts = ["(미지정)"] + STANDARD_ITEMS
+                idx = opts.index(current) if current in opts else 0
+                sel = st.selectbox(
+                    f"{no}. {itm.get('title','')}",
+                    options=opts, index=idx, key=f"map_sel_{no}",
+                )
+                if sel != "(미지정)":
+                    manual_map[no] = sel
+                elif no in manual_map:
+                    manual_map.pop(no)
+            st.session_state["_manual_std_map"] = manual_map
+
+    if st.button("안전 점수 계산 · 추천 생성", type="primary", use_container_width=True):
+        title_to_std = dict(auto_map)
+        # 수동 매핑 오버라이드 (사용자 지정이 자동 매핑을 덮어씀)
+        for k, v in (st.session_state.get("_manual_std_map") or {}).items():
+            title_to_std[k] = v
+
         std_scores: dict[str, float] = {}
         for no, val in scores.items():
             std = title_to_std.get(no)
             if std and std not in std_scores:
                 std_scores[std] = val
+
+        if not std_scores:
+            st.error(
+                "매핑된 표준 설비가 하나도 없어 점수 계산이 불가합니다. "
+                "위의 '수동 매핑' 을 펼쳐 1건 이상 지정하거나 AI 점검표를 재생성하세요."
+            )
+            st.stop()
+
         result = calculate_safety_score(std_scores)
         st.session_state["score_result"] = result
         st.session_state["recommendations"] = recommend_from_scores(std_scores)
-        st.success("계산 완료")
+        st.success(
+            f"계산 완료 · 점수 산정에 사용된 표준 설비 {len(std_scores)}건"
+        )
         st.rerun()
 
 # 점수 결과

@@ -104,58 +104,80 @@ st.plotly_chart(fig2, use_container_width=True)
 # 비교 모드 — 두 시점 선택
 # ─────────────────────────────────────────
 divider()
-section("04", "두 시점 비교", "이전 vs 최근 — 카테고리별 개선/악화 한눈에")
+section("04", "두 시점 비교",
+        "같은 공간의 이전 vs 최근 — 카테고리별 개선/악화 한눈에")
+
+# 10-2 수정: 같은 공간(type + nickname)끼리만 비교 가능하도록 공간 필터 선행
 sessions_for_pick = sub[["session_id", "timestamp_dt", "space_type", "space_nickname",
                           "score", "grade"]].copy()
+sessions_for_pick["공간키"] = sessions_for_pick.apply(
+    lambda r: f"{r['space_type']} · {r['space_nickname'] or '(별칭 없음)'}", axis=1
+)
 sessions_for_pick["라벨"] = sessions_for_pick.apply(
-    lambda r: f"{r['timestamp_dt']:%Y-%m-%d %H:%M} · {r['space_type']}"
-              f" · {r['space_nickname'] or '-'} · {r['score']}점",
+    lambda r: f"{r['timestamp_dt']:%Y-%m-%d %H:%M} · {r['score']}점",
     axis=1,
 )
-sessions_for_pick = sessions_for_pick.set_index("session_id")
 
-if len(sessions_for_pick) >= 2:
+# 같은 공간으로 2회 이상 점검된 공간 목록
+counts = sessions_for_pick["공간키"].value_counts()
+comparable_spaces = counts[counts >= 2].index.tolist()
+
+if not comparable_spaces:
+    st.info(
+        "같은 공간(유형·별칭 일치)을 **2회 이상** 점검해야 비교가 활성화됩니다. "
+        "현재는 단일 점검 공간들만 있어 개선/악화를 신뢰 있게 비교할 수 없습니다."
+    )
+else:
+    space_pick = st.selectbox(
+        "비교할 공간 선택 (같은 공간만 나옴)",
+        options=comparable_spaces,
+        key="hist_space_pick",
+    )
+    space_subset = sessions_for_pick[sessions_for_pick["공간키"] == space_pick] \
+        .sort_values("timestamp_dt").set_index("session_id")
+
     col_a, col_b = st.columns(2)
     with col_a:
-        sid_old = st.selectbox("이전 시점", options=sessions_for_pick.index,
-                                format_func=lambda s: sessions_for_pick.loc[s, "라벨"],
+        sid_old = st.selectbox("이전 시점", options=space_subset.index,
+                                format_func=lambda s: space_subset.loc[s, "라벨"],
                                 index=0, key="hist_old")
     with col_b:
-        sid_new = st.selectbox("최근 시점", options=sessions_for_pick.index,
-                                format_func=lambda s: sessions_for_pick.loc[s, "라벨"],
-                                index=len(sessions_for_pick) - 1, key="hist_new")
+        sid_new = st.selectbox("최근 시점", options=space_subset.index,
+                                format_func=lambda s: space_subset.loc[s, "라벨"],
+                                index=len(space_subset) - 1, key="hist_new")
 
-    def _load(sid: str) -> dict | None:
-        path = Path(sub[sub["session_id"] == sid]["path"].iloc[0]) / "master.json"
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return None
+    if sid_old == sid_new:
+        st.caption("서로 다른 시점을 선택하세요.")
+    else:
+        def _load(sid: str) -> dict | None:
+            path = Path(sub[sub["session_id"] == sid]["path"].iloc[0]) / "master.json"
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                return None
 
-    old_m = _load(sid_old)
-    new_m = _load(sid_new)
-    if old_m and new_m:
-        old_cat = ((old_m.get("inspection") or {}).get("score_result") or {}).get("category_scores") or {}
-        new_cat = ((new_m.get("inspection") or {}).get("score_result") or {}).get("category_scores") or {}
-        cats = sorted(set(old_cat.keys()) | set(new_cat.keys()))
-        rows = []
-        for c in cats:
-            o = (old_cat.get(c, {}) or {}).get("score", 0)
-            n = (new_cat.get(c, {}) or {}).get("score", 0)
-            rows.append({"카테고리": c, "이전": o, "최근": n, "변화": n - o})
-        cmp_df = pd.DataFrame(rows)
-        st.dataframe(cmp_df, use_container_width=True, hide_index=True)
+        old_m = _load(sid_old)
+        new_m = _load(sid_new)
+        if old_m and new_m:
+            old_cat = ((old_m.get("inspection") or {}).get("score_result") or {}).get("category_scores") or {}
+            new_cat = ((new_m.get("inspection") or {}).get("score_result") or {}).get("category_scores") or {}
+            cats = sorted(set(old_cat.keys()) | set(new_cat.keys()))
+            rows = []
+            for c in cats:
+                o = (old_cat.get(c, {}) or {}).get("score", 0)
+                n = (new_cat.get(c, {}) or {}).get("score", 0)
+                rows.append({"카테고리": c, "이전": o, "최근": n, "변화": n - o})
+            cmp_df = pd.DataFrame(rows)
+            st.dataframe(cmp_df, use_container_width=True, hide_index=True)
 
-        fig3 = go.Figure()
-        fig3.add_trace(go.Bar(name="이전", x=cmp_df["카테고리"], y=cmp_df["이전"],
-                              marker_color="#9A9A9F"))
-        fig3.add_trace(go.Bar(name="최근", x=cmp_df["카테고리"], y=cmp_df["최근"],
-                              marker_color="#D50000"))
-        fig3.update_layout(barmode="group", height=320,
-                           margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig3, use_container_width=True)
-else:
-    st.caption("점검 2회 이상 누적되면 비교 모드가 활성화됩니다.")
+            fig3 = go.Figure()
+            fig3.add_trace(go.Bar(name="이전", x=cmp_df["카테고리"], y=cmp_df["이전"],
+                                  marker_color="#9A9A9F"))
+            fig3.add_trace(go.Bar(name="최근", x=cmp_df["카테고리"], y=cmp_df["최근"],
+                                  marker_color="#D50000"))
+            fig3.update_layout(barmode="group", height=320,
+                               margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig3, use_container_width=True)
 
 # ─────────────────────────────────────────
 # 전체 이력 표

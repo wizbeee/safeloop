@@ -139,12 +139,21 @@ with oc2:
         reset_inspection()
         st.session_state["demo_mode"] = True
 
-        # 데모 학교 — 결정적 선택 (정렬된 첫 결과)
+        # 0-3 수정: 자동재생 학교를 결정적으로 선택
+        # 1) 세션에 이미 사용된 데모 학교 코드가 있으면 그걸 재사용
+        # 2) 없으면 "중학교" 검색 → 학교명 정렬 → 첫 결과 → 세션에 저장
         demo_school = None
-        df = search_schools_by_name("중학교", limit=50)
-        if not df.empty:
-            df = df.sort_values("학교명").reset_index(drop=True)
-            demo_school = get_school_by_code(df.iloc[0]["정보공시 학교코드"])
+        cached_code = st.session_state.get("_demo_school_code")
+        if cached_code:
+            demo_school = get_school_by_code(cached_code)
+        if not demo_school:
+            df = search_schools_by_name("중학교", limit=50)
+            if not df.empty:
+                df = df.sort_values("학교명").reset_index(drop=True)
+                picked_code = df.iloc[0]["정보공시 학교코드"]
+                demo_school = get_school_by_code(picked_code)
+                if demo_school:
+                    st.session_state["_demo_school_code"] = picked_code
 
         if not demo_school:
             st.error("데모 학교 데이터를 찾을 수 없습니다.")

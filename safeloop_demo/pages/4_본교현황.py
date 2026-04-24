@@ -30,7 +30,7 @@ if not school:
     st.stop()
 
 hero("DASHBOARD · 내부용",
-     "본교 실시간 현황",
+     "본교 현황",
      f"{school['학교명']} — 저장 즉시 반영 · 식별 유지 (관리자·교육청용)")
 
 sessions = [s for s in list_recent_sessions(limit=200)
@@ -80,18 +80,38 @@ with left_col:
 
 with right_col:
     section("02", "점수 추이", "공간별 시계열 — 80점 B등급 기준선")
-    fig1 = px.line(
-        df, x="timestamp_dt", y="score",
-        color="space_type", markers=True,
-        labels={"timestamp_dt": "점검 일시", "score": "안전 점수", "space_type": "공간"},
-    )
-    fig1.add_hline(y=80, line_dash="dash", line_color="#4CAF50",
-                    annotation_text="B 등급")
-    fig1.add_hline(y=60, line_dash="dash", line_color="#FFC107",
-                    annotation_text="D 등급")
-    fig1.update_layout(height=320, margin=dict(l=20, r=20, t=10, b=20),
-                       paper_bgcolor="#FFF", plot_bgcolor="#FFF")
-    st.plotly_chart(fig1, use_container_width=True)
+    # 4-2 수정: 기록이 1건뿐이면 차트 대신 요약 텍스트 (점 1개 차트는 정보가 없음)
+    if len(df) == 1:
+        only = df.iloc[0]
+        st.markdown(
+            f"<div style='border:1px solid #E5E5E8;border-radius:8px;padding:18px 22px;"
+            f"background:#FAFAFA;'>"
+            f"<div style='font-size:12px;letter-spacing:0.2em;color:#6B6B70;margin-bottom:8px;'>"
+            f"첫 점검 결과</div>"
+            f"<div style='font-size:15px;color:#0A0A0B;line-height:1.7;'>"
+            f"<b>{only['space_type']}</b>"
+            f" · <b>{only['score']:.1f}점</b> ({only['grade']}등급)"
+            f" · {only['timestamp'][:16].replace('T',' ')}"
+            f"</div>"
+            f"<div style='margin-top:8px;font-size:12px;color:#9A9A9F;'>"
+            f"※ 시계열 차트는 점검이 2회 이상 누적되면 표시됩니다."
+            f"</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        fig1 = px.line(
+            df, x="timestamp_dt", y="score",
+            color="space_type", markers=True,
+            labels={"timestamp_dt": "점검 일시", "score": "안전 점수", "space_type": "공간"},
+        )
+        fig1.add_hline(y=80, line_dash="dash", line_color="#4CAF50",
+                        annotation_text="B 등급")
+        fig1.add_hline(y=60, line_dash="dash", line_color="#FFC107",
+                        annotation_text="D 등급")
+        fig1.update_layout(height=320, margin=dict(l=20, r=20, t=10, b=20),
+                           paper_bgcolor="#FFF", plot_bgcolor="#FFF")
+        st.plotly_chart(fig1, use_container_width=True)
 
     # 공간 유형별 + 등급 분포 (우측 안에서 좌-우 분할)
     sub_a, sub_b = st.columns(2, gap="medium")

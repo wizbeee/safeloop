@@ -30,43 +30,40 @@ hero("STAGE 04",
 # ─────────────────────────────────────────
 section("01", "데이터 흐름 (Sankey)")
 
+# 6-1 수정: 14노드 → 9노드 축약 (AI 맞춤 점검/학교 클라우드 저장/익명화·집계 는
+# 본문에서 충분히 설명되므로 Sankey에선 상위 단계에 통합)
 labels = [
-    "공공데이터포털 (기존)",        # 0
-    "Stage 1 대시보드 B",            # 1
-    "위험군 526개교",                # 2
-    "학교 현장 (SafeLoop 앱)",       # 3
-    "AI 맞춤 점검 결과",              # 4
-    "학교 클라우드 저장",             # 5
-    "에듀파인 결재",                  # 6
-    "교육청 수신·검증",               # 7
-    "KEIIS 업로드",                  # 8
-    "익명화·집계",                    # 9
-    "공공데이터포털 환원",            # 10
-    "대시보드 B 고도화 (BEFORE→AFTER)", # 11
-    "교육청 정책 결정",                # 12
+    "공공데이터 (기존)",              # 0
+    "대시보드 B (BEFORE)",            # 1
+    "위험군 526개교",                 # 2
+    "학교 현장 · SafeLoop 점검",      # 3
+    "에듀파인 결재",                  # 4
+    "교육청 수신·검증",               # 5
+    "KEIIS · 공공데이터 환원",        # 6
+    "대시보드 B (AFTER 고도화)",      # 7
+    "교육청 정책 결정",                # 8
 ]
-sources = [0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 9, 10, 11, 7]
-targets = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 1, 12]
-values = [100, 60, 60, 60, 60, 60, 60, 40, 20, 20, 20, 20, 30, 40]
+sources = [0, 1, 2, 3, 4, 5, 5, 6, 7]
+targets = [1, 2, 3, 4, 5, 6, 8, 7, 1]
+values = [100, 70, 70, 70, 70, 45, 25, 45, 45]
 
 fig = go.Figure(data=[go.Sankey(
     arrangement="snap",
     node=dict(
-        pad=18, thickness=18, line=dict(color="#0A0A0B", width=0.6),
+        pad=20, thickness=20, line=dict(color="#0A0A0B", width=0.6),
         label=labels,
         color=[
-            "#8BC34A", "#4CAF50", "#FFC107", "#D50000", "#D50000",
-            "#8E24AA", "#5C6BC0", "#29B6F6", "#26C6DA", "#66BB6A",
-            "#43A047", "#2E7D32", "#1B5E20", "#FF5722",
+            "#8BC34A", "#4CAF50", "#FFC107", "#D50000",
+            "#5C6BC0", "#29B6F6", "#26C6DA", "#2E7D32", "#FF5722",
         ],
     ),
     link=dict(source=sources, target=targets, value=values,
               color=["rgba(200,200,200,0.4)"] * len(sources))
 )])
-fig.update_layout(height=520, margin=dict(l=20, r=20, t=20, b=20), font=dict(size=11))
+fig.update_layout(height=480, margin=dict(l=20, r=20, t=20, b=20), font=dict(size=12))
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("※ 화살표 `7 → 1` 이 순환의 핵심 — 교육청 수신 → KEIIS → 익명화 → 공공데이터 환원 → 대시보드 B 고도화 → 다시 위험군 식별에 활용.")
+st.caption("※ `7 → 1` 이 순환의 핵심 — AFTER 해상도가 다음 분기 BEFORE 로 되돌아 가 위험군 재평가에 사용됩니다.")
 
 # ─────────────────────────────────────────
 # [2] 내 제출 데이터 타임라인
@@ -84,14 +81,31 @@ if not saved:
         action_target="pages/3_결과저장.py",
     )
 else:
+    # 6-3 수정: _approval_demo_stage 와 edufine_approved 를 함께 사용해
+    # 결재 진행도(0/5) 를 여정 타임라인에도 반영 (결과저장 페이지와 상태 동기화).
+    _stage = int(st.session_state.get("_approval_demo_stage", 0))
+    _approved = bool(st.session_state.get("edufine_approved"))
+    if _approved or _stage >= 4:
+        _edufine_mark = "✅"
+        _edufine_done = True
+        _edufine_note = f"결재 완료 · 단계 {min(_stage, 5)}/5"
+    elif _stage > 0:
+        _edufine_mark = "◐"
+        _edufine_done = False
+        _edufine_note = f"결재 진행 중 · 단계 {_stage}/5"
+    else:
+        _edufine_mark = "◯"
+        _edufine_done = False
+        _edufine_note = "결재 대기 · 1~3일 소요"
+
     stages = [
         ("✅", "학교 클라우드 저장 완료", True, "오늘"),
         ("✅", "결재용 공문 패키지 생성", True, "오늘"),
         (
-            "✅" if st.session_state.get("edufine_approved") else "◐",
+            _edufine_mark,
             "에듀파인 결재 진행/완료",
-            st.session_state.get("edufine_approved", False),
-            "1~3일 소요",
+            _edufine_done,
+            _edufine_note,
         ),
         (
             "✅" if st.session_state.get("edu_app_sent") else "◯",
