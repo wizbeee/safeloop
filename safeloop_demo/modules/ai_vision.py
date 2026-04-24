@@ -64,7 +64,66 @@ def _parse_json(raw: str) -> dict:
                 return json.loads(match.group())
             except Exception:
                 pass
+        # 응답이 max_tokens 로 잘린 경우: 마지막 완성된 item 까지 부분 복구
+        try:
+            return _recover_truncated_json(cleaned)
+        except Exception:
+            pass
         return {"raw": raw, "parse_error": True}
+
+
+def _recover_truncated_json(text: str) -> dict:
+    """응답이 도중에 잘렸을 때(예: Stage 3 체크리스트) 완성된 부분만 복구.
+
+    전략: 마지막으로 닫힌 `}` 바로 앞까지 잘라내고 `]` + `}` 를 덧붙여
+    JSON 전체 구조를 완성. `items` 배열이 있는 응답에 특화.
+    """
+    # `"items": [` 블록 찾기
+    items_start = text.find('"items"')
+    if items_start < 0:
+        raise ValueError("no items array")
+    bracket = text.find('[', items_start)
+    if bracket < 0:
+        raise ValueError("no opening bracket")
+
+    # items 내부에서 완성된 `}` 의 마지막 인덱스 찾기 (균형 추적)
+    depth_curly = 0
+    last_complete = -1
+    i = bracket + 1
+    while i < len(text):
+        ch = text[i]
+        if ch == '{':
+            depth_curly += 1
+        elif ch == '}':
+            depth_curly -= 1
+            if depth_curly == 0:
+                last_complete = i
+        # 문자열 안이면 건너뛰기
+        elif ch == '"':
+            i += 1
+            while i < len(text) and text[i] != '"':
+                if text[i] == '\\':
+                    i += 1
+                i += 1
+        i += 1
+
+    if last_complete < 0:
+        raise ValueError("no complete item")
+
+    # 복구된 JSON 조립: 앞부분(items 앞) + [완성 아이템들] + 닫는 }
+    # 뒤쪽 rationale 등이 없으므로 items 만 살려 최소 JSON 구성
+    head = text[:items_start]  # 예: {"space_type": "...", "checklist_name": "...",
+    recovered = head.rstrip().rstrip(',') + f' "items": {text[bracket:last_complete+1]}]' + ', "rationale": "(응답이 길어 일부 복구됨)"}}'
+    # 다만 recovered 의 끝이 너무 많은 }}} 이 붙을 수 있으므로 단순화된 복구:
+    # head + "items": [...] 만 감싸서 반환
+    safe = head.rstrip().rstrip(',')
+    if not safe.endswith('{'):
+        safe = safe.rstrip() + ('' if safe.endswith(',') else ',') + ' '
+    # 마지막으로 깔끔하게 파싱 가능한 최소 JSON:
+    simple = '{' + f'"items": {text[bracket:last_complete+1]}]' + ', "rationale": "(응답이 길어 일부 복구됨)"' + '}'
+    parsed = json.loads(simple)
+    parsed["_truncated_recovered"] = True
+    return parsed
 
 
 # ─────────────────────────────────────────

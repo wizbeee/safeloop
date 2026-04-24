@@ -126,10 +126,15 @@ class AnthropicProvider(VisionProvider):
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": data},
             })
 
+        # Stage 3 (text tier) 는 맞춤 점검표 20~30개 항목을 생성하므로 더 넉넉한 토큰 필요
+        # - vision (Stage 1, 2): 짧은 JSON → 4096 충분
+        # - text (Stage 3): 긴 점검표 JSON → 16000 (응답 중단 방지)
+        max_tok = 16000 if tier == "text" else 4096
+
         def _do() -> str:
             resp = client.messages.create(
                 model=self.MODELS[tier],
-                max_tokens=4096,
+                max_tokens=max_tok,
                 system=system,
                 messages=[{"role": "user", "content": content}],
             )
@@ -168,10 +173,12 @@ class OpenAIProvider(VisionProvider):
                 "image_url": {"url": f"data:image/jpeg;base64,{data}"},
             })
 
+        max_tok = 16000 if tier == "text" else 4096
+
         def _do() -> str:
             resp = client.chat.completions.create(
                 model=self.MODELS[tier],
-                max_tokens=4096,
+                max_tokens=max_tok,
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": content},
@@ -222,10 +229,12 @@ class GeminiProvider(VisionProvider):
         for b in images:
             parts.append({"mime_type": "image/jpeg", "data": b})
 
+        max_tok = 16000 if tier == "text" else 4096
+
         def _do() -> str:
             resp = model.generate_content(
                 parts,
-                generation_config={"max_output_tokens": 4096},
+                generation_config={"max_output_tokens": max_tok},
             )
             return getattr(resp, "text", "") or ""
 
