@@ -14,11 +14,13 @@ import streamlit as st
 
 from modules.session import ensure_state
 from modules.storage import EDU_RECEIPT_DIR, list_edu_inbox
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="/", layout="wide")
+st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="/",
+                   layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="edu_inbox")
 
 hero("EDU OFFICE", "교육청 담당자 수신함",
      "학교에서 에듀파인 결재 완료 후 직접 발송한 구조화 JSON 수신 — KEIIS 업로드 지원.")
@@ -48,99 +50,102 @@ if not filtered:
     st.info("수신된 데이터가 없습니다. 학교에서 결재 완료 후 '앱 직접 발송'을 수행하면 여기에 표시됩니다.")
     st.stop()
 
-# 테이블
-section("01", "수신 목록")
-df = pd.DataFrame(filtered)[["received_at", "sido", "school", "space_type", "score", "grade", "file"]]
-df.columns = ["수신일시", "시도", "학교명", "공간", "점수", "등급", "파일"]
-df["수신일시"] = df["수신일시"].astype(str).str[:16]
-st.dataframe(df, use_container_width=True, hide_index=True)
+# ─────────────────────────────────────────
+# 마스터-디테일 레이아웃 (좌 리스트 / 우 상세)
+# ─────────────────────────────────────────
+master_col, detail_col = st.columns([2, 3], gap="large")
+
+with master_col:
+    section("01", "수신 목록", f"{len(filtered)}건")
+    df = pd.DataFrame(filtered)[["received_at", "sido", "school", "space_type",
+                                  "score", "grade", "file"]]
+    df.columns = ["수신일시", "시도", "학교명", "공간", "점수", "등급", "파일"]
+    df["수신일시"] = df["수신일시"].astype(str).str[:16]
+    st.dataframe(df.drop(columns=["파일"]), use_container_width=True,
+                  hide_index=True, height=520)
 
 # 상세 보기
-divider()
-section("02", "상세 조회")
 files = [f"{x['sido']} / {x['file']}" for x in filtered]
-picked = st.selectbox("건 선택", files)
-if picked:
-    sido_name, fname = picked.split(" / ", 1)
-    target = EDU_RECEIPT_DIR / sido_name / fname
-    try:
-        data = json.loads(target.read_text(encoding="utf-8"))
-    except Exception as e:
-        st.error(f"파일 로드 실패: {e}")
-        st.stop()
+with detail_col:
+    section("02", "상세 조회")
+    picked = st.selectbox("건 선택", files, label_visibility="collapsed")
+    if picked:
+        sido_name, fname = picked.split(" / ", 1)
+        target = EDU_RECEIPT_DIR / sido_name / fname
+        try:
+            data = json.loads(target.read_text(encoding="utf-8"))
+        except Exception as e:
+            st.error(f"파일 로드 실패: {e}")
+            st.stop()
 
-    col_a, col_b = st.columns([1, 1])
-    with col_a:
-        st.markdown("#### 기본 정보")
+        st.markdown("##### 기본 정보")
         school = data.get("school_identified") or {}
         space = data.get("space") or {}
         st.markdown(f"- **학교**: {school.get('name','-')}")
         st.markdown(f"- **코드**: `{school.get('code','-')}`")
         st.markdown(f"- **소재**: {school.get('sido','-')} · {school.get('region','-')}")
         st.markdown(f"- **공간**: {space.get('type','-')} ({space.get('nickname') or '-'})")
-        st.markdown(f"- **종합점수**: **{data.get('safety_score','-')}점** / 등급 **{data.get('grade','-')}**")
+        st.markdown(f"- **종합점수**: **{data.get('safety_score','-')}점** "
+                    f"/ 등급 **{data.get('grade','-')}**")
         st.markdown(f"- **근거 법령**: {data.get('basis_law','-')}")
-        st.markdown(f"- **수신시각**: {data.get('submission_timestamp','-')}")
 
-    with col_b:
-        st.markdown("#### 카테고리 점수")
-        cat = data.get("category_scores") or {}
-        cat_df = pd.DataFrame([
-            {"카테고리": k, "점수": v.get("score", 0), "가중치합": v.get("weight_sum", 0)}
-            for k, v in cat.items()
-        ])
-        if not cat_df.empty:
-            st.dataframe(cat_df, use_container_width=True, hide_index=True)
+        with st.expander("카테고리 점수 / 설비 / 점검표 / 추천", expanded=False):
+            cat = data.get("category_scores") or {}
+            cat_df = pd.DataFrame([
+                {"카테고리": k, "점수": v.get("score", 0),
+                 "가중치합": v.get("weight_sum", 0)} for k, v in cat.items()
+            ])
+            if not cat_df.empty:
+                st.markdown("**카테고리 점수**")
+                st.dataframe(cat_df, use_container_width=True, hide_index=True)
 
-    st.markdown("#### 탐지된 설비")
-    det = data.get("detected_equipment") or []
-    if det:
-        st.dataframe(pd.DataFrame(det), use_container_width=True, hide_index=True)
-    else:
-        st.caption("데이터 없음")
+            det = data.get("detected_equipment") or []
+            if det:
+                st.markdown("**탐지된 설비**")
+                st.dataframe(pd.DataFrame(det), use_container_width=True, hide_index=True)
 
-    st.markdown("#### 부재 설비")
-    absent = data.get("absent_equipment") or []
-    if absent:
-        st.dataframe(pd.DataFrame(absent), use_container_width=True, hide_index=True)
+            absent = data.get("absent_equipment") or []
+            if absent:
+                st.markdown("**부재 설비**")
+                st.dataframe(pd.DataFrame(absent), use_container_width=True, hide_index=True)
 
-    st.markdown("#### AI 추천 (부재·불량)")
-    recs = data.get("recommendations") or []
-    if recs:
-        st.dataframe(pd.DataFrame(recs), use_container_width=True, hide_index=True)
+            recs = data.get("recommendations") or []
+            if recs:
+                st.markdown("**AI 추천**")
+                st.dataframe(pd.DataFrame(recs), use_container_width=True, hide_index=True)
 
-    st.markdown("#### 점검표")
-    items = data.get("checklist_items") or []
-    if items:
-        st.dataframe(pd.DataFrame(items), use_container_width=True, hide_index=True)
+            items = data.get("checklist_items") or []
+            if items:
+                st.markdown("**점검표**")
+                st.dataframe(pd.DataFrame(items), use_container_width=True, hide_index=True)
 
-    # 검토 액션
-    divider()
-    section("03", "검토 처리")
-    action = st.radio(
-        "검토 결과",
-        ["대기", "승인 (KEIIS 업로드 준비)", "반려 (학교에 수정 요청)"],
-        horizontal=True,
-    )
-    memo = st.text_area("검토 메모", placeholder="품질 이슈·보완 요청 사항 등")
-
-    col_x, col_y = st.columns(2)
-    with col_x:
-        if st.button("처리 저장 (시연 Mock)"):
-            log_path = target.with_suffix(".review.json")
-            log_path.write_text(
-                json.dumps({"action": action, "memo": memo}, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            st.success(f"검토 저장됨: `{log_path.name}`")
-    with col_y:
-        st.download_button(
-            "구조화 데이터 다운로드 (KEIIS 입력용 JSON)",
-            json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
-            file_name=fname,
-            mime="application/json",
-            use_container_width=True,
+        # 검토 액션
+        st.markdown("##### 검토 처리")
+        action = st.radio(
+            "검토 결과",
+            ["대기", "승인 (KEIIS 업로드 준비)", "반려 (학교에 수정 요청)"],
+            horizontal=True,
         )
+        memo = st.text_area("검토 메모", placeholder="품질 이슈·보완 요청 사항 등",
+                            height=80)
+
+        col_x, col_y = st.columns(2)
+        with col_x:
+            if st.button("처리 저장 (시연 Mock)", use_container_width=True):
+                log_path = target.with_suffix(".review.json")
+                log_path.write_text(
+                    json.dumps({"action": action, "memo": memo}, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                st.success(f"저장됨: `{log_path.name}`")
+        with col_y:
+            st.download_button(
+                "KEIIS JSON 다운로드",
+                json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
+                file_name=fname,
+                mime="application/json",
+                use_container_width=True,
+            )
 
 divider()
 st.info(

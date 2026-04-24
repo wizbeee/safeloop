@@ -13,11 +13,13 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from modules.session import ensure_state
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="데이터 순환 · SafeLoop", page_icon="/", layout="wide")
+st.set_page_config(page_title="데이터 순환 · SafeLoop", page_icon="/",
+                   layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="cycle")
 
 hero("STAGE 04",
      "데이터 순환 · 정책 활용",
@@ -120,9 +122,9 @@ else:
 # [3] 정책 활용 시나리오
 # ─────────────────────────────────────────
 divider()
-section("03", "교육청 정책 활용 시나리오")
+section("03", "교육청 정책 활용 시나리오", "공립·사립 차등 + 효과 모니터링")
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3 = st.columns(3, gap="medium")
 with c1:
     st.markdown(
         """

@@ -11,7 +11,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from modules.session import ensure_state, reset_all
-from modules.ui import apply_theme, divider
+from modules.ui import apply_theme, divider, render_sidebar
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -24,6 +24,7 @@ st.set_page_config(
 
 apply_theme()
 ensure_state()
+render_sidebar(active_key="home")
 
 # ─────────────────────────────────────────
 # 히어로
@@ -142,31 +143,13 @@ with oc2:
         else:
             st.error("데모 학교 데이터를 찾을 수 없습니다.")
 
-# ─────────────────────────────────────────
-# 사이드바 안내
-# ─────────────────────────────────────────
+# 사이드바는 render_sidebar()로 통합됨 (modules/ui.py)
 with st.sidebar:
     st.markdown(
-        "<div style='font-size:11px; letter-spacing:0.4em; color:#D50000; font-weight:600;'>"
-        "SAFELOOP</div>"
-        "<div style='font-size:14px; color:#6B6B70; margin-bottom:16px;'>세이프루프</div>",
+        "<div style='margin-top:18px; padding-top:14px; border-top:1px solid #E5E5E8;'>",
         unsafe_allow_html=True,
     )
-    st.markdown("**점검 흐름**")
-    st.markdown(
-        "<span style='color:#6B6B70; font-size:13px;'>"
-        "1. 점검 시작<br>2. AI 점검<br>3. 결과 저장·발송"
-        "</span>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("**조회**")
-    st.markdown(
-        "<span style='color:#6B6B70; font-size:13px;'>"
-        "본교 현황<br>전국 대시보드<br>데이터 순환"
-        "</span>",
-        unsafe_allow_html=True,
-    )
-    st.divider()
-    if st.button("세션 초기화", use_container_width=True):
+    if st.button("세션 초기화", key="sb_reset_home", use_container_width=True):
         reset_all()
         st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)

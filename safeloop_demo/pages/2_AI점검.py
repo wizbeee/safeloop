@@ -20,11 +20,13 @@ from modules.laws import CATEGORIES
 from modules.recommend import recommend_from_scores
 from modules.score import calculate_safety_score
 from modules.session import ensure_state, require_school
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="AI 점검 · SafeLoop", page_icon="/", layout="wide")
+st.set_page_config(page_title="AI 점검 · SafeLoop", page_icon="/",
+                   layout="wide", initial_sidebar_state="collapsed")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="ai")
 
 school = require_school()
 if not school:

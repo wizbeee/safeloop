@@ -19,11 +19,13 @@ from modules.data_loader import (
     pseudo_school_name,
 )
 from modules.session import ensure_state
-from modules.ui import apply_theme, hero, section, divider
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="전국 대시보드 · SafeLoop", page_icon="/", layout="wide")
+st.set_page_config(page_title="전국 대시보드 · SafeLoop", page_icon="/",
+                   layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="national_dash")
 
 hero("DASHBOARD · 공공용",
      "전국 대시보드",
@@ -75,67 +77,75 @@ else:
     )
 
 # ─────────────────────────────────────────
-# 필터
+# 데스크톱: 좌(필터·요약) | 우(메인 차트들)
 # ─────────────────────────────────────────
-st.subheader("시도·학교급 필터")
-f_col1, f_col2, f_col3 = st.columns(3)
-with f_col1:
+filter_col, main_col = st.columns([1, 3], gap="large")
+
+with filter_col:
+    section("02", "필터")
     sidos = ["(전체)"] + sorted(master["시도교육청"].dropna().unique().tolist())
     sel_sido = st.selectbox("시도교육청", sidos)
-with f_col2:
     levels = ["(전체)"] + sorted(master["학교급"].dropna().unique().tolist())
     sel_level = st.selectbox("학교급", levels)
-with f_col3:
     establishment = ["(전체)"] + sorted(master["설립구분"].dropna().unique().tolist())
     sel_est = st.selectbox("설립구분", establishment)
 
-subset = master.copy()
-if sel_sido != "(전체)":
-    subset = subset[subset["시도교육청"] == sel_sido]
-if sel_level != "(전체)":
-    subset = subset[subset["학교급"] == sel_level]
-if sel_est != "(전체)":
-    subset = subset[subset["설립구분"] == sel_est]
+    subset = master.copy()
+    if sel_sido != "(전체)":
+        subset = subset[subset["시도교육청"] == sel_sido]
+    if sel_level != "(전체)":
+        subset = subset[subset["학교급"] == sel_level]
+    if sel_est != "(전체)":
+        subset = subset[subset["설립구분"] == sel_est]
 
-# ─────────────────────────────────────────
-# 시도별 위험 분포
-# ─────────────────────────────────────────
-st.subheader("시도별 위험도 분포")
-fig1 = px.bar(
-    sido_sum.sort_values("고위험_비율", ascending=False),
-    x="시도교육청", y="고위험_학교수",
-    color="고위험_비율",
-    color_continuous_scale=["#4CAF50", "#FFC107", "#D50000"],
-    text="고위험_학교수",
-    labels={"고위험_학교수": "고위험 학교 수", "고위험_비율": "고위험 비율(%)"},
-)
-fig1.update_layout(height=380, margin=dict(l=20, r=20, t=20, b=40),
-                   xaxis_tickangle=-35)
-st.plotly_chart(fig1, use_container_width=True)
+    st.markdown(
+        f"<div style='margin-top:14px; padding:12px; background:#FAFAFA; "
+        f"border:1px solid #E5E5E8; border-radius:6px;'>"
+        f"<div style='font-size:11px; letter-spacing:0.16em; color:#6B6B70;'>"
+        f"필터 결과</div>"
+        f"<div style='font-size:22px; font-weight:800; color:#0A0A0B;'>"
+        f"{len(subset):,}개교</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
-# ─────────────────────────────────────────
-# 학교급·클러스터
-# ─────────────────────────────────────────
-col_a, col_b = st.columns(2)
+with main_col:
+    section("03", "시도별 위험도 분포")
+    fig1 = px.bar(
+        sido_sum.sort_values("고위험_비율", ascending=False),
+        x="시도교육청", y="고위험_학교수",
+        color="고위험_비율",
+        color_continuous_scale=["#4CAF50", "#FFC107", "#D50000"],
+        text="고위험_학교수",
+        labels={"고위험_학교수": "고위험 학교 수", "고위험_비율": "고위험 비율(%)"},
+    )
+    fig1.update_layout(height=320, margin=dict(l=20, r=20, t=10, b=40),
+                       xaxis_tickangle=-35,
+                       paper_bgcolor="#FFF", plot_bgcolor="#FFF")
+    st.plotly_chart(fig1, use_container_width=True)
 
-with col_a:
-    st.subheader("학교급별 위험군 구성")
-    level_risk = hr.groupby("학교급").size().reset_index(name="고위험 수")
-    level_total = master.groupby("학교급").size().reset_index(name="전체")
-    merged = level_risk.merge(level_total, on="학교급", how="left")
-    merged["비율(%)"] = (merged["고위험 수"] / merged["전체"] * 100).round(1)
-    fig2 = px.bar(merged, x="학교급", y=["고위험 수", "전체"], barmode="group",
-                  color_discrete_map={"고위험 수": "#D50000", "전체": "#C0C0C0"})
-    fig2.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig2, use_container_width=True)
+    sub_a, sub_b = st.columns(2, gap="medium")
+    with sub_a:
+        st.markdown("<div class='sl-h' style='font-size:15px;margin:18px 0 6px;'>"
+                    "학교급별 위험군 구성</div>", unsafe_allow_html=True)
+        level_risk = hr.groupby("학교급").size().reset_index(name="고위험 수")
+        level_total = master.groupby("학교급").size().reset_index(name="전체")
+        merged = level_risk.merge(level_total, on="학교급", how="left")
+        merged["비율(%)"] = (merged["고위험 수"] / merged["전체"] * 100).round(1)
+        fig2 = px.bar(merged, x="학교급", y=["고위험 수", "전체"], barmode="group",
+                      color_discrete_map={"고위험 수": "#D50000", "전체": "#C0C0C0"})
+        fig2.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=20))
+        st.plotly_chart(fig2, use_container_width=True)
 
-with col_b:
-    st.subheader("K-Means 3 클러스터")
-    fig3 = px.bar(cluster, x="위험군", y="학교수", text="학교수",
-                  color="위험군",
-                  color_discrete_map={"고위험": "#D50000", "주의": "#FFC107", "양호": "#4CAF50"})
-    fig3.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig3, use_container_width=True)
+    with sub_b:
+        st.markdown("<div class='sl-h' style='font-size:15px;margin:18px 0 6px;'>"
+                    "K-Means 3 클러스터</div>", unsafe_allow_html=True)
+        fig3 = px.bar(cluster, x="위험군", y="학교수", text="학교수",
+                      color="위험군",
+                      color_discrete_map={"고위험": "#D50000", "주의": "#FFC107",
+                                          "양호": "#4CAF50"})
+        fig3.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=20))
+        st.plotly_chart(fig3, use_container_width=True)
 
 # ─────────────────────────────────────────
 # 고위험군 테이블 (익명화)

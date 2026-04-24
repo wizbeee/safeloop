@@ -24,11 +24,13 @@ from modules.data_loader import (
     verify_auth_code,
 )
 from modules.session import ensure_state
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="점검 시작 · SafeLoop", page_icon="/", layout="centered")
+st.set_page_config(page_title="점검 시작 · SafeLoop", page_icon="/",
+                   layout="centered", initial_sidebar_state="collapsed")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="inspect")
 
 hero("STEP 01", "점검 시작", "학교를 찾아 인증한 뒤, 점검할 공간을 선택하세요.")
 

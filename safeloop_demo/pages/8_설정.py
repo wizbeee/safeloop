@@ -16,11 +16,13 @@ import streamlit as st
 from modules.ai_vision import api_key_available, current_provider_label
 from modules.ai_providers import ALL_PROVIDERS, providers_status
 from modules.session import ensure_state, reset_all
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="설정 · SafeLoop", page_icon="/", layout="centered")
+st.set_page_config(page_title="설정 · SafeLoop", page_icon="/",
+                   layout="centered", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="settings")
 
 hero("SETTINGS", "설정", "운영 모드 · 결재라인 · 사전 등록 · 시스템 상태")
 

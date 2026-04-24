@@ -128,22 +128,27 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
 
 /* ───────── 사이드바 ───────── */
 [data-testid="stSidebar"] { border-right: 1px solid #E5E5E8; }
-[data-testid="stSidebar"] .block-container { padding-top: 1.6rem; }
-[data-testid="stSidebarNav"] li a,
-[data-testid="stSidebarNav"] li a * {
-    font-size: 13px !important; font-weight: 500; padding: 8px 12px !important;
-    border-radius: 4px; color: #0A0A0B !important;
+[data-testid="stSidebar"] .block-container { padding-top: 1.2rem; padding-bottom: 2rem; }
+
+/* Streamlit 기본 페이지 nav 숨김 — 우리 render_sidebar 사용 */
+[data-testid="stSidebarNav"] { display: none; }
+
+/* 사이드바 내부 버튼: 보조 톤 (홈처럼 두지 않음) */
+[data-testid="stSidebar"] div.stButton > button {
+    background: #FFFFFF; color: #0A0A0B; border: 1px solid #E5E5E8;
+    font-size: 13px; min-height: 36px; padding: 6px 10px;
+    text-align: left; justify-content: flex-start; font-weight: 500;
 }
-[data-testid="stSidebarNav"] li a:hover,
-[data-testid="stSidebarNav"] li a:hover * { background: #FAFAFA; color: #0A0A0B !important; }
-[data-testid="stSidebarNav"] li a[aria-current="page"],
-[data-testid="stSidebarNav"] li a[aria-current="page"] * {
-    background: #0A0A0B; color: #FFFFFF !important; font-weight: 600;
+[data-testid="stSidebar"] div.stButton > button:hover {
+    background: #FAFAFA; border-color: #0A0A0B;
 }
-/* 사이드바 내부 버튼도 동일 원칙: 검정 배경엔 흰 글자 강제 */
 [data-testid="stSidebar"] div.stButton > button[kind="primary"],
 [data-testid="stSidebar"] div.stButton > button[kind="primary"] * {
-    color: #FFFFFF !important;
+    background: #0A0A0B; color: #FFFFFF !important; border-color: #0A0A0B;
+    text-align: center; justify-content: center; font-weight: 600;
+}
+[data-testid="stSidebar"] div.stButton > button[kind="primary"]:hover {
+    background: #D50000; border-color: #D50000;
 }
 
 /* ───────── 표 ───────── */
@@ -184,6 +189,44 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
 
 .sl-status-ok { color: #1B8A3A; font-weight: 600; font-size: 12px; }
 .sl-status-empty { color: #9A9A9F; font-weight: 500; font-size: 12px; }
+
+/* ───────── 키보드 포커스 강화 ───────── */
+*:focus-visible {
+    outline: 2px solid #D50000 !important;
+    outline-offset: 2px !important;
+    border-radius: 4px;
+}
+
+/* ───────── 모바일 사이드바 햄버거 가독성 ───────── */
+@media (max-width: 768px) {
+    [data-testid="collapsedControl"] svg {
+        width: 28px !important; height: 28px !important;
+    }
+}
+
+/* ───────── 인쇄 (Ctrl+P / 보고서 출력 친화) ───────── */
+@media print {
+    [data-testid="stSidebar"],
+    [data-testid="stHeader"],
+    [data-testid="collapsedControl"],
+    .stButton, .stDownloadButton,
+    div[role="radiogroup"],
+    div[data-testid="stToolbar"] {
+        display: none !important;
+    }
+    .main .block-container {
+        padding: 0 !important;
+        max-width: 100% !important;
+    }
+    .sl-card { box-shadow: none !important; page-break-inside: avoid; }
+    .sl-hero, .sl-section { page-break-after: avoid; }
+    h1, h2, h3 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+    @page { size: A4; margin: 1.5cm; }
+    .sl-kicker, .sl-num { color: #000 !important; }
+    .sl-card-accent { border-left: 2px solid #000 !important; }
+    a { color: #000 !important; text-decoration: underline; }
+}
 </style>
 """
 
@@ -218,6 +261,161 @@ def apply_theme() -> None:
     """페이지 최상단에서 호출 — 공통 CSS + PWA 메타 주입."""
     st.markdown(_CSS, unsafe_allow_html=True)
     st.markdown(_PWA_META, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────
+# 공용 사이드바 — 역할/컨텍스트 + 빠른 액션
+# ─────────────────────────────────────────
+def render_sidebar(active_key: str = "") -> None:
+    """모든 페이지가 호출하는 공통 사이드바.
+
+    active_key: 현재 페이지 식별자 (예: "home", "inspect", "ai", "save",
+                                  "school_dash", "national_dash", "cycle",
+                                  "edu_inbox", "settings", "about",
+                                  "history", "policy")
+    역할에 따라 추천 메뉴를 강조한다.
+    """
+    role = st.session_state.get("role", "학교")
+    school = st.session_state.get("school")
+    space = st.session_state.get("active_space")
+
+    with st.sidebar:
+        st.markdown(
+            "<div style='font-size:11px; letter-spacing:0.4em; color:#D50000; "
+            "font-weight:700; padding-top:6px;'>SAFELOOP</div>"
+            "<div style='font-size:13px; color:#6B6B70; margin-bottom:14px;'>"
+            "세이프루프 · 학교 안전 순환</div>",
+            unsafe_allow_html=True,
+        )
+
+        # 컨텍스트 카드
+        if school or space:
+            ctx_lines = []
+            if school:
+                ctx_lines.append(f"<b>{school.get('학교명','-')}</b>")
+                ctx_lines.append(
+                    f"<span style='color:#6B6B70;font-size:11px'>"
+                    f"{school.get('학교급','-')} · {school.get('설립구분','-')}</span>"
+                )
+            if space:
+                nick = space.get("nickname") or "별칭 없음"
+                ctx_lines.append(
+                    f"<span style='color:#0A0A0B;font-size:12px;'>"
+                    f"공간: {space.get('type','-')} · {nick}</span>"
+                )
+            st.markdown(
+                "<div style='border:1px solid #E5E5E8; border-left:3px solid #D50000; "
+                "padding:10px 12px; border-radius:4px; margin-bottom:14px; "
+                "font-size:13px; line-height:1.5;'>"
+                + "<br>".join(ctx_lines) + "</div>",
+                unsafe_allow_html=True,
+            )
+
+        # 역할
+        st.markdown(
+            f"<div style='font-size:11px; letter-spacing:0.16em; color:#6B6B70;'>역할</div>"
+            f"<div style='font-size:14px; font-weight:600; margin-bottom:10px;'>{role} 담당자</div>",
+            unsafe_allow_html=True,
+        )
+
+        # 빠른 액션
+        st.markdown(
+            "<div style='font-size:11px; letter-spacing:0.16em; color:#6B6B70; "
+            "margin-top:6px; margin-bottom:6px;'>빠른 액션</div>",
+            unsafe_allow_html=True,
+        )
+        if role == "교육청":
+            if st.button("교육청 수신함 열기", key=f"sb_quick_inbox_{active_key}",
+                          use_container_width=True, type="primary"):
+                st.switch_page("pages/7_교육청수신함.py")
+        else:
+            if st.button("점검 시작", key=f"sb_quick_inspect_{active_key}",
+                          use_container_width=True, type="primary"):
+                st.switch_page("pages/1_점검시작.py")
+            if school and st.button("본교 현황", key=f"sb_quick_dash_{active_key}",
+                                     use_container_width=True):
+                st.switch_page("pages/4_본교현황.py")
+
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # 추천 강조 메뉴 그룹 (역할별)
+        recommended = {
+            "학교": {"inspect", "ai", "save", "school_dash", "history"},
+            "교육청": {"edu_inbox", "national_dash", "cycle", "policy"},
+        }.get(role, set())
+
+        groups = [
+            ("점검 흐름", [
+                ("home", "홈", "app.py"),
+                ("inspect", "1 점검 시작", "pages/1_점검시작.py"),
+                ("ai", "2 AI 점검", "pages/2_AI점검.py"),
+                ("save", "3 결과 저장", "pages/3_결과저장.py"),
+            ]),
+            ("조회·분석", [
+                ("school_dash", "본교 현황", "pages/4_본교현황.py"),
+                ("national_dash", "전국 대시보드", "pages/5_전국대시보드.py"),
+                ("history", "점검 이력", "pages/10_점검이력.py"),
+            ]),
+            ("정책·운영", [
+                ("cycle", "데이터 순환", "pages/6_데이터순환.py"),
+                ("edu_inbox", "교육청 수신함", "pages/7_교육청수신함.py"),
+                ("policy", "정책 시뮬레이터", "pages/11_정책시뮬레이터.py"),
+            ]),
+            ("기타", [
+                ("settings", "설정", "pages/8_설정.py"),
+                ("about", "프로젝트 소개", "pages/9_프로젝트소개.py"),
+            ]),
+        ]
+
+        for group_label, items in groups:
+            st.markdown(
+                f"<div style='font-size:11px; letter-spacing:0.16em; color:#6B6B70; "
+                f"margin-top:14px; margin-bottom:4px;'>{group_label}</div>",
+                unsafe_allow_html=True,
+            )
+            for key, label, target in items:
+                is_active = key == active_key
+                is_recommended = key in recommended
+                weight = "700" if is_recommended else "500"
+                color = "#D50000" if is_active else ("#0A0A0B" if is_recommended else "#6B6B70")
+                bg = "#FFF2F2" if is_active else "transparent"
+                badge = " ●" if is_recommended and not is_active else ""
+                btn_label = f"{label}{badge}"
+                # st.page_link 사용 (현재 페이지면 비활성)
+                if is_active:
+                    st.markdown(
+                        f"<div style='padding:6px 10px; font-size:13px; font-weight:{weight}; "
+                        f"color:{color}; background:{bg}; border-radius:4px; "
+                        f"border-left:2px solid #D50000;'>{label}</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    if st.button(btn_label, key=f"sb_nav_{key}_{active_key}",
+                                  use_container_width=True):
+                        st.switch_page(target)
+
+        # 데모 URL · 도움말
+        st.markdown(
+            "<div style='margin-top:24px; padding-top:14px; border-top:1px solid #E5E5E8; "
+            "font-size:11px; color:#9A9A9F;'>"
+            "데모 URL은 배포 후 추가됩니다.<br>"
+            "도움말: README.md / SETUP_ON_NEW_MACHINE.md"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+
+# ─────────────────────────────────────────
+# 반응형 컬럼 헬퍼
+# ─────────────────────────────────────────
+def desktop_columns(spec: list[float] | int = 2):
+    """데스크톱에선 좌-우 분할, 모바일에선 자동 세로 스택.
+
+    Streamlit의 st.columns는 너비가 좁아지면 자동으로 세로 스택되므로
+    spec 비율만 지정하면 된다. 의도를 명확히 하기 위한 별칭.
+    """
+    return st.columns(spec)
+
 
 
 def hero(kicker: str, title: str, subtitle: str = "") -> None:

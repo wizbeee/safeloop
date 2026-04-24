@@ -16,11 +16,13 @@ import streamlit as st
 
 from modules.session import ensure_state
 from modules.storage import STORAGE_DIR, list_recent_sessions
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="점검 이력 · SafeLoop", page_icon="/", layout="wide")
+st.set_page_config(page_title="점검 이력 · SafeLoop", page_icon="/",
+                   layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="history")
 
 hero("HISTORY", "점검 이력",
      "학교 클라우드에 누적된 모든 점검 결과를 시계열·공간별로 추적합니다.")
@@ -43,43 +45,44 @@ default_code = school.get("정보공시 학교코드") if school else None
 codes = sorted(df["school_code"].unique().tolist())
 labels = {c: f"{c}  ·  {df[df['school_code']==c]['school_name'].iloc[-1]}" for c in codes}
 
-section("01", "학교 선택")
-sel_code = st.selectbox(
-    "학교",
-    options=codes,
-    index=codes.index(default_code) if default_code in codes else 0,
-    format_func=lambda c: labels.get(c, c),
-)
-sub = df[df["school_code"] == sel_code].copy()
-school_name = sub["school_name"].iloc[-1] if len(sub) else sel_code
+# ─────────────────────────────────────────
+# 데스크톱: 좌(학교 선택 + KPI) | 우(시계열 추이)
+# ─────────────────────────────────────────
+left_col, right_col = st.columns([1, 2], gap="large")
 
-# ─────────────────────────────────────────
-# 요약 카드
-# ─────────────────────────────────────────
-divider()
-section("02", f"{school_name} · 누적 통계")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("총 점검 수", f"{len(sub)}회")
-c2.metric("평균 점수", f"{sub['score'].mean():.1f}점")
-c3.metric("점검 공간 종류", f"{sub['space_type'].nunique()}종")
-c4.metric("최근 점검", str(sub["timestamp_dt"].max().date()))
+with left_col:
+    section("01", "학교 선택")
+    sel_code = st.selectbox(
+        "학교",
+        options=codes,
+        index=codes.index(default_code) if default_code in codes else 0,
+        format_func=lambda c: labels.get(c, c),
+        label_visibility="collapsed",
+    )
+    sub = df[df["school_code"] == sel_code].copy()
+    school_name = sub["school_name"].iloc[-1] if len(sub) else sel_code
 
-# ─────────────────────────────────────────
-# 시계열 추이
-# ─────────────────────────────────────────
-divider()
-section("03", "시계열 추이")
-fig = px.line(
-    sub, x="timestamp_dt", y="score",
-    color="space_type", markers=True,
-    labels={"timestamp_dt": "점검 일시", "score": "안전 점수", "space_type": "공간 유형"},
-)
-fig.add_hrect(y0=80, y1=100, fillcolor="#4CAF50", opacity=0.06, line_width=0)
-fig.add_hrect(y0=60, y1=80, fillcolor="#FFC107", opacity=0.06, line_width=0)
-fig.add_hrect(y0=0, y1=60, fillcolor="#D50000", opacity=0.06, line_width=0)
-fig.update_layout(height=380, margin=dict(l=20, r=20, t=20, b=20),
-                  paper_bgcolor="#FFF", plot_bgcolor="#FFF")
-st.plotly_chart(fig, use_container_width=True)
+    st.markdown(f"<div style='margin-top:14px; font-size:12px; color:#6B6B70; "
+                f"letter-spacing:0.16em;'>누적 통계 · {school_name}</div>",
+                unsafe_allow_html=True)
+    st.metric("총 점검 수", f"{len(sub)}회")
+    st.metric("평균 점수", f"{sub['score'].mean():.1f}점")
+    st.metric("점검 공간 종류", f"{sub['space_type'].nunique()}종")
+    st.metric("최근 점검", str(sub["timestamp_dt"].max().date()))
+
+with right_col:
+    section("02", "시계열 추이", "공간별 색상 — 등급 구간 음영")
+    fig = px.line(
+        sub, x="timestamp_dt", y="score",
+        color="space_type", markers=True,
+        labels={"timestamp_dt": "점검 일시", "score": "안전 점수", "space_type": "공간 유형"},
+    )
+    fig.add_hrect(y0=80, y1=100, fillcolor="#4CAF50", opacity=0.06, line_width=0)
+    fig.add_hrect(y0=60, y1=80, fillcolor="#FFC107", opacity=0.06, line_width=0)
+    fig.add_hrect(y0=0, y1=60, fillcolor="#D50000", opacity=0.06, line_width=0)
+    fig.update_layout(height=380, margin=dict(l=20, r=20, t=10, b=20),
+                      paper_bgcolor="#FFF", plot_bgcolor="#FFF")
+    st.plotly_chart(fig, use_container_width=True)
 
 # ─────────────────────────────────────────
 # 공간별 박스플롯 (분포)

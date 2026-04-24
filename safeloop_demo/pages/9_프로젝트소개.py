@@ -8,11 +8,13 @@ import streamlit as st
 
 from modules.laws import CORE_LAWS, LAW_BASIS
 from modules.session import ensure_state
-from modules.ui import apply_theme, divider, hero, section
+from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="프로젝트 소개 · SafeLoop", page_icon="/", layout="wide")
+st.set_page_config(page_title="프로젝트 소개 · SafeLoop", page_icon="/",
+                   layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()
+render_sidebar(active_key="about")
 
 hero("ABOUT", "세이프루프 (SafeLoop)",
      "공공데이터로 시작해, 공공데이터로 돌아옵니다. 학교 안전의 순환 구조.")
