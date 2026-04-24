@@ -14,7 +14,7 @@ import streamlit as st
 
 from modules.session import ensure_state
 from modules.storage import EDU_RECEIPT_DIR, list_edu_inbox
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
 st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
@@ -47,7 +47,10 @@ sel_sido = st.selectbox("시도 필터", ["(전체)"] + sidos)
 filtered = inbox if sel_sido == "(전체)" else [x for x in inbox if x["sido"] == sel_sido]
 
 if not filtered:
-    st.info("수신된 데이터가 없습니다. 학교에서 결재 완료 후 '앱 직접 발송'을 수행하면 여기에 표시됩니다.")
+    empty_state(
+        title="수신된 데이터가 없습니다",
+        description="학교에서 결재 완료 후 '앱 직접 발송'을 수행하면 이 화면에 누적됩니다.",
+    )
     st.stop()
 
 # ─────────────────────────────────────────
@@ -132,7 +135,8 @@ with detail_col:
         col_x, col_y = st.columns(2)
         with col_x:
             if st.button("처리 저장 (시연 Mock)", use_container_width=True):
-                log_path = target.with_suffix(".review.json")
+                # 7-3: 원본 .json 보호 — stem에 .review.json 확장자 추가
+                log_path = target.parent / (target.stem + ".review.json")
                 log_path.write_text(
                     json.dumps({"action": action, "memo": memo}, ensure_ascii=False, indent=2),
                     encoding="utf-8",

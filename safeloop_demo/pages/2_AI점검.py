@@ -525,6 +525,8 @@ else:
             next_step="review",
             next_label="결과 단계로 →",
         )
+        if not supplement_photos:
+            st.caption("보완 촬영이 필요 없다면 그대로 ‘결과 단계로’ 진행해도 됩니다.")
 
     elif step == "review":
         # 결과 단계는 아래 (B)/(C)/(D)/(E) 블록이 렌더
@@ -735,15 +737,20 @@ if s1 and _show_stage1:
     with col3:
         tag = "캐시" if s1.get("_cached") else "신규"
         st.metric(f"처리 시간({tag})", f"{s1.get('_elapsed_sec','?')}초")
-    # 교차검증 결과 표시
+    # 교차검증 결과 표시 (ERROR 경우 포함)
     cc = st.session_state.get("stage1_cross_check")
     if cc and cc.get("by_provider"):
         agree = cc.get("agreement")
-        if agree:
+        has_error = any("error" in r for r in cc["by_provider"].values())
+        if has_error:
+            errs = [f"{pid}: {r['error'][:60]}" for pid, r in cc["by_provider"].items()
+                    if "error" in r]
+            st.warning(f"교차검증 일부 공급자 실패 — {'; '.join(errs)}")
+        elif agree:
             st.success(f"교차검증 합의 ✓ — 두 공급자 모두 '{cc.get('consensus')}'로 판정")
         else:
             results_str = ", ".join(
-                f"{pid}={(r.get('space_type_primary') or 'ERROR')}"
+                f"{pid}={r.get('space_type_primary', 'ERROR')}"
                 for pid, r in cc["by_provider"].items()
             )
             st.warning(f"교차검증 불일치 — {results_str}")

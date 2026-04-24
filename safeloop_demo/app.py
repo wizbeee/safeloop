@@ -83,9 +83,7 @@ with mode_c2:
     st.session_state["role"] = "학교" if role == "학교 담당자" else "교육청"
 
 if st.session_state["role"] == "교육청":
-    st.info("교육청 담당자 모드입니다. 아래 버튼으로 수신함을 여세요.")
-    if st.button("교육청 수신함 열기", use_container_width=True):
-        st.switch_page("pages/7_교육청수신함.py")
+    st.caption("교육청 담당자 모드 — 사이드바 '교육청 수신함' 메뉴로 이동하세요.")
 
 # ─────────────────────────────────────────
 # 첫 방문 온보딩 + 데모 자동재생 (간이)

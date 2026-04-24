@@ -49,7 +49,11 @@ with col_b:
 # ─────────────────────────────────────────
 divider()
 section("02", "결재라인 기본값")
-st.caption("저장하면 공문 품의서에 자동 반영됩니다.")
+st.caption("저장하면 공문 품의서에 자동 반영됩니다. 학교를 선택하면 영구 저장 가능.")
+
+if not st.session_state.get("school"):
+    st.info("학교를 선택하면 결재라인이 학교 프로필에 영구 저장됩니다. "
+            "지금은 세션에만 저장됩니다.")
 
 eduline = st.session_state.get("eduline") or {}
 c1, c2 = st.columns(2)
@@ -170,7 +174,8 @@ new_key = st.text_input(
 if new_key != existing:
     st.session_state[key_field] = new_key.strip()
 
-if st.button("키 저장·연결 확인"):
+st.caption("키는 입력 즉시 세션에 저장됩니다. 아래 버튼은 공급자에 실제 ping 호출로 연결 확인만 합니다.")
+if st.button("연결 확인 (ping)"):
     if not api_key_available():
         st.error("이 공급자의 API 키가 감지되지 않습니다.")
     else:

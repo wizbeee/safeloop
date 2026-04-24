@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from modules.session import ensure_state
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
 st.set_page_config(page_title="데이터 순환 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
@@ -77,7 +77,12 @@ section("02", "내 제출 데이터 여정")
 saved = st.session_state.get("saved_session_id")
 school = st.session_state.get("school")
 if not saved:
-    st.info("아직 저장된 점검 결과가 없습니다. 결과 저장·발송 페이지에서 저장 후 돌아와주세요.")
+    empty_state(
+        title="내 제출 데이터가 없습니다",
+        description="결과 저장·발송 페이지에서 저장을 마치면 이 자리에 여정이 표시됩니다.",
+        action_label="결과 저장으로",
+        action_target="pages/3_결과저장.py",
+    )
 else:
     stages = [
         ("✅", "학교 클라우드 저장 완료", True, "오늘"),

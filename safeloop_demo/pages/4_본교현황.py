@@ -38,8 +38,8 @@ sessions = [s for s in list_recent_sessions(limit=200)
 
 if not sessions:
     empty_state(
-        title="아직 저장된 점검이 없습니다",
-        description="AI 점검 후 결과를 저장하면 이 화면에 누적·시각화됩니다.",
+        title=f"{school.get('학교명','이 학교')}에 저장된 점검이 없습니다",
+        description="AI 점검 후 결과 저장을 누르면 이 화면에 누적·시각화됩니다.",
         action_label="지금 점검 시작",
         action_target="pages/1_점검시작.py",
     )

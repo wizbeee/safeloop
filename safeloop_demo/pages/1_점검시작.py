@@ -170,8 +170,9 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
         unsafe_allow_html=True,
     )
 
-    # 인증번호 안내 — 혼란 해소
-    with st.expander("ⓘ 담당자 인증번호란? (처음이라면 먼저 읽어보세요)", expanded=not st.session_state.get("_seen_auth_help")):
+    # 1-4: 플래그를 expander 바깥에서 설정 — 한 번이라도 페이지 보면 이후 접힘
+    _was_seen = st.session_state.get("_seen_auth_help", False)
+    with st.expander("ⓘ 담당자 인증번호란? (처음이라면 먼저 읽어보세요)", expanded=not _was_seen):
         st.markdown(
             "**담당자 인증번호**는 점검을 등록할 자격이 있는 **담당 교사·시설관리자**를 증명하는 6자리 숫자 비밀번호입니다.\n\n"
             "- **학교 코드**(예: `S120002870`)는 위에 자동 표시됩니다 — 공개 정보, 입력 불필요\n"
@@ -180,7 +181,7 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
             "- **이 앱은 시연용**이므로 실제 발급 체계가 없어, 우측의 <span style='color:#D50000;font-weight:700'>시연 모드 번호</span>를 그대로 입력하거나 **자동 입력** 버튼을 누르면 됩니다",
             unsafe_allow_html=True,
         )
-        st.session_state["_seen_auth_help"] = True
+    st.session_state["_seen_auth_help"] = True
 
     # 인증번호 (수동 입력 + 시연용 자동 입력)
     colA, colB = st.columns([3, 2])

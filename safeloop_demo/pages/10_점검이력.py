@@ -16,7 +16,7 @@ import streamlit as st
 
 from modules.session import ensure_state
 from modules.storage import STORAGE_DIR, list_recent_sessions
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
 st.set_page_config(page_title="점검 이력 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
@@ -32,7 +32,12 @@ hero("HISTORY", "점검 이력",
 # ─────────────────────────────────────────
 all_sessions = list_recent_sessions(limit=10000)
 if not all_sessions:
-    st.info("아직 저장된 점검이 없습니다. AI 점검을 마친 뒤 결과 저장을 누르면 이 화면에 누적됩니다.")
+    empty_state(
+        title="누적된 점검 이력이 없습니다",
+        description="AI 점검 → 결과 저장을 한 번 이상 수행하면 이 화면에 시계열·비교가 표시됩니다.",
+        action_label="지금 점검 시작",
+        action_target="pages/1_점검시작.py",
+    )
     st.stop()
 
 df = pd.DataFrame(all_sessions)
@@ -88,7 +93,7 @@ with right_col:
 # 공간별 박스플롯 (분포)
 # ─────────────────────────────────────────
 divider()
-section("04", "공간 유형별 점수 분포")
+section("03", "공간 유형별 점수 분포")
 fig2 = px.box(sub, x="space_type", y="score", points="all",
               color_discrete_sequence=["#D50000"],
               labels={"space_type": "공간 유형", "score": "점수"})
@@ -99,7 +104,7 @@ st.plotly_chart(fig2, use_container_width=True)
 # 비교 모드 — 두 시점 선택
 # ─────────────────────────────────────────
 divider()
-section("05", "두 시점 비교", "이전 vs 최근 — 카테고리별 개선/악화 한눈에")
+section("04", "두 시점 비교", "이전 vs 최근 — 카테고리별 개선/악화 한눈에")
 sessions_for_pick = sub[["session_id", "timestamp_dt", "space_type", "space_nickname",
                           "score", "grade"]].copy()
 sessions_for_pick["라벨"] = sessions_for_pick.apply(
@@ -156,7 +161,7 @@ else:
 # 전체 이력 표
 # ─────────────────────────────────────────
 divider()
-section("06", "전체 이력")
+section("05", "전체 이력")
 table = sub[["timestamp_dt", "space_type", "space_nickname", "score", "grade", "session_id"]].copy()
 table.columns = ["점검 일시", "공간 유형", "별칭", "점수", "등급", "세션 ID"]
 table = table.sort_values("점검 일시", ascending=False)

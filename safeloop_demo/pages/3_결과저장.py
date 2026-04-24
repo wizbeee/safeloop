@@ -253,16 +253,24 @@ def _render_approval_chain(stage_idx: int) -> None:
 
 _approval_stage = int(st.session_state.get("_approval_demo_stage", 0))
 _render_approval_chain(_approval_stage)
-sim_col1, sim_col2 = st.columns([1, 1])
+sim_col1, sim_col2, sim_col3 = st.columns(3)
 with sim_col1:
-    if st.button("결재 한 단계 진행 (시연)", key="approval_step",
-                 disabled=_approval_stage >= 5):
+    if st.button("한 단계 진행", key="approval_step",
+                 disabled=_approval_stage >= 5, use_container_width=True):
         st.session_state["_approval_demo_stage"] = min(_approval_stage + 1, 5)
         if st.session_state["_approval_demo_stage"] >= 4:
             st.session_state["edufine_approved"] = True
         st.rerun()
 with sim_col2:
-    if st.button("결재 단계 초기화", key="approval_reset"):
+    if st.button("결재 즉시 완료 (시연용)", key="approval_fastforward",
+                 type="primary",
+                 disabled=_approval_stage >= 4 or not st.session_state.get("demo_mode", True),
+                 use_container_width=True):
+        st.session_state["_approval_demo_stage"] = 4
+        st.session_state["edufine_approved"] = True
+        st.rerun()
+with sim_col3:
+    if st.button("초기화", key="approval_reset", use_container_width=True):
         st.session_state["_approval_demo_stage"] = 0
         st.session_state["edufine_approved"] = False
         st.rerun()
@@ -339,12 +347,17 @@ st.markdown(
 
 col_ap1, col_ap2 = st.columns(2)
 with col_ap1:
+    auto_approved = st.session_state.get("_approval_demo_stage", 0) >= 4
     approved = st.checkbox(
         "에듀파인 결재 완료 확인",
         value=st.session_state.get("edufine_approved", False),
-        help="에듀파인에서 결재가 완료된 경우에만 체크하세요. 결재 미완료 상태에서 전송 시 학교 행정 원칙 위반.",
+        disabled=auto_approved,
+        help=("자동 결재 시뮬이 완료되어 체크 고정됨" if auto_approved
+              else "에듀파인에서 결재가 완료된 경우에만 체크하세요."),
     )
-    st.session_state["edufine_approved"] = approved
+    if not auto_approved:
+        st.session_state["edufine_approved"] = approved
+    approved = st.session_state.get("edufine_approved", False)
 
 with col_ap2:
     if st.button("교육청 수신함으로 전송", type="primary", use_container_width=True,
@@ -372,10 +385,12 @@ if st.session_state.get("edu_app_sent"):
         st.switch_page("pages/4_본교현황.py")
 
 divider()
-colX, colY = st.columns(2)
-if colX.button("다른 공간 이어서 점검", use_container_width=True):
-    from modules.session import reset_inspection
-    reset_inspection()
-    st.switch_page("pages/1_점검시작.py")
-if colY.button("홈으로", use_container_width=True):
-    st.switch_page("app.py")
+# 3-6: 저장 이후에만 다음 액션 버튼 노출
+if st.session_state.get("saved_session_id"):
+    colX, colY = st.columns(2)
+    if colX.button("다른 공간 이어서 점검", use_container_width=True):
+        from modules.session import reset_inspection
+        reset_inspection()
+        st.switch_page("pages/1_점검시작.py")
+    if colY.button("홈으로", use_container_width=True):
+        st.switch_page("app.py")

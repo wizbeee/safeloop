@@ -148,7 +148,7 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/app.py:121-125`
 - 수정: 데모 학교 코드 하드코딩 (예: 자동재생 시 정렬 후 첫 결과 안정)
 
-### 0-5 시연 모드 OFF + 교육청 모드 중복 진입 ⏳
+### 0-5 시연 모드 OFF + 교육청 모드 중복 진입 ✅
 - 파일: `safeloop_demo/app.py:85-88`
 - 수정: 사이드바에 같은 메뉴 있으므로 홈의 안내 박스 제거
 
@@ -164,7 +164,7 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/pages/1_점검시작.py:185-199`
 - 수정: 사용자 입력값 있으면 confirm
 
-### 1-4 _seen_auth_help 위치 버그 ⏳
+### 1-4 _seen_auth_help 위치 버그 ✅
 - 파일: `safeloop_demo/pages/1_점검시작.py:173-182`
 - 수정: expander 바깥에서 `_seen_auth_help=True` 설정
 
@@ -192,7 +192,7 @@ cat HANDOFF_FIX50.md
 - 파일: `modules/session.py:71-85`
 - 수정: reset_inspection에서 cam_ctr_* 키도 카운터 증가
 
-### 2-10 supplement 다음 안내 ⏳
+### 2-10 supplement 다음 안내 ✅
 - 파일: `safeloop_demo/pages/2_AI점검.py:509-513`
 - 수정: 보완 안 했을 때 caption "보완 없이 결과로 가시려면 그대로 다음"
 
@@ -200,7 +200,7 @@ cat HANDOFF_FIX50.md
 - 파일: `modules/ai_vision.py:226`
 - 수정: 현재 사진 해시로 정확 매칭 시에만 cached 표시
 
-### 2-14 교차검증 ERROR 표시 ⏳
+### 2-14 교차검증 ERROR 표시 ✅
 - 파일: `safeloop_demo/pages/2_AI점검.py:720-730`
 - 수정: provider 별 에러도 표시
 
@@ -217,19 +217,19 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/pages/3_결과저장.py:283-294`
 - 수정: 세션에 캐시
 
-### 3-4 결재 시뮬 5번 클릭 ⏳
+### 3-4 결재 시뮬 5번 클릭 ✅
 - 파일: `safeloop_demo/pages/3_결과저장.py:243-260`
 - 수정: "결재 즉시 완료 (시연용)" 빠른 버튼 추가
 
-### 3-5 결재 자동 + 수동 충돌 ⏳
+### 3-5 결재 자동 + 수동 충돌 ✅
 - 파일: `safeloop_demo/pages/3_결과저장.py:255-257`
 - 수정: 자동 시 체크박스 disabled
 
-### 3-6 발송 안 한 상태 버튼 노출 ⏳
+### 3-6 발송 안 한 상태 버튼 노출 ✅
 - 파일: `safeloop_demo/pages/3_결과저장.py:354-360`
 - 수정: edu_app_sent 조건 추가
 
-### 4-1 빈 상태 메시지 부정확 ⏳
+### 4-1 빈 상태 메시지 부정확 ✅
 - 파일: `safeloop_demo/pages/4_본교현황.py:26-46`
 - 수정: 메시지 정확화
 
@@ -237,11 +237,11 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/pages/4_본교현황.py:99-113`
 - 수정: 1개일 땐 텍스트로 표시
 
-### 5-3 고위험군 리스트 컬럼 밖 ⏳
+### 5-3 고위험군 리스트 컬럼 밖 ✅
 - 파일: `safeloop_demo/pages/5_전국대시보드.py:157-170`
 - 수정: divider 후 명시적 풀폭 섹션으로
 
-### 5-4 사이드바 안내 이모지 ⏳
+### 5-4 사이드바 안내 이모지 ✅
 - 파일: `safeloop_demo/pages/5_전국대시보드.py:184-188`
 - 수정: 이모지 제거
 
@@ -249,7 +249,7 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/pages/6_데이터순환.py:33-65`
 - 수정: 14노드 → 8~10노드로 축약
 
-### 6-2 여정 빈 상태 ⏳
+### 6-2 여정 빈 상태 ✅
 - 파일: `safeloop_demo/pages/6_데이터순환.py:77-80`
 - 수정: 본교 클라우드 데이터 있을 때 다른 안내
 
@@ -257,23 +257,23 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/pages/6_데이터순환.py:82-101`
 - 수정: _approval_demo_stage 도 함께 사용
 
-### 7-1 빈 수신함 디자인 ⏳
+### 7-1 빈 수신함 디자인 ✅
 - 파일: `safeloop_demo/pages/7_교육청수신함.py:49-51`
 - 수정: empty_state 사용
 
-### 7-3 .review.json 원본 손상 위험 ⏳
+### 7-3 .review.json 원본 손상 위험 ✅
 - 파일: `safeloop_demo/pages/7_교육청수신함.py:135-139`
 - 수정: with_suffix 대신 stem + ".review.json" 형태
 
-### 8-2 결재라인 학교 미선택 시 일관성 ⏳
+### 8-2 결재라인 학교 미선택 시 일관성 ✅
 - 파일: `safeloop_demo/pages/8_설정.py:63-72`
 - 수정: 공간 사전 등록과 동일하게 학교 선택 안내
 
-### 8-3 공간 사전 등록 학교 미선택 시 일관성 ⏳
+### 8-3 공간 사전 등록 학교 미선택 시 일관성 ✅
 - 파일: `safeloop_demo/pages/8_설정.py:81-83`
 - 수정: 결재라인과 동일 패턴
 
-### 8-5 키 저장 버튼 의미 ⏳
+### 8-5 키 저장 버튼 의미 ✅
 - 파일: `safeloop_demo/pages/8_설정.py:170-182`
 - 수정: 라벨 "연결 확인"으로 변경 (저장은 자동임을 명시)
 
@@ -283,7 +283,7 @@ cat HANDOFF_FIX50.md
 
 ### 9-1 (없음 — 9_프로젝트소개는 이슈 없음)
 
-### 10-1 점검 이력 03 누락 ⏳
+### 10-1 점검 이력 03 누락 ✅
 - 파일: `safeloop_demo/pages/10_점검이력.py`
 - 수정: 섹션 번호 재정렬
 
@@ -291,15 +291,15 @@ cat HANDOFF_FIX50.md
 - 파일: `safeloop_demo/pages/10_점검이력.py:101-153`
 - 수정: 같은 공간일 때만 비교 활성화
 
-### 11-1 정책시뮬 03 누락 ⏳
+### 11-1 정책시뮬 03 누락 ✅
 - 파일: `safeloop_demo/pages/11_정책시뮬레이터.py`
 - 수정: 섹션 번호 재정렬
 
-### 11-2 면책 문구 중복 ⏳
+### 11-2 면책 문구 중복 ✅
 - 파일: `safeloop_demo/pages/11_정책시뮬레이터.py:65-72, 169-173`
 - 수정: 한 곳만 유지
 
-### 11-3 가짜 부재율 라벨 ⏳
+### 11-3 가짜 부재율 라벨 ✅
 - 파일: `safeloop_demo/pages/11_정책시뮬레이터.py:144-146`
 - 수정: "(시연용 가상값)" 라벨 명시
 
