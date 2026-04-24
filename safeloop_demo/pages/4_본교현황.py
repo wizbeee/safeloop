@@ -22,6 +22,17 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="school_dash")
 
+# 역할 가드 — '본교 현황' 은 학교 담당자 전용
+# (교육청 담당자는 '본교' 개념이 없으므로 전국 대시보드로 유도)
+if st.session_state.get("role") == "교육청":
+    st.warning(
+        "🏛 **교육청 담당자 모드** — '본교 현황' 은 학교 담당자가 자신의 학교 데이터를 "
+        "확인하는 내부용 화면입니다. 교육청 관점에서는 '전국 대시보드' 를 사용하세요."
+    )
+    if st.button("→ 전국 대시보드로 이동", type="primary"):
+        st.switch_page("pages/5_전국대시보드.py")
+    st.stop()
+
 school = st.session_state.get("school")
 if not school:
     st.warning("학교가 선택되지 않았습니다. 점검 시작에서 학교를 선택하세요.")

@@ -25,9 +25,25 @@ render_sidebar(active_key="edu_inbox")
 hero("EDU OFFICE", "교육청 담당자 수신함",
      "학교에서 에듀파인 결재 완료 후 직접 발송한 구조화 JSON 수신 — KEIIS 업로드 지원.")
 
-# 역할 안내
+# 역할 가드 — 학교 담당자는 수신함을 열람할 권한이 없으므로 홈으로 안내
 if st.session_state.get("role") != "교육청":
-    st.warning("현재 역할이 **학교 담당자**로 설정되어 있습니다. 홈에서 '교육청 담당자'로 전환하면 본 수신함이 주 화면이 됩니다.")
+    st.warning(
+        "🏫 **학교 담당자 모드** — '교육청 수신함' 은 교육청 담당자가 관할 학교의 "
+        "제출물을 검증·수신하는 관리 화면입니다. 교육청 담당자로 전환해야 이용 가능합니다."
+    )
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("← 홈으로 돌아가기"):
+            st.switch_page("app.py")
+    with col_b:
+        if st.button("교육청 담당자로 전환", type="primary"):
+            from modules.session import reset_inspection
+            reset_inspection()
+            st.session_state["school"] = None
+            st.session_state["auth_verified"] = False
+            st.session_state["role"] = "교육청"
+            st.rerun()
+    st.stop()
 
 # 수신함 리스트
 inbox = list_edu_inbox()

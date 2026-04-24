@@ -24,6 +24,17 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="history")
 
+# 역할 가드 — '점검 이력' 은 학교 담당자가 본교 이력을 추적하는 도구
+# 교육청 담당자는 전체 학교 이력 대신 '교육청 수신함' 또는 '전국 대시보드' 사용
+if st.session_state.get("role") == "교육청":
+    st.warning(
+        "🏛 **교육청 담당자 모드** — '점검 이력' 은 학교 담당자가 본교의 점검 시계열을 "
+        "추적하는 화면입니다. 교육청 관점의 수신 데이터는 '교육청 수신함'을 이용하세요."
+    )
+    if st.button("→ 교육청 수신함으로 이동", type="primary"):
+        st.switch_page("pages/7_교육청수신함.py")
+    st.stop()
+
 hero("HISTORY", "점검 이력",
      "학교 클라우드에 누적된 모든 점검 결과를 시계열·공간별로 추적합니다.")
 

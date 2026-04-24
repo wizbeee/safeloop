@@ -28,6 +28,28 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="policy")
 
+# 역할 가드 — '정책 시뮬레이터' 는 교육청 담당자의 예산 편성 의사결정 도구
+# 학교 담당자는 개별 학교 안전 점검이 주 업무이므로 이 기능을 노출하지 않음
+if st.session_state.get("role") != "교육청":
+    st.warning(
+        "🏫 **학교 담당자 모드** — '정책 시뮬레이터' 는 교육청 담당자가 관할 위험군 526개교에 "
+        "예산을 투입할 때의 효과를 추정하는 의사결정 도구입니다. 학교 담당자는 개별 학교의 "
+        "안전 점검과 결재가 주 업무이므로 이 기능은 필요하지 않습니다."
+    )
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("← 홈으로 돌아가기"):
+            st.switch_page("app.py")
+    with col_b:
+        if st.button("교육청 담당자로 전환", type="primary"):
+            from modules.session import reset_inspection
+            reset_inspection()
+            st.session_state["school"] = None
+            st.session_state["auth_verified"] = False
+            st.session_state["role"] = "교육청"
+            st.rerun()
+    st.stop()
+
 hero("STAGE 04 EXTENSION", "정책 시뮬레이터",
      "위험군에 예산을 투입했을 때 안전도 변화 추정 · 실무 단가 기준 로그 감쇠 모델")
 
