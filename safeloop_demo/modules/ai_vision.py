@@ -218,3 +218,47 @@ def api_key_available() -> bool:
 
 def current_provider_label() -> str:
     return get_provider().label
+
+
+def has_cached_demo_results() -> bool:
+    """샘플 사진(13장) 결과가 캐시에 있는지 — 시연 폴백 가능성."""
+    try:
+        return any(CACHE_DIR.glob("stage*_*.json"))
+    except Exception:
+        return False
+
+
+def load_demo_pipeline_for_samples(images: list[bytes]) -> Optional[dict]:
+    """샘플 사진 해시와 일치하는 캐시가 있으면 단계 1·2·3 결과를 한꺼번에 반환."""
+    if not images:
+        return None
+    img_hash = _hash_images(images)
+    # 어떤 공급자든 캐시되어 있으면 사용
+    for provider_id in ("anthropic", "openai"):
+        s1_path = CACHE_DIR / f"stage1_{provider_id}_{img_hash}.json"
+        if not s1_path.exists():
+            continue
+        try:
+            s1 = json.loads(s1_path.read_text(encoding="utf-8"))
+            space_type = s1.get("space_type_primary", "")
+            s2_key = f"{img_hash}_{space_type}"
+            s2_path = CACHE_DIR / f"stage2_{provider_id}_{s2_key}.json"
+            if not s2_path.exists():
+                continue
+            s2 = json.loads(s2_path.read_text(encoding="utf-8"))
+            # stage3 키 (stage1·2 결과 해시)
+            clean1 = {k: v for k, v in s1.items() if not k.startswith("_")}
+            clean2 = {k: v for k, v in s2.items() if not k.startswith("_")}
+            payload = json.dumps({"stage1": clean1, "stage2": clean2},
+                                  ensure_ascii=False, sort_keys=True)
+            s3_key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+            s3_path = CACHE_DIR / f"stage3_{provider_id}_{s3_key}.json"
+            if not s3_path.exists():
+                continue
+            s3 = json.loads(s3_path.read_text(encoding="utf-8"))
+            for r in (s1, s2, s3):
+                r["_cached"] = True
+            return {"stage1": s1, "stage2": s2, "stage3": s3}
+        except Exception:
+            continue
+    return None

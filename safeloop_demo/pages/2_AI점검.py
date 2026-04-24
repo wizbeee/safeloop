@@ -13,7 +13,9 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from modules.ai_vision import (
-    api_key_available, run_stage1, run_stage1_cross_check, run_stage2, run_stage3,
+    api_key_available, current_provider_label,
+    has_cached_demo_results, load_demo_pipeline_for_samples,
+    run_stage1, run_stage1_cross_check, run_stage2, run_stage3,
 )
 from modules.image_quality import analyze_and_optimize
 from modules.laws import CATEGORIES
@@ -123,7 +125,7 @@ else:
 shots_state: dict = st.session_state["shots"]
 
 # ─────────────────────────────────────────
-# 드래프트 복원 안내 (새로고침/재진입 시)
+# 드래프트 복원 안내 (새로고침/재진입 시) — 정제된 인라인 카드
 # ─────────────────────────────────────────
 school_code = school.get("정보공시 학교코드", "")
 empty_now = sum(len(v) for v in shots_state.values()) == 0
@@ -131,19 +133,29 @@ if empty_now and has_draft(school_code) and not st.session_state.get("_draft_res
     summary = draft_summary(school_code) or {}
     n = summary.get("photo_count", 0)
     when = (summary.get("updated_at") or "")[:16].replace("T", " ")
-    st.warning(
-        f"이전에 작성하다 멈춘 촬영 드래프트가 있습니다 — **{n}장** · 마지막 저장 {when}"
+    st.markdown(
+        f"<div style='border:1px solid #E5E5E8; border-left:3px solid #D50000; "
+        f"background:#FFF; border-radius:6px; padding:14px 18px; margin:8px 0 14px 0; "
+        f"display:flex; align-items:center; justify-content:space-between; gap:14px;'>"
+        f"<div>"
+        f"<div style='font-size:11px; letter-spacing:0.2em; color:#D50000; "
+        f"font-weight:600;'>중단된 작업 발견</div>"
+        f"<div style='font-size:14px; color:#0A0A0B; margin-top:4px;'>"
+        f"이 학교 촬영본 <b>{n}장</b>이 임시 저장되어 있습니다 · {when}</div>"
+        f"</div></div>",
+        unsafe_allow_html=True,
     )
     rc1, rc2, _ = st.columns([1, 1, 3])
     with rc1:
-        if st.button("이어서 작업", type="primary", key="restore_draft"):
+        if st.button("이어서 작업", type="primary", key="restore_draft",
+                      use_container_width=True):
             restored = load_draft_shots(school_code)
             for k, v in restored.items():
                 shots_state[k] = v
             st.session_state["_draft_restored"] = True
             st.rerun()
     with rc2:
-        if st.button("드래프트 폐기", key="discard_draft"):
+        if st.button("새로 시작", key="discard_draft", use_container_width=True):
             clear_draft(school_code)
             st.session_state["_draft_restored"] = True
             st.rerun()
@@ -551,9 +563,28 @@ if _show_ai_run:
            else " · 필수 3장을 먼저 채우세요"),
     )
 
-    if not api_key_available():
-        st.error("ANTHROPIC_API_KEY가 설정되지 않았습니다. .env 또는 Streamlit Secrets를 확인하세요.")
-    else:
+    key_ok = api_key_available()
+    cached_demo = has_cached_demo_results() and st.session_state.get("demo_mode", True)
+
+    if not key_ok and not cached_demo:
+        provider_id = st.session_state.get("ai_provider") or "anthropic"
+        env_var = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}.get(
+            provider_id, "API_KEY"
+        )
+        st.warning(
+            f"**AI 키가 감지되지 않았습니다** ({provider_id})\n\n"
+            f"세 가지 방법 중 하나로 해결할 수 있습니다:\n"
+            f"- `safeloop_demo/.env` 에 `{env_var}=sk-...` 추가\n"
+            f"- 사이드바 **설정 → AI 공급자** 에서 키 입력\n"
+            f"- 시연 모드: 샘플 사진을 한 번 분석해두면 다음부턴 캐시로 즉시 재현"
+        )
+    elif not key_ok and cached_demo:
+        st.info(
+            "🎬 **시연 모드 — 캐시 폴백 활성화**\n\n"
+            "API 키가 없지만 이전에 분석한 샘플 사진의 결과가 캐시되어 있어 "
+            "동일 사진은 즉시 재현됩니다."
+        )
+    if key_ok or cached_demo:
         col_a, col_b = st.columns([1, 3])
         with col_a:
             use_cache = st.checkbox("캐시 사용", value=True,
@@ -566,13 +597,35 @@ if _show_ai_run:
                          disabled=run_disabled, key="run_ai_btn"):
                 images = all_photos
                 labels = all_labels
-                # 사진 수 기반 예상 시간: 단계1(5+1.5*N) + 단계2(8+2.5*N) + 단계3(4)
+                # 사진 수 기반 예상 시간
                 n_imgs = len(images)
                 est_total = int(5 + 1.5 * n_imgs + 8 + 2.5 * n_imgs + 4)
+
+                # 1) API 키 없을 때 시연 캐시 폴백 우선 시도
+                if not key_ok:
+                    cached_pipeline = load_demo_pipeline_for_samples(
+                        [analyze_and_optimize(b).optimized_bytes for b in images]
+                    )
+                    if cached_pipeline:
+                        st.session_state["stage1_result"] = cached_pipeline["stage1"]
+                        st.session_state["stage2_result"] = cached_pipeline["stage2"]
+                        st.session_state["stage2_confirmed"] = None
+                        st.session_state["stage3_result"] = cached_pipeline["stage3"]
+                        st.toast("시연 모드: 캐시된 결과로 재현 완료", icon="🎬")
+                        if not classic_mode:
+                            _go_to_step("supplement")
+                        st.rerun()
+                    else:
+                        st.error(
+                            "이 사진은 캐시에 없습니다. API 키를 설정하거나 "
+                            "시연 모드 샘플 사진(화학실/물리실)을 사용하세요."
+                        )
+                        st.stop()
+
                 st.info(
                     f"⏱ 예상 소요 시간 약 **{est_total}초** "
                     f"(사진 {n_imgs}장 · 캐시 적중 시 즉시). "
-                    f"공급자: {st.session_state.get('ai_provider') or '자동'}"
+                    f"공급자: {current_provider_label()}"
                 )
 
                 # 이미지 품질 사전 검사

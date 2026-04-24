@@ -122,43 +122,47 @@ else:
 # [3] 정책 활용 시나리오
 # ─────────────────────────────────────────
 divider()
-section("03", "교육청 정책 활용 시나리오", "공립·사립 차등 + 효과 모니터링")
+section("03", "교육청 정책 활용",
+        "수집된 데이터로 위험군 학교에 일관된 개선 지원 → 효과 모니터링")
 
-c1, c2, c3 = st.columns(3, gap="medium")
-with c1:
-    st.markdown(
-        """
-        ### 공립학교
-        **직접 재정 투입**
-        - 지방교육재정교부금 우선 배정
-        - 부재 핵심 설비 일괄 설치
-        - 점검 주기 단축
-        """
-    )
-with c2:
-    st.markdown(
-        """
-        ### 사립학교
-        **권고 + 매칭 지원**
-        - 학교법인에 개선 권고
-        - 매칭 지원(교부금·법인 자부담) 검토
-        - 사립학교법 준수 범위 내
-        """
-    )
-with c3:
-    st.markdown(
-        """
-        ### 모니터링
-        **반복 점검·효과 측정**
-        - 개선 전/후 안전점수 비교
-        - 대시보드 B의 AFTER 해상도 활용
-        - 다음 분기 정책 보완
-        """
-    )
+# 통합 카드 (공립/사립 분리하지 않음 · 짙은 글자색으로 가독성 확보)
+st.markdown(
+    """
+    <div style='display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin:8px 0;'>
+      <div style='border:1px solid #E5E5E8; border-radius:8px; padding:18px 20px; background:#FFF;'>
+        <div style='font-size:11px; letter-spacing:0.32em; color:#D50000; font-weight:600; margin-bottom:8px;'>STEP 01</div>
+        <div style='font-size:17px; font-weight:700; color:#0A0A0B; margin-bottom:10px;'>위험군 식별</div>
+        <div style='font-size:13px; color:#0A0A0B; line-height:1.7;'>
+          공공데이터 + 환원 데이터로 위험도 산출. 동일 기준으로 모든 학교에 적용.
+        </div>
+      </div>
+      <div style='border:1px solid #E5E5E8; border-radius:8px; padding:18px 20px; background:#FFF;'>
+        <div style='font-size:11px; letter-spacing:0.32em; color:#D50000; font-weight:600; margin-bottom:8px;'>STEP 02</div>
+        <div style='font-size:17px; font-weight:700; color:#0A0A0B; margin-bottom:10px;'>차등 개선 지원</div>
+        <div style='font-size:13px; color:#0A0A0B; line-height:1.7;'>
+          부재 핵심 설비 우선 보완 · 지방교육재정교부금 활용 · 매칭 지원 검토. 설립 구분에 따라 적용 방식만 조정.
+        </div>
+      </div>
+      <div style='border:1px solid #E5E5E8; border-radius:8px; padding:18px 20px; background:#FFF;'>
+        <div style='font-size:11px; letter-spacing:0.32em; color:#D50000; font-weight:600; margin-bottom:8px;'>STEP 03</div>
+        <div style='font-size:17px; font-weight:700; color:#0A0A0B; margin-bottom:10px;'>효과 모니터링</div>
+        <div style='font-size:13px; color:#0A0A0B; line-height:1.7;'>
+          개선 전/후 안전점수 비교 · 대시보드 B의 AFTER 해상도로 학교×공간 단위 추적 · 다음 분기 정책 보완.
+        </div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 divider()
-st.info(
-    "**기존 제도 존중 원칙** — SafeLoop은 에듀파인·KEIIS·공공데이터포털을 대체하지 않습니다. "
-    "법적 근거(공공데이터법 · 교육시설법 제10조 3항 · 공공데이터는 업무 부산물 개방)를 그대로 두고, "
-    "학교의 업무 부산물이 더 정확하게·구조화되어 기존 경로로 흘러가도록 돕는 역할만 합니다."
+st.markdown(
+    "<div style='padding:16px 20px; background:#FAFAFA; border:1px solid #E5E5E8; "
+    "border-radius:8px; font-size:13px; color:#0A0A0B; line-height:1.8;'>"
+    "<b style='color:#D50000;'>기존 제도 존중 원칙</b> — SafeLoop은 에듀파인·KEIIS·공공데이터포털을 "
+    "대체하지 않습니다. 법적 근거(공공데이터법 · 교육시설법 제10조 3항 · "
+    "<i>공공데이터는 업무 부산물 개방</i>)를 그대로 두고, 학교의 업무 부산물이 더 정확하게·구조화되어 "
+    "기존 경로로 흘러가도록 돕는 역할만 합니다."
+    "</div>",
+    unsafe_allow_html=True,
 )

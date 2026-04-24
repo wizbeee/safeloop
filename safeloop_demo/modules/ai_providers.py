@@ -14,7 +14,25 @@ import os
 import random
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Callable, Optional
+
+
+# 모듈 임포트 시점에 .env 자동 로드 (Streamlit 페이지 직접 진입 대응)
+# - 기본은 override=False로 외부 환경변수 존중
+# - 단, 외부 값이 빈 문자열인 경우(쉘에 ANTHROPIC_API_KEY= 식으로 잡혀있는 경우)는
+#   .env 값으로 덮어써야 정상 작동
+try:
+    from dotenv import load_dotenv, dotenv_values
+    _env_path = Path(__file__).resolve().parent.parent / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+        # 빈 문자열만 덮어쓰기
+        for _k, _v in dotenv_values(_env_path).items():
+            if _v and not os.environ.get(_k):
+                os.environ[_k] = _v
+except Exception:
+    pass
 
 
 # ─────────────────────────────────────────

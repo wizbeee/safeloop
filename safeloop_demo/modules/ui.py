@@ -425,13 +425,23 @@ def desktop_columns(spec: list[float] | int = 2):
 # ─────────────────────────────────────────
 def confirm_button(label: str, key: str, message: str = "이 작업은 되돌릴 수 없습니다.",
                     use_container_width: bool = False) -> bool:
-    """2단계 확인 버튼. 두 번째 클릭 시 True 반환."""
+    """2단계 확인 버튼 — 첫 클릭 시 인라인 카드로 변환, 두 번째 클릭 시 실행.
+
+    버튼 디자인이 갑자기 폭증하지 않도록 카드 안에 작게 배치.
+    """
     confirm_key = f"_confirm_{key}"
     if st.session_state.get(confirm_key):
-        st.warning(f"⚠ {message}")
-        cc1, cc2 = st.columns(2)
+        st.markdown(
+            f"<div style='border:1px solid #F8D0D0; background:#FFF2F2; "
+            f"border-radius:6px; padding:12px 14px; margin:6px 0;'>"
+            f"<div style='font-size:13px; color:#0A0A0B; margin-bottom:8px;'>"
+            f"<b style='color:#D50000;'>확인 필요</b> · {message}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        cc1, cc2 = st.columns(2, gap="small")
         with cc1:
-            if st.button(f"네, {label}", key=f"{key}_yes", type="primary",
+            if st.button(f"진행", key=f"{key}_yes", type="primary",
                           use_container_width=True):
                 st.session_state[confirm_key] = False
                 return True

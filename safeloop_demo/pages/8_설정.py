@@ -215,31 +215,35 @@ else:
 # 세션 초기화
 # ─────────────────────────────────────────
 divider()
-section("06", "디스크 사용량 · 캐시 정리",
-        "학교 클라우드와 AI 캐시의 디스크 사용량을 확인하고 오래된 캐시를 정리합니다.")
+with st.expander("📦 디스크 사용량 · 캐시 정리 (관리자용)", expanded=False):
+    st.caption(
+        "이 정보는 **현재 Streamlit 서버가 실행 중인 호스트의 로컬 파일 시스템** 기준입니다. "
+        "Streamlit Cloud 환경에선 컨테이너 재시작마다 초기화되므로 관리 의미는 제한적이며, "
+        "주로 **로컬 개발·자체 호스팅 운영** 시 캐시 누적 점검용입니다."
+    )
 
-from modules.storage import storage_usage, cleanup_old_cache
-usage = storage_usage()
-def _fmt(b: int) -> str:
-    if b < 1024:
-        return f"{b}B"
-    if b < 1024 * 1024:
-        return f"{b/1024:.1f}KB"
-    return f"{b/1024/1024:.2f}MB"
+    from modules.storage import storage_usage, cleanup_old_cache
+    usage = storage_usage()
+    def _fmt(b: int) -> str:
+        if b < 1024:
+            return f"{b}B"
+        if b < 1024 * 1024:
+            return f"{b/1024:.1f}KB"
+        return f"{b/1024/1024:.2f}MB"
 
-uc1, uc2, uc3 = st.columns(3)
-uc1.metric("학교 클라우드", _fmt(usage["school_storage"]))
-uc2.metric("AI 캐시", _fmt(usage["ai_cache"]))
-uc3.metric("교육청 수신함", _fmt(usage["edu_receipt"]))
+    uc1, uc2, uc3 = st.columns(3)
+    uc1.metric("학교 클라우드", _fmt(usage["school_storage"]))
+    uc2.metric("AI 캐시", _fmt(usage["ai_cache"]))
+    uc3.metric("교육청 수신함", _fmt(usage["edu_receipt"]))
 
-cdays = st.slider("캐시 보존 기간(일)", 7, 90, 30, step=1)
-if st.button(f"{cdays}일 이전 AI 캐시 정리"):
-    n, freed = cleanup_old_cache(days=cdays)
-    if n:
-        st.success(f"{n}개 파일 삭제 · {_fmt(freed)} 회수")
-    else:
-        st.info("정리할 파일이 없습니다.")
-    st.rerun()
+    cdays = st.slider("캐시 보존 기간(일)", 7, 90, 30, step=1)
+    if st.button(f"{cdays}일 이전 AI 캐시 정리"):
+        n, freed = cleanup_old_cache(days=cdays)
+        if n:
+            st.success(f"{n}개 파일 삭제 · {_fmt(freed)} 회수")
+        else:
+            st.info("정리할 파일이 없습니다.")
+        st.rerun()
 
 divider()
 section("07", "세션 관리", "모든 세션 데이터(학교 선택·공간·촬영·AI 결과 등)를 초기화합니다.")
