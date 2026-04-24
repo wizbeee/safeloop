@@ -332,7 +332,7 @@ with col_pkg2:
             type="primary",
         )
 
-# 공문 품의서 단독 미리보기
+# 첨부파일 미리보기 — ZIP 내용을 사용자가 알아보게 표시
 if st.session_state.get("edu_package_ready"):
     sid = st.session_state.get("saved_session_id", "")
     letter_cache = st.session_state.get("_edufine_letter_cache") or {}
@@ -342,12 +342,100 @@ if st.session_state.get("edu_package_ready"):
         st.session_state["_edufine_letter_cache"] = {"sid": sid, "bytes": letter_bytes}
     else:
         letter_bytes = letter_cache["bytes"]
-    st.download_button(
-        "공문(품의서) PDF만 다운로드",
-        letter_bytes,
-        file_name="에듀파인_품의서.pdf",
-        mime="application/pdf",
-    )
+
+    # 첨부파일 UX: ZIP 내부 구성 명시 + 각 파일별 개별 다운로드 + 용도 설명
+    import zipfile, io as _io
+    zip_bytes_for_list = (st.session_state.get("_edufine_zip_cache") or {}).get("bytes")
+
+    def _fmt_size(b: int) -> str:
+        if b < 1024:
+            return f"{b} B"
+        if b < 1024 * 1024:
+            return f"{b/1024:.1f} KB"
+        return f"{b/1024/1024:.2f} MB"
+
+    FILE_META = {
+        "00_에듀파인_품의서.pdf": (
+            "📄 공문 (품의서)",
+            "결재 상신용 — 에듀파인에 이 파일을 본문으로 첨부하세요.",
+            "application/pdf",
+        ),
+        "01_점검결과보고서.pdf": (
+            "📊 점검 결과 보고서",
+            "안전점수·카테고리별 분석·법령 근거 — 결재 시 함께 첨부하는 상세 보고서.",
+            "application/pdf",
+        ),
+        "02_점검결과.xlsx": (
+            "📈 결과 엑셀",
+            "KEIIS/내부 집계용 — 요약·점검표·카테고리점수·추천 4개 시트 포함.",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ),
+        "03_점검결과.csv": (
+            "📑 결과 CSV",
+            "다른 시스템 집계용 평문 CSV — Excel 불가 환경에서 사용.",
+            "text/csv",
+        ),
+        "04_master.json": (
+            "🗂 마스터 JSON",
+            "전체 세션의 원본 구조화 데이터 — 감사·재현·API 연동용.",
+            "application/json",
+        ),
+        "05_edu_package.json": (
+            "📡 교육청 송신 패키지",
+            "'앱 직접 발송' 시 교육청 수신함에 실제로 저장되는 JSON.",
+            "application/json",
+        ),
+        "06_opendata_package.json": (
+            "🌐 공공데이터 환원 패키지",
+            "익명화·집계 후 공공데이터포털 환원용 JSON (학교 식별 정보 제거됨).",
+            "application/json",
+        ),
+    }
+
+    with st.expander("📦 ZIP 안에 들어 있는 파일 보기 (7개)", expanded=True):
+        st.caption(
+            "아래 7개 파일이 ZIP 안에 포함됩니다. 각 파일의 **용도와 어디에 쓰는지** 를 확인하고, "
+            "원하는 파일만 개별로도 내려받을 수 있습니다."
+        )
+        if zip_bytes_for_list:
+            try:
+                zf = zipfile.ZipFile(_io.BytesIO(zip_bytes_for_list))
+                infos = {i.filename: i for i in zf.infolist()}
+                for fname in FILE_META:
+                    icon_title, desc, mime = FILE_META[fname]
+                    info = infos.get(fname)
+                    size = info.file_size if info else 0
+                    col_desc, col_dl = st.columns([3, 1])
+                    with col_desc:
+                        st.markdown(
+                            f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
+                            f"border-left:3px solid #D50000;border-radius:6px;"
+                            f"background:#FFF;margin:4px 0;'>"
+                            f"<div style='font-size:14px;font-weight:700;color:#0A0A0B;'>"
+                            f"{icon_title} <span style='color:#9A9A9F;font-weight:500;font-size:11px;"
+                            f"margin-left:8px;'>{fname} · {_fmt_size(size)}</span></div>"
+                            f"<div style='font-size:12px;color:#6B6B70;margin-top:4px;'>{desc}</div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with col_dl:
+                        try:
+                            payload = zf.read(fname) if info else b""
+                        except Exception:
+                            payload = b""
+                        if payload:
+                            st.download_button(
+                                "다운로드",
+                                payload,
+                                file_name=fname,
+                                mime=mime,
+                                key=f"dl_{fname}",
+                                use_container_width=True,
+                            )
+            except Exception as e:
+                st.warning(f"ZIP 미리보기 실패: {e}")
+        else:
+            st.info("ZIP 을 먼저 생성하면 파일 목록이 표시됩니다.")
 
 # ─────────────────────────────────────────
 # (5) 앱 직접 발송 (옵션 2)

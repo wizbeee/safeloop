@@ -86,28 +86,94 @@ if st.session_state["role"] == "교육청":
     st.caption("교육청 담당자 모드 — 사이드바 '교육청 수신함' 메뉴로 이동하세요.")
 
 # ─────────────────────────────────────────
-# 첫 방문 온보딩 + 데모 자동재생 (간이)
+# 튜토리얼 다이얼로그 (플로팅 버튼에서 호출)
+# ─────────────────────────────────────────
+def _render_tutorial_content() -> None:
+    st.markdown(
+        "<div style='font-size:12px;letter-spacing:0.28em;color:#D50000;"
+        "font-weight:700;margin-bottom:6px;'>3단계로 끝납니다</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "**1단계 · 학교 찾기 + 인증**  \n"
+        "GPS · 학교명 · 지역 단계 검색 중 편한 방식으로 학교를 찾고, "
+        "담당자 인증번호(6자리)를 입력합니다.\n\n"
+        "**2단계 · AI 점검**  \n"
+        "정면·우측·좌측 **광각 3장** 만 촬영하면 AI가 공간 유형과 안전설비를 자동 식별하여 "
+        "맞춤 점검표를 생성합니다. 놓친 항목은 '보완 촬영' 으로 추가하세요.\n\n"
+        "**3단계 · 저장 + 발송**  \n"
+        "결과는 Human용(읽기 좋은 PDF/Excel) 과 Machine용(구조화 JSON) 으로 이중 저장됩니다. "
+        "에듀파인 결재 후 교육청 수신함으로 즉시 전송할 수 있습니다."
+    )
+    st.markdown("---")
+    st.caption(
+        "💡 **팁** — 홈의 '시연 자동 재생' 버튼을 누르면 데모 학교·공간이 자동 세팅되고 "
+        "AI 점검 화면까지 바로 이동합니다. 발표·리뷰 시 유용합니다."
+    )
+
+
+# Streamlit 1.32+ 의 @st.dialog 사용, 없으면 expander 폴백
+try:
+    _dialog_decorator = st.dialog("SafeLoop 사용 가이드")
+
+    @_dialog_decorator
+    def _show_tutorial_dialog():
+        _render_tutorial_content()
+
+    _use_dialog = True
+except Exception:
+    _use_dialog = False
+
+# 플로팅 스타일 튜토리얼 트리거 (우상단 고정)
+st.markdown(
+    """
+    <style>
+    .sl-tutorial-floater {
+        position: fixed; top: 70px; right: 24px; z-index: 9998;
+        background: #FFFFFF; border: 1px solid #E5E5E8;
+        border-radius: 999px; padding: 6px 14px 6px 10px;
+        box-shadow: 0 4px 14px rgba(10,10,11,0.08);
+        font-size: 12px; color: #6B6B70; font-weight: 500;
+        letter-spacing: -0.01em;
+    }
+    .sl-tutorial-floater b { color: #D50000; font-size: 14px; margin-right: 4px; }
+    @media (max-width: 768px) {
+        .sl-tutorial-floater { top: 64px; right: 12px; padding: 5px 10px; }
+    }
+    </style>
+    <div class="sl-tutorial-floater">
+        <b>?</b>처음이신가요 ↓ 튜토리얼 보기
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ─────────────────────────────────────────
+# 튜토리얼 + 데모 자동 재생 (2컬럼)
 # ─────────────────────────────────────────
 divider()
 oc1, oc2 = st.columns(2)
 
 with oc1:
-    if not st.session_state.get("_onboarding_done"):
-        with st.expander("ⓘ 처음 사용하시나요? (3단계 안내)", expanded=True):
-            st.markdown(
-                "**1단계 · 학교 찾기 + 인증** — GPS · 학교명 · 지역 단계 검색 중 편한 방식\n\n"
-                "**2단계 · AI 점검** — 정면·우측·좌측 3장 촬영 후 AI 자동 분석 → 점검표 입력\n\n"
-                "**3단계 · 저장 + 발송** — Human/Machine 이중 저장, 에듀파인 결재 후 교육청 전송"
-            )
-            if st.button("이해했습니다 (다시 보지 않기)", key="dismiss_onboarding"):
-                st.session_state["_onboarding_done"] = True
+    st.markdown("**🎓 튜토리얼**")
+    st.caption("3단계 플로우를 30초 안에 이해합니다. 언제든 다시 볼 수 있습니다.")
+    if st.button("튜토리얼 열기", key="open_tutorial", use_container_width=True):
+        if _use_dialog:
+            _show_tutorial_dialog()
+        else:
+            st.session_state["_tutorial_inline"] = True
+            st.rerun()
+    # 폴백(old Streamlit): 인라인 expander
+    if not _use_dialog and st.session_state.get("_tutorial_inline"):
+        with st.expander("SafeLoop 사용 가이드", expanded=True):
+            _render_tutorial_content()
+            if st.button("닫기", key="close_tutorial_inline"):
+                st.session_state["_tutorial_inline"] = False
                 st.rerun()
-    else:
-        st.caption("✓ 온보딩 완료")
 
 with oc2:
-    st.markdown("**시연 자동 재생**")
-    st.caption("심사·발표용 — 데모 학교·인증 자동 통과 + 화학실 샘플 등록")
+    st.markdown("**🎬 시연 자동 재생**")
+    st.caption("심사·발표용 — 학교·공간·샘플 사진까지 일괄 세팅 후 AI 점검으로 이동")
     has_existing = bool(st.session_state.get("school")) or bool(st.session_state.get("active_space"))
     if has_existing:
         st.markdown(
@@ -182,8 +248,31 @@ with oc2:
                 }
                 st.session_state.setdefault("registered_spaces", []).append(demo_space)
             st.session_state["active_space"] = demo_space
+
+            # 🎬 시연 자동 재생 실제화 — 샘플 사진도 즉시 분배 + AI 자동실행 플래그
+            sample_root = Path(__file__).resolve().parent / "sample_images" / "chemistry_lab"
+            if sample_root.exists():
+                paths = sorted(sample_root.glob("*.jpg"))[:3]  # 광각 3장만
+                if paths:
+                    SHOT_KEYS = ["wide_front", "wide_right", "wide_left"]
+                    shots = {k: [] for k in SHOT_KEYS + ["close_supplement"]}
+                    for i, p in enumerate(paths):
+                        shots[SHOT_KEYS[i]].append({
+                            "name": p.name,
+                            "bytes": p.read_bytes(),
+                            "source": "sample",
+                        })
+                    st.session_state["shots"] = shots
+                    # 이전 AI 결과 클리어 (다시 분석하도록)
+                    for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
+                                "stage3_result", "item_scores", "score_result",
+                                "recommendations"]:
+                        st.session_state[_k] = None
+
             st.session_state["_autoplay"] = True
-            st.toast(f"데모 학교: {demo_school.get('학교명')}")
+            # 2_AI점검 페이지가 이 플래그를 감지해 캐시 폴백 가능 시 즉시 분석 실행
+            st.session_state["_autoplay_run_ai"] = True
+            st.toast(f"데모 학교·공간·샘플 세팅 완료 → AI 점검 이동", icon="🎬")
             st.switch_page("pages/2_AI점검.py")
 
 # 8-7: 세션 초기화는 설정 페이지에만 두기 (사이드바 중복 제거)

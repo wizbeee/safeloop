@@ -649,13 +649,21 @@ if _show_ai_run:
                                      help="동일 사진 재분석 시 API 호출 생략.")
         # 보완 재분석 트리거 자동 처리
         triggered_by_supplement = st.session_state.pop("_trigger_rerun_supplement", False)
+        # 🎬 시연 자동 재생 트리거 (홈에서 넘어온 경우) — 1회만
+        triggered_by_autoplay = (
+            st.session_state.pop("_autoplay_run_ai", False)
+            and analysis_ready
+            and not st.session_state.get("stage3_result")
+        )
+        if triggered_by_autoplay:
+            st.info("🎬 시연 자동 재생 — 샘플 사진으로 AI 분석을 즉시 실행합니다...")
         with col_b:
             run_disabled = not analysis_ready
             btn_label = ("▶  AI 분석 시작 (공간 식별 → 설비 탐지 → 점검표 생성)"
                          if analysis_ready else "필수 3장 촬영 후 활성화")
             user_clicked = st.button(btn_label, type="primary", use_container_width=True,
                                       disabled=run_disabled, key="run_ai_btn")
-            if user_clicked or (triggered_by_supplement and analysis_ready):
+            if user_clicked or (triggered_by_supplement and analysis_ready) or triggered_by_autoplay:
                 images = all_photos
                 labels = all_labels
                 # 사진 수 기반 예상 시간

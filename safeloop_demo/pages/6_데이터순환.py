@@ -30,40 +30,45 @@ hero("STAGE 04",
 # ─────────────────────────────────────────
 section("01", "데이터 흐름 (Sankey)")
 
-# 6-1 수정: 14노드 → 9노드 축약 (AI 맞춤 점검/학교 클라우드 저장/익명화·집계 는
-# 본문에서 충분히 설명되므로 Sankey에선 상위 단계에 통합)
+# Sankey 구조 — 좌→우 선형 흐름 + 환원 루프
+# 라벨 겹침 방지를 위해 (1) 노드를 7개로 더 축약 (2) 세로 간격 충분히 확보
+# (3) 환원 루프(AFTER → BEFORE)는 caption 으로 설명하고 다이어그램에선 단방향 표기
 labels = [
-    "공공데이터 (기존)",              # 0
-    "대시보드 B (BEFORE)",            # 1
-    "위험군 526개교",                 # 2
-    "학교 현장 · SafeLoop 점검",      # 3
-    "에듀파인 결재",                  # 4
-    "교육청 수신·검증",               # 5
-    "KEIIS · 공공데이터 환원",        # 6
-    "대시보드 B (AFTER 고도화)",      # 7
-    "교육청 정책 결정",                # 8
+    "공공데이터 (기존 BEFORE)",     # 0
+    "위험군 526개교",                # 1
+    "학교 · SafeLoop 점검",          # 2
+    "에듀파인 결재",                 # 3
+    "교육청 수신·검증",              # 4
+    "KEIIS · 환원",                  # 5
+    "AFTER 고도화 · 정책 결정",      # 6
 ]
-sources = [0, 1, 2, 3, 4, 5, 5, 6, 7]
-targets = [1, 2, 3, 4, 5, 6, 8, 7, 1]
-values = [100, 70, 70, 70, 70, 45, 25, 45, 45]
+# 좌→우 흐름
+sources = [0, 1, 2, 3, 4, 5]
+targets = [1, 2, 3, 4, 5, 6]
+values  = [100, 80, 80, 80, 55, 55]
 
 fig = go.Figure(data=[go.Sankey(
     arrangement="snap",
     node=dict(
-        pad=20, thickness=20, line=dict(color="#0A0A0B", width=0.6),
+        pad=40, thickness=22,
+        line=dict(color="#0A0A0B", width=0.6),
         label=labels,
         color=[
-            "#8BC34A", "#4CAF50", "#FFC107", "#D50000",
-            "#5C6BC0", "#29B6F6", "#26C6DA", "#2E7D32", "#FF5722",
+            "#8BC34A", "#FFC107", "#D50000",
+            "#5C6BC0", "#29B6F6", "#26C6DA", "#2E7D32",
         ],
     ),
     link=dict(source=sources, target=targets, value=values,
-              color=["rgba(200,200,200,0.4)"] * len(sources))
+              color=["rgba(200,200,200,0.35)"] * len(sources))
 )])
-fig.update_layout(height=480, margin=dict(l=20, r=20, t=20, b=20), font=dict(size=12))
+fig.update_layout(height=420, margin=dict(l=20, r=20, t=10, b=10),
+                  font=dict(size=13, color="#0A0A0B"))
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("※ `7 → 1` 이 순환의 핵심 — AFTER 해상도가 다음 분기 BEFORE 로 되돌아 가 위험군 재평가에 사용됩니다.")
+st.caption(
+    "※ **순환의 핵심** — 6단계의 **AFTER 고도화** 결과는 다음 분기에 0단계 **BEFORE** 에 "
+    "추가되어 위험군 재평가에 사용됩니다. (매 분기 반복 → '순환' 의 의미)"
+)
 
 # ─────────────────────────────────────────
 # [2] 내 제출 데이터 타임라인

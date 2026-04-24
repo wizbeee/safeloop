@@ -16,7 +16,6 @@ from modules.data_loader import (
     load_master,
     load_sensitivity,
     load_sido_summary,
-    pseudo_school_name,
 )
 from modules.session import ensure_state
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
@@ -204,19 +203,33 @@ with main_col:
         st.plotly_chart(fig3, use_container_width=True)
 
 # ─────────────────────────────────────────
-# 풀폭: 고위험군 테이블 + 민감도 (마스터-디테일 아래 별도 섹션)
+# 풀폭: 고위험군 통계 요약 (개별 학교 리스트는 제거 — 공공 대시보드 취지상 부적절)
 # ─────────────────────────────────────────
 divider()
-section("04", "고위험군 학교 리스트", "공공데이터 환원 원칙에 따라 학교명은 가명 처리")
+section("04", "고위험군 요약 통계",
+        "개별 학교가 아닌 집계 통계만 표시 — 개별 학교 낙인 효과 방지")
 
-display = hr.copy()
+hr_summary = hr.copy()
 if sel_sido != "(전체)":
-    display = display[display["시도교육청"] == sel_sido]
-display["가명"] = display["정보공시 학교코드"].astype(str).apply(pseudo_school_name)
-display = display[["가명", "시도교육청", "학교급", "설립구분", "위험도_점수", "위험군", "지역분류"]]\
-    .rename(columns={"위험도_점수": "위험도"})
-st.dataframe(display.head(100), use_container_width=True, hide_index=True)
-st.caption(f"총 {len(display):,}개교 (상위 100개 표시)")
+    hr_summary = hr_summary[hr_summary["시도교육청"] == sel_sido]
+if sel_est != "(전체)":
+    hr_summary = hr_summary[hr_summary["설립구분"] == sel_est]
+
+sum_col1, sum_col2, sum_col3 = st.columns(3)
+sum_col1.metric("필터 내 고위험 학교 수", f"{len(hr_summary):,}개교")
+if len(hr_summary):
+    sum_col2.metric("평균 위험도 점수", f"{hr_summary['위험도_점수'].mean():.1f}")
+    sum_col3.metric("최고 위험도",
+                     f"{hr_summary['위험도_점수'].max():.1f}")
+else:
+    sum_col2.metric("평균 위험도 점수", "—")
+    sum_col3.metric("최고 위험도", "—")
+
+st.caption(
+    "※ **개별 학교명 노출은 의도적으로 제외** — 고위험 판정은 현장 검증 전 "
+    "선별 지표이며, 공개 대시보드에서 학교별 식별은 지원 대상 학교에 불이익이 될 수 있습니다. "
+    "실제 정책 집행은 교육청 내부 권한으로 별도 채널에서 이루어집니다."
+)
 
 # ─────────────────────────────────────────
 # 민감도
