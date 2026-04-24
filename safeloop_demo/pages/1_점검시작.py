@@ -28,7 +28,7 @@ from modules.ui import (
     apply_theme, divider, hero, numeric_input_patch, render_sidebar, section,
 )
 
-st.set_page_config(page_title="점검 시작 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="점검 시작 · SafeLoop", page_icon="static/icon-192.png",
                    layout="centered", initial_sidebar_state="collapsed")
 apply_theme()
 ensure_state()

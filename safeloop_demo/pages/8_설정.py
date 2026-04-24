@@ -18,7 +18,7 @@ from modules.ai_providers import ALL_PROVIDERS, providers_status, test_provider_
 from modules.session import ensure_state, reset_all
 from modules.ui import apply_theme, confirm_button, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="설정 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="설정 · SafeLoop", page_icon="static/icon-192.png",
                    layout="centered", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()

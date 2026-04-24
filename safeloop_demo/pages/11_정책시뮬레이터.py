@@ -22,7 +22,7 @@ from modules.laws import LAW_BASIS, CATEGORIES
 from modules.session import ensure_state
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="정책 시뮬레이터 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="정책 시뮬레이터 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()

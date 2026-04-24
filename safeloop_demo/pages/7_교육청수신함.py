@@ -16,7 +16,7 @@ from modules.session import ensure_state
 from modules.storage import EDU_RECEIPT_DIR, list_edu_inbox
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()

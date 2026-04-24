@@ -17,7 +17,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 st.set_page_config(
     page_title="SafeLoop",
-    page_icon="/",
+    page_icon="static/icon-192.png",
     layout="centered",
     initial_sidebar_state="collapsed",
 )
@@ -143,14 +143,11 @@ with oc2:
         else:
             st.error("데모 학교 데이터를 찾을 수 없습니다.")
 
-# 사이드바는 render_sidebar()로 통합됨 (modules/ui.py)
+# 사이드바 푸터에 세션 초기화 (홈에서만)
 with st.sidebar:
-    st.markdown(
-        "<div style='margin-top:18px; padding-top:14px; border-top:1px solid #E5E5E8;'>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
     if confirm_button("세션 초기화", key="sb_reset_home",
-                       message="현재 세션의 모든 입력·선택이 삭제됩니다."):
+                       message="현재 세션의 모든 입력·선택이 삭제됩니다.",
+                       use_container_width=True):
         reset_all()
         st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)

@@ -21,7 +21,7 @@ from modules.data_loader import (
 from modules.session import ensure_state
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="전국 대시보드 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="전국 대시보드 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()

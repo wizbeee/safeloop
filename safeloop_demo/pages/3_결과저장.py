@@ -32,7 +32,7 @@ from modules.storage import (
 )
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
-st.set_page_config(page_title="결과 저장·발송 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="결과 저장·발송 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="expanded")
 apply_theme()
 ensure_state()

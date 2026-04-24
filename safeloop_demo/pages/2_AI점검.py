@@ -27,7 +27,7 @@ from modules.ui import (
     confirm_button,
 )
 
-st.set_page_config(page_title="AI 점검 · SafeLoop", page_icon="/",
+st.set_page_config(page_title="AI 점검 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="collapsed")
 apply_theme()
 ensure_state()
