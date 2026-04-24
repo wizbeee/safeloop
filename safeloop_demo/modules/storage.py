@@ -42,9 +42,12 @@ EDU_RECEIPT_DIR.mkdir(exist_ok=True)
 _FONT_REGISTERED = False
 
 
+_FONT_FALLBACK_USED = False
+
+
 def _ensure_font() -> str:
-    """시스템 폰트를 찾아 PDF에 한글 지원."""
-    global _FONT_REGISTERED
+    """시스템 폰트를 찾아 PDF에 한글 지원. 실패 시 Helvetica fallback."""
+    global _FONT_REGISTERED, _FONT_FALLBACK_USED
     if _FONT_REGISTERED:
         return "KoreanFont"
 
@@ -53,6 +56,8 @@ def _ensure_font() -> str:
         "C:/Windows/Fonts/malgunbd.ttf",
         "C:/Windows/Fonts/NanumGothic.ttf",
         "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/System/Library/Fonts/AppleSDGothicNeo.ttc",
     ]
     for path in candidates:
@@ -63,12 +68,20 @@ def _ensure_font() -> str:
                 return "KoreanFont"
             except Exception:
                 continue
+    _FONT_FALLBACK_USED = True
     return "Helvetica"
+
+
+def korean_font_available() -> bool:
+    """한글 폰트 사용 가능 여부 (PDF 생성 호출 후 정확)."""
+    _ensure_font()
+    return not _FONT_FALLBACK_USED
 
 
 # ─────────────────────────────────────────
 # 저장 경로
 # ─────────────────────────────────────────
+# 드래프트 폴더 패턴(_drafts)은 list_recent_sessions에서 제외
 def session_dir(school_code: str, session_id: str) -> Path:
     safe_code = str(school_code).replace("/", "_")
     path = STORAGE_DIR / safe_code / session_id
@@ -559,6 +572,197 @@ def list_edu_inbox(sido: str | None = None) -> list[dict]:
     return items
 
 
+# ─────────────────────────────────────────
+# 드래프트(촬영 진행 중) — 새로고침 복구용
+# ─────────────────────────────────────────
+def _draft_dir(school_code: str) -> Path:
+    p = STORAGE_DIR / str(school_code or "_unknown") / "_drafts"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def save_draft_shots(school_code: str, shots: dict) -> None:
+    """촬영 중인 사진들을 디스크에 백업 (새로고침 대비)."""
+    if not school_code:
+        return
+    d = _draft_dir(school_code)
+    # 기존 파일 정리
+    for f in d.glob("*.jpg"):
+        try:
+            f.unlink()
+        except Exception:
+            pass
+
+    metadata: dict = {}
+    for shot_key, photos in (shots or {}).items():
+        if not photos:
+            continue
+        for idx, p in enumerate(photos):
+            fname = f"{shot_key}__{idx:02d}.jpg"
+            try:
+                (d / fname).write_bytes(p.get("bytes", b""))
+                metadata[fname] = {
+                    "shot_key": shot_key,
+                    "idx": idx,
+                    "source": p.get("source", "camera"),
+                    "name": p.get("name", fname),
+                }
+            except Exception:
+                continue
+    (d / "_meta.json").write_text(
+        json.dumps({
+            "updated_at": datetime.datetime.now().isoformat(),
+            "files": metadata,
+        }, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def load_draft_shots(school_code: str) -> dict:
+    """저장된 드래프트를 shots 형식으로 복원."""
+    if not school_code:
+        return {}
+    d = _draft_dir(school_code)
+    meta_path = d / "_meta.json"
+    if not meta_path.exists():
+        return {}
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+    shots: dict = {}
+    for fname, info in (meta.get("files") or {}).items():
+        path = d / fname
+        if not path.exists():
+            continue
+        shots.setdefault(info["shot_key"], []).append({
+            "name": info.get("name", fname),
+            "bytes": path.read_bytes(),
+            "source": info.get("source", "camera"),
+            "_idx": info.get("idx", 0),
+        })
+    for k in shots:
+        shots[k].sort(key=lambda p: p.get("_idx", 0))
+        for p in shots[k]:
+            p.pop("_idx", None)
+    return shots
+
+
+def has_draft(school_code: str) -> bool:
+    if not school_code:
+        return False
+    return (_draft_dir(school_code) / "_meta.json").exists()
+
+
+def draft_summary(school_code: str) -> dict | None:
+    if not has_draft(school_code):
+        return None
+    meta_path = _draft_dir(school_code) / "_meta.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    files = meta.get("files") or {}
+    return {
+        "updated_at": meta.get("updated_at"),
+        "photo_count": len(files),
+        "shot_keys": sorted({v.get("shot_key", "") for v in files.values()}),
+    }
+
+
+def clear_draft(school_code: str) -> None:
+    if not school_code:
+        return
+    import shutil
+    d = _draft_dir(school_code)
+    if d.exists():
+        shutil.rmtree(d, ignore_errors=True)
+
+
+# ─────────────────────────────────────────
+# 학교별 영구 프로필 (결재라인·기본 설정)
+# ─────────────────────────────────────────
+def _profile_path(school_code: str) -> Path:
+    p = STORAGE_DIR / str(school_code or "_unknown")
+    p.mkdir(parents=True, exist_ok=True)
+    return p / "_profile.json"
+
+
+def save_school_profile(school_code: str, profile: dict) -> None:
+    """학교별 영구 프로필 저장 (결재라인 등). 매 점검마다 재입력 안 하도록."""
+    if not school_code:
+        return
+    try:
+        existing = load_school_profile(school_code) or {}
+    except Exception:
+        existing = {}
+    existing.update(profile)
+    existing["updated_at"] = datetime.datetime.now().isoformat()
+    _profile_path(school_code).write_text(
+        json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def load_school_profile(school_code: str) -> dict:
+    if not school_code:
+        return {}
+    p = _profile_path(school_code)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+# ─────────────────────────────────────────
+# 디스크 사용량 + 캐시 정리
+# ─────────────────────────────────────────
+def _dir_size(path: Path) -> int:
+    total = 0
+    if not path.exists():
+        return 0
+    for p in path.rglob("*"):
+        if p.is_file():
+            try:
+                total += p.stat().st_size
+            except Exception:
+                pass
+    return total
+
+
+def storage_usage() -> dict:
+    """학교 클라우드·캐시·교육청 수신함 디스크 사용량 (바이트)."""
+    cache = STORAGE_DIR / "_ai_cache"
+    return {
+        "school_storage": _dir_size(STORAGE_DIR) - _dir_size(cache),
+        "ai_cache": _dir_size(cache),
+        "edu_receipt": _dir_size(EDU_RECEIPT_DIR),
+        "total": _dir_size(STORAGE_DIR) + _dir_size(EDU_RECEIPT_DIR),
+    }
+
+
+def cleanup_old_cache(days: int = 30) -> tuple[int, int]:
+    """`_ai_cache/` 안의 N일 이상 된 파일 삭제. (삭제 수, 회수 바이트)"""
+    cache = STORAGE_DIR / "_ai_cache"
+    if not cache.exists():
+        return 0, 0
+    cutoff = datetime.datetime.now().timestamp() - days * 86400
+    removed = 0
+    bytes_freed = 0
+    for p in cache.rglob("*"):
+        if p.is_file():
+            try:
+                if p.stat().st_mtime < cutoff:
+                    bytes_freed += p.stat().st_size
+                    p.unlink()
+                    removed += 1
+            except Exception:
+                continue
+    return removed, bytes_freed
+
+
 def list_recent_sessions(limit: int = 20) -> list[dict]:
     items: list[dict] = []
     for school_dir in STORAGE_DIR.iterdir():
@@ -566,6 +770,8 @@ def list_recent_sessions(limit: int = 20) -> list[dict]:
             continue
         for sess in school_dir.iterdir():
             if not sess.is_dir():
+                continue
+            if sess.name.startswith("_"):  # _drafts 등 시스템 폴더 제외
                 continue
             master_path = sess / "master.json"
             if not master_path.exists():

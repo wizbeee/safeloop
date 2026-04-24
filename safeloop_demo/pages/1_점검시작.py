@@ -24,7 +24,9 @@ from modules.data_loader import (
     verify_auth_code,
 )
 from modules.session import ensure_state
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import (
+    apply_theme, divider, hero, numeric_input_patch, render_sidebar, section,
+)
 
 st.set_page_config(page_title="점검 시작 · SafeLoop", page_icon="/",
                    layout="centered", initial_sidebar_state="collapsed")
@@ -193,6 +195,8 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
             help="실제 운영: 교육청 발급. 시연 중: 우측 빨강 카드 번호 입력 or '자동 입력' 버튼.",
             key="auth_input",
         )
+        # 모바일 숫자 키패드 강제 (iOS·Android 모두)
+        numeric_input_patch("담당자 인증번호")
         submit = st.button("인증 확인", type="primary", use_container_width=True)
 
     with colB:
@@ -218,6 +222,14 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
         elif verify_auth_code(code, auth_input):
             st.session_state["auth_verified"] = True
             st.session_state["_auth_prefill"] = ""
+            # 학교 프로필 자동 로드 (결재라인 등)
+            try:
+                from modules.storage import load_school_profile
+                profile = load_school_profile(code)
+                if profile.get("eduline"):
+                    st.session_state["eduline"] = profile["eduline"]
+            except Exception:
+                pass
             st.success("인증되었습니다.")
             st.rerun()
         else:

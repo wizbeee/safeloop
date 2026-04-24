@@ -14,7 +14,7 @@ import streamlit as st
 from modules.laws import CATEGORIES
 from modules.session import ensure_state
 from modules.storage import list_recent_sessions
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
 st.set_page_config(page_title="본교 현황 · SafeLoop", page_icon="/",
                    layout="wide", initial_sidebar_state="expanded")
@@ -37,7 +37,12 @@ sessions = [s for s in list_recent_sessions(limit=200)
             if s["school_code"] == school["정보공시 학교코드"]]
 
 if not sessions:
-    st.info("저장된 점검이 없습니다. AI 점검 후 저장하면 이 화면에 반영됩니다.")
+    empty_state(
+        title="아직 저장된 점검이 없습니다",
+        description="AI 점검 후 결과를 저장하면 이 화면에 누적·시각화됩니다.",
+        action_label="지금 점검 시작",
+        action_target="pages/1_점검시작.py",
+    )
     st.stop()
 
 df = pd.DataFrame(sessions)

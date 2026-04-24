@@ -69,15 +69,23 @@ def ensure_state() -> None:
 
 
 def reset_inspection() -> None:
-    """한 공간 점검 세션 초기화 (다른 공간 이어서 점검 시)."""
+    """한 공간 점검 세션 초기화 (다른 공간 이어서 점검 시).
+    학교 선택과 인증 상태, 등록된 공간 목록은 유지."""
     for k in [
         "active_space", "captured_images",
-        "stage1_result", "stage2_result", "stage2_confirmed", "stage3_result",
+        "stage1_result", "stage2_result", "stage1_cross_check",
+        "stage2_confirmed", "stage3_result",
         "item_scores", "score_result", "recommendations",
         "saved_session_id", "edu_package_ready", "edu_app_sent", "edufine_approved",
     ]:
         st.session_state[k] = DEFAULT_STATE[k] if not isinstance(DEFAULT_STATE[k], (list, dict)) \
             else type(DEFAULT_STATE[k])(DEFAULT_STATE[k])
+    # 샷 카운터·드래프트 복원 플래그도 정리
+    st.session_state["shots"] = {}
+    st.session_state["_draft_restored"] = False
+    st.session_state["wizard_step"] = "shoot_1"
+    if "_approval_demo_stage" in st.session_state:
+        st.session_state["_approval_demo_stage"] = 0
 
 
 def reset_all() -> None:
@@ -89,6 +97,25 @@ def reset_all() -> None:
 def get(key: str, default: Any = None) -> Any:
     ensure_state()
     return st.session_state.get(key, default)
+
+
+def stamp_activity() -> None:
+    """페이지 진입마다 호출. 마지막 활동 시각 기록."""
+    import datetime
+    st.session_state["_last_activity"] = datetime.datetime.now().isoformat()
+
+
+def session_age_minutes() -> float:
+    """마지막 활동 이후 경과 분 (분)."""
+    import datetime
+    last = st.session_state.get("_last_activity")
+    if not last:
+        return 0.0
+    try:
+        delta = datetime.datetime.now() - datetime.datetime.fromisoformat(last)
+        return delta.total_seconds() / 60.0
+    except Exception:
+        return 0.0
 
 
 def set_(key: str, value: Any) -> None:
@@ -104,3 +131,23 @@ def require_school() -> dict | None:
         st.warning("먼저 **학교 찾기** 페이지에서 학교를 선택하고 인증하세요.")
         return None
     return school
+
+
+def require_active_space() -> dict | None:
+    """공간 선택 여부 확인."""
+    ensure_state()
+    sp = st.session_state.get("active_space")
+    if not sp or not isinstance(sp, dict) or not sp.get("type"):
+        st.warning("점검할 **공간이 선택되지 않았습니다**. 점검 시작 페이지에서 공간을 선택하세요.")
+        return None
+    return sp
+
+
+def require_score_result() -> dict | None:
+    """안전 점수 산출 여부 확인."""
+    ensure_state()
+    sr = st.session_state.get("score_result")
+    if not sr or not isinstance(sr, dict) or "score" not in sr:
+        st.warning("**점검 결과가 아직 산출되지 않았습니다**. AI 점검에서 점수 계산을 마치세요.")
+        return None
+    return sr

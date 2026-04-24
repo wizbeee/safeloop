@@ -11,8 +11,42 @@ from __future__ import annotations
 
 import base64
 import os
+import random
+import time
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Callable, Optional
+
+
+# ─────────────────────────────────────────
+# 자동 재시도 (지수 백오프 + jitter)
+# ─────────────────────────────────────────
+_RETRY_MARKERS = (
+    "timeout", "timed out", "connection", "503", "502", "504",
+    "429", "rate limit", "rate_limit", "overloaded", "temporarily",
+    "service unavailable", "internal server error",
+)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return any(m in msg for m in _RETRY_MARKERS)
+
+
+def _with_retry(fn: Callable[[], str], max_attempts: int = 3,
+                base_delay: float = 1.5) -> str:
+    last_error: Optional[Exception] = None
+    for attempt in range(max_attempts):
+        try:
+            return fn()
+        except Exception as e:
+            last_error = e
+            if attempt >= max_attempts - 1 or not _is_retryable(e):
+                raise
+            wait = (2 ** attempt) * base_delay + random.uniform(0, 1)
+            time.sleep(wait)
+    if last_error:
+        raise last_error
+    return ""
 
 
 class VisionProvider(ABC):
@@ -55,11 +89,16 @@ class AnthropicProvider(VisionProvider):
         from anthropic import Anthropic
         import httpx
         proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        # 명시적 timeout: 전체 90초, 연결 10초
         if proxy:
-            client = Anthropic(api_key=self.api_key,
-                                http_client=httpx.Client(proxy=proxy, timeout=120.0))
+            client = Anthropic(
+                api_key=self.api_key,
+                http_client=httpx.Client(proxy=proxy,
+                                         timeout=httpx.Timeout(90.0, connect=10.0)),
+                timeout=90.0,
+            )
         else:
-            client = Anthropic(api_key=self.api_key)
+            client = Anthropic(api_key=self.api_key, timeout=90.0)
 
         content: list = [{"type": "text", "text": text}]
         for b in images:
@@ -68,13 +107,17 @@ class AnthropicProvider(VisionProvider):
                 "type": "image",
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": data},
             })
-        resp = client.messages.create(
-            model=self.MODELS[tier],
-            max_tokens=4096,
-            system=system,
-            messages=[{"role": "user", "content": content}],
-        )
-        return resp.content[0].text
+
+        def _do() -> str:
+            resp = client.messages.create(
+                model=self.MODELS[tier],
+                max_tokens=4096,
+                system=system,
+                messages=[{"role": "user", "content": content}],
+            )
+            return resp.content[0].text
+
+        return _with_retry(_do, max_attempts=3, base_delay=2.0)
 
 
 # ─────────────────────────────────────────
@@ -97,7 +140,7 @@ class OpenAIProvider(VisionProvider):
     def call(self, system: str, text: str, images: list[bytes],
              tier: str = "vision") -> str:
         from openai import OpenAI
-        client = OpenAI(api_key=self.api_key)
+        client = OpenAI(api_key=self.api_key, timeout=90.0)
 
         content: list = [{"type": "text", "text": text}]
         for b in images:
@@ -106,15 +149,19 @@ class OpenAIProvider(VisionProvider):
                 "type": "image_url",
                 "image_url": {"url": f"data:image/jpeg;base64,{data}"},
             })
-        resp = client.chat.completions.create(
-            model=self.MODELS[tier],
-            max_tokens=4096,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": content},
-            ],
-        )
-        return resp.choices[0].message.content or ""
+
+        def _do() -> str:
+            resp = client.chat.completions.create(
+                model=self.MODELS[tier],
+                max_tokens=4096,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": content},
+                ],
+            )
+            return resp.choices[0].message.content or ""
+
+        return _with_retry(_do, max_attempts=3, base_delay=2.0)
 
 
 # ─────────────────────────────────────────
@@ -177,6 +224,41 @@ def get_provider(name: Optional[str] = None) -> VisionProvider:
 
     # 그래도 없으면 Anthropic(사용 불가 상태) 반환
     return AnthropicProvider()
+
+
+def test_provider_connection(provider_id: str, api_key: Optional[str] = None,
+                              timeout: float = 15.0) -> tuple[bool, str]:
+    """공급자 연결 테스트 — 최소 토큰 호출 1회.
+
+    Returns: (성공 여부, 사용자 표시 메시지)
+    """
+    cls = _PROVIDER_CLASSES.get(provider_id)
+    if not cls:
+        return False, f"알 수 없는 공급자: {provider_id}"
+    inst = cls(api_key=api_key or _key_from_session(provider_id))
+    if not inst.available():
+        return False, "API 키가 없습니다. 위에서 키를 입력하고 저장하세요."
+
+    try:
+        # 가장 가벼운 호출 (텍스트 모델, max_tokens=5)
+        resp = inst.call(
+            system="You respond with exactly the word: ok",
+            text="ping",
+            images=[],
+            tier="text",
+        )
+        if resp:
+            return True, f"연결 정상 — 응답 받음 ({len(resp)} chars)"
+        return False, "응답이 비어있습니다."
+    except Exception as e:
+        msg = str(e).lower()
+        if "auth" in msg or "401" in msg or "403" in msg or "invalid" in msg:
+            return False, "키가 잘못되었거나 권한이 없습니다."
+        if "rate" in msg or "429" in msg:
+            return False, "호출 한도 초과 — 잠시 후 다시 시도하세요."
+        if "timeout" in msg or "connection" in msg:
+            return False, "네트워크 또는 공급자 응답 지연."
+        return False, f"오류: {type(e).__name__} — {str(e)[:80]}"
 
 
 def providers_status() -> list[dict]:

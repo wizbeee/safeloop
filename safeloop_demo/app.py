@@ -11,7 +11,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from modules.session import ensure_state, reset_all
-from modules.ui import apply_theme, divider, render_sidebar
+from modules.ui import apply_theme, confirm_button, divider, render_sidebar
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -149,7 +149,8 @@ with st.sidebar:
         "<div style='margin-top:18px; padding-top:14px; border-top:1px solid #E5E5E8;'>",
         unsafe_allow_html=True,
     )
-    if st.button("세션 초기화", key="sb_reset_home", use_container_width=True):
+    if confirm_button("세션 초기화", key="sb_reset_home",
+                       message="현재 세션의 모든 입력·선택이 삭제됩니다."):
         reset_all()
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)

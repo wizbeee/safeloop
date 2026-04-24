@@ -38,7 +38,14 @@ try:
     sens = load_sensitivity()
     hr = load_high_risk()
 except FileNotFoundError as e:
-    st.error(f"데이터 파일을 찾을 수 없습니다: {e}")
+    st.error("📁 공공데이터 CSV가 누락되었습니다.")
+    st.markdown(
+        f"```\n{e}\n```\n\n"
+        "**해결 방법**\n"
+        "1. `git pull` 로 최신 데이터 받기\n"
+        "2. 또는 `SafeLoop_데모앱_이관세트/data/` 폴더의 CSV를 "
+        "`safeloop_demo/data/` 로 복사"
+    )
     st.stop()
 
 # ─────────────────────────────────────────

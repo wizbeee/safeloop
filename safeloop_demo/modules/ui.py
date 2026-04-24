@@ -269,12 +269,19 @@ def apply_theme() -> None:
 def render_sidebar(active_key: str = "") -> None:
     """모든 페이지가 호출하는 공통 사이드바.
 
-    active_key: 현재 페이지 식별자 (예: "home", "inspect", "ai", "save",
-                                  "school_dash", "national_dash", "cycle",
-                                  "edu_inbox", "settings", "about",
-                                  "history", "policy")
-    역할에 따라 추천 메뉴를 강조한다.
+    active_key: 현재 페이지 식별자
+    역할에 따라 추천 메뉴를 강조 + 세션 활동 기록.
     """
+    # 세션 활동 시각 갱신 + 장기 idle 안내
+    from modules.session import stamp_activity, session_age_minutes
+    age_min = session_age_minutes()
+    stamp_activity()
+    if age_min > 30:
+        st.warning(
+            f"⏱ 마지막 활동에서 {age_min:.0f}분 경과 — "
+            "촬영본은 자동 백업되었으나 일부 입력은 초기화될 수 있습니다."
+        )
+
     role = st.session_state.get("role", "학교")
     school = st.session_state.get("school")
     space = st.session_state.get("active_space")
@@ -409,12 +416,96 @@ def render_sidebar(active_key: str = "") -> None:
 # 반응형 컬럼 헬퍼
 # ─────────────────────────────────────────
 def desktop_columns(spec: list[float] | int = 2):
-    """데스크톱에선 좌-우 분할, 모바일에선 자동 세로 스택.
-
-    Streamlit의 st.columns는 너비가 좁아지면 자동으로 세로 스택되므로
-    spec 비율만 지정하면 된다. 의도를 명확히 하기 위한 별칭.
-    """
+    """데스크톱에선 좌-우 분할, 모바일에선 자동 세로 스택."""
     return st.columns(spec)
+
+
+# ─────────────────────────────────────────
+# 확인 모달 (2단계 클릭) — 파괴적 액션 안전
+# ─────────────────────────────────────────
+def confirm_button(label: str, key: str, message: str = "이 작업은 되돌릴 수 없습니다.",
+                    use_container_width: bool = False) -> bool:
+    """2단계 확인 버튼. 두 번째 클릭 시 True 반환."""
+    confirm_key = f"_confirm_{key}"
+    if st.session_state.get(confirm_key):
+        st.warning(f"⚠ {message}")
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            if st.button(f"네, {label}", key=f"{key}_yes", type="primary",
+                          use_container_width=True):
+                st.session_state[confirm_key] = False
+                return True
+        with cc2:
+            if st.button("취소", key=f"{key}_no", use_container_width=True):
+                st.session_state[confirm_key] = False
+                st.rerun()
+        return False
+    if st.button(label, key=f"{key}_init", use_container_width=use_container_width):
+        st.session_state[confirm_key] = True
+        st.rerun()
+    return False
+
+
+# ─────────────────────────────────────────
+# 친절 에러 박스
+# ─────────────────────────────────────────
+def friendly_error(operation: str, exc: Exception, hint: str = "") -> None:
+    st.error(f"❌ **{operation} 중 오류가 발생했습니다.**")
+    if hint:
+        st.info(f"💡 {hint}")
+    with st.expander("기술 상세 보기 (개발자/지원팀용)"):
+        st.code(f"{type(exc).__name__}: {exc}")
+        st.exception(exc)
+
+
+# ─────────────────────────────────────────
+# 빈 상태 안내 카드 (D-C3)
+# ─────────────────────────────────────────
+def empty_state(title: str, description: str = "",
+                 action_label: str = "", action_target: str = "") -> None:
+    st.markdown(
+        f"<div style='text-align:center; padding:40px 20px; "
+        f"border:1px dashed #D1D1D4; border-radius:8px; background:#FAFAFA;'>"
+        f"<div style='font-size:18px; font-weight:700; color:#0A0A0B; margin-bottom:8px;'>"
+        f"{title}</div>"
+        f"<div style='font-size:13px; color:#6B6B70;'>{description}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    if action_label and action_target:
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            if st.button(action_label, type="primary", use_container_width=True,
+                          key=f"empty_action_{action_target}"):
+                st.switch_page(action_target)
+
+
+# ─────────────────────────────────────────
+# 모바일 숫자 키패드 (text_input 보강)
+# ─────────────────────────────────────────
+def numeric_input_patch(label_substring: str) -> None:
+    """이미 렌더링된 text_input에 inputmode=numeric 주입."""
+    safe = label_substring.replace("'", "")
+    st.markdown(
+        f"""
+        <script>
+        (function(){{
+            const labels = window.parent.document.querySelectorAll('label');
+            for (const lab of labels) {{
+                if (lab.textContent && lab.textContent.includes('{safe}')) {{
+                    const inp = lab.parentElement && lab.parentElement.querySelector('input');
+                    if (inp) {{
+                        inp.setAttribute('inputmode', 'numeric');
+                        inp.setAttribute('pattern', '[0-9]*');
+                        inp.setAttribute('autocomplete', 'one-time-code');
+                    }}
+                }}
+            }}
+        }})();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 

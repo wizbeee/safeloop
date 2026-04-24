@@ -27,6 +27,8 @@ from modules.storage import (
     list_recent_sessions,
     save_inspection,
     send_to_edu_app,
+    clear_draft,
+    korean_font_available,
 )
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
@@ -148,6 +150,12 @@ with col_save1:
     if st.button("학교 클라우드에 저장", type="primary", use_container_width=True):
         result = save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
         st.session_state["saved_session_id"] = result["session_id"]
+        # 본저장 완료 → 드래프트 정리
+        try:
+            clear_draft(school.get("정보공시 학교코드", ""))
+            st.session_state["_draft_restored"] = False
+        except Exception:
+            pass
         st.success(f"저장 완료 · 세션 ID `{result['session_id']}`")
         with st.expander("생성된 파일"):
             for fn in result["files"]:
@@ -161,6 +169,12 @@ with col_save2:
 # 사용자 추가 다운로드
 if st.session_state.get("saved_session_id"):
     st.markdown("##### 사용자 다운로드 (원하는 포맷 개별 선택)")
+    if not korean_font_available():
+        st.warning(
+            "⚠ 시스템에 한글 PDF 폰트가 없어 PDF의 한글이 깨질 수 있습니다. "
+            "Linux 서버라면 `apt install fonts-nanum fonts-noto-cjk` 후 재시작하세요. "
+            "(Streamlit Cloud는 packages.txt로 자동 처리됨)"
+        )
 
     master = build_master_record({**st.session_state,
                                    "session_id": st.session_state.get("saved_session_id")})

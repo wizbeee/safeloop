@@ -20,7 +20,10 @@ from modules.laws import CATEGORIES
 from modules.recommend import recommend_from_scores
 from modules.score import calculate_safety_score
 from modules.session import ensure_state, require_school
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import (
+    apply_theme, divider, friendly_error, hero, render_sidebar, section,
+    confirm_button,
+)
 
 st.set_page_config(page_title="AI 점검 · SafeLoop", page_icon="/",
                    layout="wide", initial_sidebar_state="collapsed")
@@ -90,6 +93,11 @@ SHOTS: list[dict] = [
 ]
 
 
+from modules.storage import (
+    save_draft_shots, load_draft_shots, has_draft, draft_summary, clear_draft,
+)
+
+
 def _shots_dict() -> dict:
     """세션에 샷별 저장소 초기화 — 각 샷은 사진 리스트."""
     return {s["key"]: [] for s in SHOTS}
@@ -113,6 +121,32 @@ else:
     st.session_state["shots"] = migrated
 
 shots_state: dict = st.session_state["shots"]
+
+# ─────────────────────────────────────────
+# 드래프트 복원 안내 (새로고침/재진입 시)
+# ─────────────────────────────────────────
+school_code = school.get("정보공시 학교코드", "")
+empty_now = sum(len(v) for v in shots_state.values()) == 0
+if empty_now and has_draft(school_code) and not st.session_state.get("_draft_restored"):
+    summary = draft_summary(school_code) or {}
+    n = summary.get("photo_count", 0)
+    when = (summary.get("updated_at") or "")[:16].replace("T", " ")
+    st.warning(
+        f"이전에 작성하다 멈춘 촬영 드래프트가 있습니다 — **{n}장** · 마지막 저장 {when}"
+    )
+    rc1, rc2, _ = st.columns([1, 1, 3])
+    with rc1:
+        if st.button("이어서 작업", type="primary", key="restore_draft"):
+            restored = load_draft_shots(school_code)
+            for k, v in restored.items():
+                shots_state[k] = v
+            st.session_state["_draft_restored"] = True
+            st.rerun()
+    with rc2:
+        if st.button("드래프트 폐기", key="discard_draft"):
+            clear_draft(school_code)
+            st.session_state["_draft_restored"] = True
+            st.rerun()
 
 total_photos = sum(len(v) for v in shots_state.values())
 required_filled = sum(1 for s in SHOTS if s["required"] and shots_state.get(s["key"]))
@@ -215,6 +249,7 @@ def _render_shot_card(s: dict) -> None:
                              use_container_width=True)
                     if st.button("삭제", key=f"del_{key}_{idx}", use_container_width=True):
                         photos.pop(idx)
+                        _persist_draft()
                         st.rerun()
 
         counter_key = f"cam_ctr_{key}"
@@ -271,12 +306,14 @@ def _render_shot_card(s: dict) -> None:
                     added = True
             if added:
                 st.session_state[counter_key] += 1
+                _persist_draft()
                 st.rerun()
 
         if photos:
             if st.button("이 구도 전체 비우기", key=f"clear_shot_{key}"):
                 shots_state[key] = []
                 st.session_state[counter_key] = st.session_state.get(counter_key, 0) + 1
+                _persist_draft()
                 st.rerun()
 
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
@@ -347,6 +384,7 @@ if st.session_state.get("demo_mode"):
                 })
             for k in ["stage1_result", "stage2_result", "stage2_confirmed", "stage3_result"]:
                 st.session_state[k] = None
+            _persist_draft()
             st.rerun()
 
 def _reset_all() -> None:
@@ -359,6 +397,8 @@ def _reset_all() -> None:
                "item_scores", "score_result", "recommendations"]:
         st.session_state[_k] = None
     st.session_state["wizard_step"] = "shoot_1"
+    clear_draft(school_code)
+    st.session_state["_draft_restored"] = False
     st.rerun()
 
 
@@ -373,7 +413,8 @@ if classic_mode:
         _render_shot_card(s)
     colR1, colR2 = st.columns([4, 1])
     with colR2:
-        if st.button("전체 초기화", key="reset_shots_classic"):
+        if confirm_button("전체 초기화", key="reset_shots_classic",
+                           message="촬영한 모든 사진과 AI 결과가 삭제됩니다."):
             _reset_all()
 else:
     # ─── 위저드: 스텝별 한 화면 ───
@@ -465,7 +506,8 @@ else:
 
     # 초기화 링크 (위저드에서도 접근)
     with st.expander("처음부터 다시 시작"):
-        if st.button("모든 사진/결과 초기화", key="reset_wizard"):
+        if confirm_button("모든 사진/결과 초기화", key="reset_wizard",
+                           message="이 공간의 촬영본·AI 분석·점검 입력이 모두 사라집니다."):
             _reset_all()
 
 # ─────────────────────────────────────────
@@ -483,6 +525,14 @@ def _flatten_photos_with_labels() -> tuple[list[bytes], list[str]]:
             photos.append(p["bytes"])
             labels.append(f"{s['no']}-{idx} ({s['title']})")
     return photos, labels
+
+
+def _persist_draft() -> None:
+    """샷 변경 시마다 호출 — 디스크에 자동 백업."""
+    try:
+        save_draft_shots(school_code, shots_state)
+    except Exception:
+        pass  # 백업 실패는 사용자 흐름 차단하지 않음
 
 
 all_photos, all_labels = _flatten_photos_with_labels()
@@ -516,6 +566,14 @@ if _show_ai_run:
                          disabled=run_disabled, key="run_ai_btn"):
                 images = all_photos
                 labels = all_labels
+                # 사진 수 기반 예상 시간: 단계1(5+1.5*N) + 단계2(8+2.5*N) + 단계3(4)
+                n_imgs = len(images)
+                est_total = int(5 + 1.5 * n_imgs + 8 + 2.5 * n_imgs + 4)
+                st.info(
+                    f"⏱ 예상 소요 시간 약 **{est_total}초** "
+                    f"(사진 {n_imgs}장 · 캐시 적중 시 즉시). "
+                    f"공급자: {st.session_state.get('ai_provider') or '자동'}"
+                )
 
                 # 이미지 품질 사전 검사
                 if st.session_state.get("image_quality_check", True):
@@ -570,9 +628,18 @@ if _show_ai_run:
                     if not classic_mode:
                         _go_to_step("supplement")
                 except Exception as e:
-                    st.error("AI 호출 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
-                    with st.expander("상세 로그"):
-                        st.exception(e)
+                    err_msg = str(e).lower()
+                    if "rate" in err_msg or "429" in err_msg:
+                        hint = "API 호출 한도를 초과했습니다. 1~2분 후 다시 시도하세요."
+                    elif "auth" in err_msg or "401" in err_msg or "403" in err_msg:
+                        hint = "API 키가 잘못되었거나 만료되었습니다. 설정 페이지에서 키를 확인하세요."
+                    elif "timeout" in err_msg or "503" in err_msg or "502" in err_msg:
+                        hint = "공급자 서버가 일시적으로 응답하지 않습니다. 잠시 후 재시도하세요."
+                    elif "network" in err_msg or "connection" in err_msg:
+                        hint = "네트워크 연결을 확인해 주세요."
+                    else:
+                        hint = "잠시 후 다시 시도하세요. 반복되면 사진을 줄이거나 공급자를 교체해 보세요."
+                    friendly_error("AI 점검표 생성", e, hint=hint)
 
 # 결과 데이터 참조 (모든 스텝에서 필요)
 s1 = st.session_state.get("stage1_result")

@@ -14,9 +14,9 @@ import uuid
 import streamlit as st
 
 from modules.ai_vision import api_key_available, current_provider_label
-from modules.ai_providers import ALL_PROVIDERS, providers_status
+from modules.ai_providers import ALL_PROVIDERS, providers_status, test_provider_connection
 from modules.session import ensure_state, reset_all
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, confirm_button, divider, hero, render_sidebar, section
 
 st.set_page_config(page_title="설정 · SafeLoop", page_icon="/",
                    layout="centered", initial_sidebar_state="expanded")
@@ -62,7 +62,14 @@ with c2:
 
 if st.button("결재라인 저장"):
     st.session_state["eduline"] = eduline
-    st.success("저장 완료")
+    # 학교가 선택돼 있으면 학교 프로필에도 영구 저장
+    school = st.session_state.get("school")
+    if school and school.get("정보공시 학교코드"):
+        from modules.storage import save_school_profile
+        save_school_profile(school["정보공시 학교코드"], {"eduline": eduline})
+        st.success("저장 완료 — 학교 프로필에도 영구 반영됨 (다음 점검부터 자동 채움)")
+    else:
+        st.success("저장 완료 (학교 미선택 — 세션에만 저장)")
 
 # ─────────────────────────────────────────
 # 공간 사전 등록
@@ -164,10 +171,15 @@ if new_key != existing:
     st.session_state[key_field] = new_key.strip()
 
 if st.button("키 저장·연결 확인"):
-    if api_key_available():
-        st.success(f"연결됨 — {current_provider_label()}")
-    else:
+    if not api_key_available():
         st.error("이 공급자의 API 키가 감지되지 않습니다.")
+    else:
+        with st.spinner(f"{selected['label']} 에 ping 호출 중…"):
+            ok, msg = test_provider_connection(sel)
+        if ok:
+            st.success(f"✅ {selected['label']} — {msg}")
+        else:
+            st.error(f"❌ {selected['label']} — {msg}")
 
 # 전체 공급자 상태 요약
 st.markdown("##### 전체 공급자 상태")
@@ -203,8 +215,36 @@ else:
 # 세션 초기화
 # ─────────────────────────────────────────
 divider()
-section("06", "세션 관리", "모든 세션 데이터(학교 선택·공간·촬영·AI 결과 등)를 초기화합니다.")
-if st.button("전체 세션 초기화", type="secondary"):
+section("06", "디스크 사용량 · 캐시 정리",
+        "학교 클라우드와 AI 캐시의 디스크 사용량을 확인하고 오래된 캐시를 정리합니다.")
+
+from modules.storage import storage_usage, cleanup_old_cache
+usage = storage_usage()
+def _fmt(b: int) -> str:
+    if b < 1024:
+        return f"{b}B"
+    if b < 1024 * 1024:
+        return f"{b/1024:.1f}KB"
+    return f"{b/1024/1024:.2f}MB"
+
+uc1, uc2, uc3 = st.columns(3)
+uc1.metric("학교 클라우드", _fmt(usage["school_storage"]))
+uc2.metric("AI 캐시", _fmt(usage["ai_cache"]))
+uc3.metric("교육청 수신함", _fmt(usage["edu_receipt"]))
+
+cdays = st.slider("캐시 보존 기간(일)", 7, 90, 30, step=1)
+if st.button(f"{cdays}일 이전 AI 캐시 정리"):
+    n, freed = cleanup_old_cache(days=cdays)
+    if n:
+        st.success(f"{n}개 파일 삭제 · {_fmt(freed)} 회수")
+    else:
+        st.info("정리할 파일이 없습니다.")
+    st.rerun()
+
+divider()
+section("07", "세션 관리", "모든 세션 데이터(학교 선택·공간·촬영·AI 결과 등)를 초기화합니다.")
+if confirm_button("전체 세션 초기화", key="reset_all_settings",
+                   message="학교 선택·공간·촬영본·AI 결과 등 모든 세션 데이터 삭제."):
     reset_all()
     st.success("초기화 완료")
     st.rerun()

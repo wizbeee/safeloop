@@ -28,42 +28,54 @@ def _strip_bom(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _safe_read_csv(name: str, **kwargs) -> pd.DataFrame:
+    """CSV 누락 시 친절한 에러 + 재현 가이드."""
+    path = DATA_DIR / name
+    if not path.exists():
+        raise FileNotFoundError(
+            f"데이터 파일이 없습니다: data/{name}\n"
+            f"git pull로 데이터를 받았는지 확인하세요. "
+            f"또는 'SafeLoop_데모앱_이관세트/data/' 에서 복사해 주세요."
+        )
+    return pd.read_csv(path, **kwargs)
+
+
 @st.cache_data(show_spinner=False)
 def load_master() -> pd.DataFrame:
-    df = pd.read_csv(DATA_DIR / "master_school_data.csv", dtype={"정보공시 학교코드": str})
-    return _strip_bom(df)
+    return _strip_bom(_safe_read_csv("master_school_data.csv",
+                                       dtype={"정보공시 학교코드": str}))
 
 
 @st.cache_data(show_spinner=False)
 def load_high_risk() -> pd.DataFrame:
-    df = pd.read_csv(DATA_DIR / "high_risk_schools.csv", dtype={"정보공시 학교코드": str})
-    return _strip_bom(df)
+    return _strip_bom(_safe_read_csv("high_risk_schools.csv",
+                                       dtype={"정보공시 학교코드": str}))
 
 
 @st.cache_data(show_spinner=False)
 def load_sido_summary() -> pd.DataFrame:
-    return _strip_bom(pd.read_csv(DATA_DIR / "sido_summary.csv"))
+    return _strip_bom(_safe_read_csv("sido_summary.csv"))
 
 
 @st.cache_data(show_spinner=False)
 def load_cluster_summary() -> pd.DataFrame:
-    return _strip_bom(pd.read_csv(DATA_DIR / "cluster_summary.csv"))
+    return _strip_bom(_safe_read_csv("cluster_summary.csv"))
 
 
 @st.cache_data(show_spinner=False)
 def load_sensitivity() -> pd.DataFrame:
-    return _strip_bom(pd.read_csv(DATA_DIR / "sensitivity_result.csv"))
+    return _strip_bom(_safe_read_csv("sensitivity_result.csv"))
 
 
 @st.cache_data(show_spinner=False)
 def load_sigungu_agg() -> pd.DataFrame:
-    return _strip_bom(pd.read_csv(DATA_DIR / "sigungu_agg.csv"))
+    return _strip_bom(_safe_read_csv("sigungu_agg.csv"))
 
 
 @st.cache_data(show_spinner=False)
 def load_risk_analysis() -> pd.DataFrame:
-    df = pd.read_csv(DATA_DIR / "risk_analysis_result.csv", dtype={"정보공시 학교코드": str})
-    return _strip_bom(df)
+    return _strip_bom(_safe_read_csv("risk_analysis_result.csv",
+                                       dtype={"정보공시 학교코드": str}))
 
 
 # ─────────────────────────────────────────
