@@ -219,6 +219,16 @@ if "wizard_step" not in st.session_state:
 if st.session_state["wizard_step"] not in _STEP_KEYS:
     st.session_state["wizard_step"] = "shoot_1"
 
+# 🎬 자동재생 진입 — 필수 3장이 모두 있고 _autoplay 플래그가 있으면 ai_run 스텝으로 점프
+if st.session_state.get("_autoplay") and not st.session_state.get("_autoplay_consumed"):
+    _required_keys_auto = ["wide_front", "wide_right", "wide_left"]
+    _all_wide_ready = all(
+        st.session_state.get("shots", {}).get(k) for k in _required_keys_auto
+    )
+    if _all_wide_ready:
+        st.session_state["wizard_step"] = "ai_run"
+        st.session_state["_autoplay_consumed"] = True
+
 # 2-3 수정: 토글 라벨을 명확히 하고, 현재 모드를 보조 안내로 함께 표시
 col_toggle_l, col_toggle_r = st.columns([3, 2])
 with col_toggle_l:

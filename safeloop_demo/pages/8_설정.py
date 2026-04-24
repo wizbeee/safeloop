@@ -59,41 +59,11 @@ with oc2:
         st.switch_page("app.py")
 
 # ─────────────────────────────────────────
-# 결재라인 기본값
+# 공간 사전 등록 (이전 02 결재라인 기본값 섹션은 삭제 —
+#   실제 결재는 K에듀파인에서 이뤄지므로 이 앱에서 관리할 필요 없음)
 # ─────────────────────────────────────────
 divider()
-section("02", "결재라인 기본값")
-st.caption("저장하면 공문 품의서에 자동 반영됩니다. 학교를 선택하면 영구 저장 가능.")
-
-if not st.session_state.get("school"):
-    st.info("학교를 선택하면 결재라인이 학교 프로필에 영구 저장됩니다. "
-            "지금은 세션에만 저장됩니다.")
-
-eduline = st.session_state.get("eduline") or {}
-c1, c2 = st.columns(2)
-with c1:
-    eduline["담당자"] = st.text_input("담당자", value=eduline.get("담당자", ""), key="cfg_담당자")
-    eduline["부장"] = st.text_input("부장", value=eduline.get("부장", ""), key="cfg_부장")
-with c2:
-    eduline["교감"] = st.text_input("교감", value=eduline.get("교감", ""), key="cfg_교감")
-    eduline["교장"] = st.text_input("교장", value=eduline.get("교장", ""), key="cfg_교장")
-
-if st.button("결재라인 저장"):
-    st.session_state["eduline"] = eduline
-    # 학교가 선택돼 있으면 학교 프로필에도 영구 저장
-    school = st.session_state.get("school")
-    if school and school.get("정보공시 학교코드"):
-        from modules.storage import save_school_profile
-        save_school_profile(school["정보공시 학교코드"], {"eduline": eduline})
-        st.success("저장 완료 — 학교 프로필에도 영구 반영됨 (다음 점검부터 자동 채움)")
-    else:
-        st.success("저장 완료 (학교 미선택 — 세션에만 저장)")
-
-# ─────────────────────────────────────────
-# 공간 사전 등록
-# ─────────────────────────────────────────
-divider()
-section("03", "공간 사전 등록")
+section("02", "공간 사전 등록")
 st.caption("첫 점검 전에 학교 내 공간 목록을 미리 등록할 수 있습니다.")
 
 school = st.session_state.get("school")
@@ -141,11 +111,11 @@ else:
                     st.rerun()
 
 # ─────────────────────────────────────────
-# API 상태
+# AI 공급자 (이전 04 → 03 으로 번호 재정렬)
 # ─────────────────────────────────────────
 divider()
-section("04", "AI 공급자",
-        "Claude 이외에도 OpenAI 등 다른 공급자로 전환할 수 있습니다. "
+section("03", "AI 공급자",
+        "Claude · Gemini · GPT 중 선택. "
         "프롬프트·파이프라인은 동일하며 호출 대상만 교체됩니다.")
 
 _providers = providers_status()
@@ -228,18 +198,55 @@ img_check = st.toggle(
 st.session_state["image_quality_check"] = img_check
 
 divider()
-section("05", "AI 시스템 상태")
+section("04", "AI 시스템 상태")
 if api_key_available():
     st.success(f"AI 파이프라인 사용 가능 — 현재 공급자: {current_provider_label()}")
 else:
     st.error("현재 선택된 공급자의 API 키가 없습니다. 위 섹션에서 키를 입력하세요.")
 
 # ─────────────────────────────────────────
-# 세션 초기화
+# 데이터 저장·처리 원칙 (보안·컴플라이언스 안내)
+# ─────────────────────────────────────────
+divider()
+section("05", "데이터 저장 원칙 (시연 vs 운영)",
+        "학교 안전 점검 로우데이터는 학교 내부 결재가 선행되어야 하는 자료입니다.")
+st.markdown(
+    "<div style='border:1px solid #F8D0D0;background:#FFF6F6;"
+    "border-radius:6px;padding:14px 18px;font-size:13px;color:#0A0A0B;line-height:1.75;'>"
+    "<b style='color:#D50000;'>⚠ 중요</b> — 현재 이 앱은 "
+    "<b>Streamlit Community Cloud</b> 데모 컨테이너에서 실행 중일 수 있습니다. "
+    "이 환경의 파일 시스템(`school_storage/`)은 <b>임시 저장소</b>이며, "
+    "컨테이너 재시작 시 초기화됩니다. 외부 인가 없이 영구 저장되지 않습니다.<br><br>"
+    "<b>⚙ 실 운영 시에는 반드시 다음 중 하나로 전환하세요:</b><br>"
+    "① <b>학교 내부망 온프렘 배포</b> — 학교 서버·NAS 에 Streamlit 컨테이너 설치<br>"
+    "② <b>브라우저 세션 전용 모드</b> — 하단 옵션으로 디스크 저장 비활성화<br>"
+    "③ <b>교육청 내부 클라우드</b> — 교육청 인증 게이트웨이 통한 격리된 테넌트<br><br>"
+    "<b>현재 시연 모드</b>에서는 결과 저장 시 파일이 임시로 생성되지만, "
+    "앱 밖으로 반출되려면 반드시 사용자가 <b>다운로드 버튼</b>으로 직접 내려받아야 합니다. "
+    "수동 다운로드 없이는 외부로 전송되지 않습니다."
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+_session_only = st.toggle(
+    "📁 **세션 전용 모드** — 디스크에 저장하지 않고 브라우저 메모리에만 유지",
+    value=st.session_state.get("_session_only_mode", False),
+    help="ON: 점검 이력이 디스크에 쓰이지 않음 (새로고침·재시작 시 소멸). "
+         "다운로드로만 이력 보관 가능. 개인정보·보안이 우려될 때 권장."
+)
+st.session_state["_session_only_mode"] = _session_only
+if _session_only:
+    st.info(
+        "세션 전용 모드 ON — 결과 저장 버튼을 눌러도 디스크에 기록되지 않습니다. "
+        "반드시 **다운로드 버튼**으로 결과물을 내려받아 학교 내부 결재에 첨부하세요."
+    )
+
+# ─────────────────────────────────────────
+# 디스크 사용량 (관리자 도구)
 # ─────────────────────────────────────────
 divider()
 section("06", "디스크 사용량 · 캐시 정리",
-        "현재 Streamlit 서버 호스트 기준. Streamlit Cloud는 재시작 시 초기화.")
+        "로컬/자체 호스팅 환경에서만 의미 있음. Streamlit Cloud는 재시작 시 초기화.")
 with st.expander("관리자 도구 열기", expanded=False):
     st.caption(
         "이 정보는 **현재 Streamlit 서버가 실행 중인 호스트의 로컬 파일 시스템** 기준입니다. "

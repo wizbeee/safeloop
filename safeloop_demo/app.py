@@ -31,7 +31,7 @@ render_sidebar(active_key="home")
 # ─────────────────────────────────────────
 st.markdown(
     """
-    <div style="text-align:center; padding: 80px 0 40px 0;">
+    <div style="text-align:center; padding: 60px 0 28px 0;">
       <div style="font-size:11px; letter-spacing:0.4em; font-weight:600; color:#D50000; margin-bottom:14px; text-transform:uppercase;">SAFELOOP</div>
       <div style="font-size:42px; font-weight:800; color:#0A0A0B; letter-spacing:-0.03em; line-height:1.1; margin-bottom:14px;">
         학교 안전, 지금 바로 점검
@@ -45,45 +45,111 @@ st.markdown(
 )
 
 # ─────────────────────────────────────────
-# 중앙 CTA
+# 진입점 선택 — 학교 담당자 / 교육청 담당자 (명확한 카드 분기)
 # ─────────────────────────────────────────
-col_l, col_c, col_r = st.columns([1, 2, 1])
-with col_c:
-    if st.button("점검하러 가기", type="primary", use_container_width=True, key="go_inspect"):
-        st.switch_page("pages/1_점검시작.py")
+current_role = st.session_state.get("role", "학교")
+
+st.markdown(
+    "<div style='text-align:center;font-size:12px;letter-spacing:0.28em;"
+    "color:#6B6B70;font-weight:600;margin-bottom:14px;'>역할을 선택하세요</div>",
+    unsafe_allow_html=True,
+)
+
+role_col_a, role_col_b = st.columns(2, gap="medium")
+
+with role_col_a:
+    is_school = current_role == "학교"
+    border = "3px solid #D50000" if is_school else "1px solid #E5E5E8"
+    bg = "#FFFFFF" if is_school else "#FAFAFA"
     st.markdown(
-        "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
-        "모바일·태블릿 권장 · 약 3분 소요"
-        "</div>",
+        f"<div style='border-left:{border};border-top:1px solid #E5E5E8;"
+        f"border-right:1px solid #E5E5E8;border-bottom:1px solid #E5E5E8;"
+        f"background:{bg};border-radius:6px;padding:22px 22px 14px 22px;"
+        f"min-height:150px;'>"
+        f"<div style='font-size:11px;letter-spacing:0.28em;color:#D50000;"
+        f"font-weight:700;margin-bottom:8px;'>SCHOOL</div>"
+        f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
+        f"학교 담당자</div>"
+        f"<div style='font-size:13px;color:#6B6B70;line-height:1.6;'>"
+        f"학교 식별·인증 후 AI 점검 → 에듀파인 결재용 패키지 생성 → 교육청 전송"
+        f"</div></div>",
         unsafe_allow_html=True,
     )
+    if st.button("학교 담당자로 시작", key="enter_school",
+                  type=("primary" if is_school else "secondary"),
+                  use_container_width=True):
+        # 교육청 모드에서 오거나 역할 스위치 시 학교 세션 유지 (학교 담당자 흐름)
+        st.session_state["role"] = "학교"
+        st.rerun()
+
+with role_col_b:
+    is_edu = current_role == "교육청"
+    border = "3px solid #D50000" if is_edu else "1px solid #E5E5E8"
+    bg = "#FFFFFF" if is_edu else "#FAFAFA"
+    st.markdown(
+        f"<div style='border-left:{border};border-top:1px solid #E5E5E8;"
+        f"border-right:1px solid #E5E5E8;border-bottom:1px solid #E5E5E8;"
+        f"background:{bg};border-radius:6px;padding:22px 22px 14px 22px;"
+        f"min-height:150px;'>"
+        f"<div style='font-size:11px;letter-spacing:0.28em;color:#D50000;"
+        f"font-weight:700;margin-bottom:8px;'>EDU OFFICE</div>"
+        f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
+        f"교육청 담당자</div>"
+        f"<div style='font-size:13px;color:#6B6B70;line-height:1.6;'>"
+        f"학교 제출본 수신·검증 → KEIIS 이관 → 전국 대시보드·정책 시뮬레이터 활용"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
+    if st.button("교육청 담당자로 시작", key="enter_edu",
+                  type=("primary" if is_edu else "secondary"),
+                  use_container_width=True):
+        # 교육청 진입 시 학교 세션 자동 정리 (교육청 담당자는 특정 학교 소속이 아님)
+        if st.session_state.get("role") != "교육청" \
+                or st.session_state.get("school") or st.session_state.get("active_space"):
+            from modules.session import reset_inspection
+            reset_inspection()
+            st.session_state["school"] = None
+            st.session_state["auth_verified"] = False
+        st.session_state["role"] = "교육청"
+        st.toast("교육청 담당자 모드 — 학교 선택 세션이 정리되었습니다.", icon="🏛")
+        st.rerun()
+
+# 역할별 빠른 이동
+st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+col_l, col_c, col_r = st.columns([1, 2, 1])
+with col_c:
+    if current_role == "교육청":
+        if st.button("교육청 수신함 열기", type="primary",
+                      use_container_width=True, key="go_inbox"):
+            st.switch_page("pages/7_교육청수신함.py")
+        st.markdown(
+            "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
+            "수신·검증 → KEIIS 이관 · 약 2분 소요"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        if st.button("점검하러 가기", type="primary", use_container_width=True, key="go_inspect"):
+            st.switch_page("pages/1_점검시작.py")
+        st.markdown(
+            "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
+            "모바일·태블릿 권장 · 약 3분 소요"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 # ─────────────────────────────────────────
-# 운영 모드 / 역할
+# 운영 모드
 # ─────────────────────────────────────────
-st.markdown("<div style='height:56px'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
 divider()
 
-mode_c1, mode_c2 = st.columns(2)
-with mode_c1:
-    demo = st.toggle(
-        "시연 모드",
-        value=st.session_state.get("demo_mode", True),
-        help="샘플 사진·자동 값 채우기를 허용합니다. 실 운영에선 꺼두세요.",
-    )
-    st.session_state["demo_mode"] = demo
-with mode_c2:
-    role = st.radio(
-        "역할",
-        options=["학교 담당자", "교육청 담당자"],
-        index=0 if st.session_state.get("role", "학교") == "학교" else 1,
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    st.session_state["role"] = "학교" if role == "학교 담당자" else "교육청"
-
-if st.session_state["role"] == "교육청":
-    st.caption("교육청 담당자 모드 — 사이드바 '교육청 수신함' 메뉴로 이동하세요.")
+demo = st.toggle(
+    "시연 모드 (샘플 사진·자동 채움 허용)",
+    value=st.session_state.get("demo_mode", True),
+    help="샘플 사진·자동 값 채우기를 허용합니다. 실 운영에선 꺼두세요.",
+)
+st.session_state["demo_mode"] = demo
 
 # ─────────────────────────────────────────
 # 튜토리얼 다이얼로그 (플로팅 버튼에서 호출)
@@ -173,23 +239,19 @@ with oc1:
 
 with oc2:
     st.markdown("**🎬 시연 자동 재생**")
-    st.caption("심사·발표용 — 학교·공간·샘플 사진까지 일괄 세팅 후 AI 점검으로 이동")
+    st.caption("심사·발표용 — 학교·공간·샘플 3장 로드 + AI 분석 화면으로 즉시 이동 (원클릭)")
     has_existing = bool(st.session_state.get("school")) or bool(st.session_state.get("active_space"))
     if has_existing:
         st.markdown(
             "<div style='background:#FFF2F2; border:1px solid #F8D0D0; "
             "border-radius:6px; padding:8px 12px; font-size:12px; color:#D50000;'>"
-            "기존 선택된 학교·공간·진행 중 작업이 모두 초기화됩니다."
+            "⚠ 기존 선택된 학교·공간·진행 중 작업이 모두 초기화됩니다."
             "</div>",
             unsafe_allow_html=True,
         )
-    if confirm_button(
-        "자동 재생 시작",
-        key="autoplay",
-        message="현재 선택된 학교·공간·촬영본·AI 결과가 모두 초기화되고 데모 학교로 전환됩니다."
-        if has_existing else "데모 학교로 즉시 전환합니다.",
-        use_container_width=True,
-    ):
+    # 원클릭 자동재생 — 2단계 확인 없이 즉시 실행 (발표 시 빠르게)
+    if st.button("▶ 자동 재생 시작", key="autoplay_btn",
+                  type="primary", use_container_width=True):
         from modules.data_loader import search_schools_by_name, get_school_by_code
         from modules.session import reset_inspection
         from modules.storage import clear_draft

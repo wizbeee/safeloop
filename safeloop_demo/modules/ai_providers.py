@@ -183,16 +183,69 @@ class OpenAIProvider(VisionProvider):
 
 
 # ─────────────────────────────────────────
+# Google Gemini
+# ─────────────────────────────────────────
+class GeminiProvider(VisionProvider):
+    id = "gemini"
+    label = "Google Gemini 2.5 (Pro · Flash)"
+    MODELS = {
+        "vision": "gemini-2.5-pro",
+        "text": "gemini-2.5-flash",
+    }
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.environ.get("GOOGLE_API_KEY") \
+            or os.environ.get("GEMINI_API_KEY")
+
+    def available(self) -> bool:
+        return bool(self.api_key)
+
+    def call(self, system: str, text: str, images: list[bytes],
+             tier: str = "vision") -> str:
+        # google-generativeai SDK 사용 (필요 시 requirements 에 추가)
+        try:
+            import google.generativeai as genai
+        except ImportError as e:
+            raise RuntimeError(
+                "google-generativeai 패키지가 설치되지 않았습니다. "
+                "requirements.txt 에 google-generativeai 를 추가하고 재설치하세요."
+            ) from e
+
+        genai.configure(api_key=self.api_key)
+        model = genai.GenerativeModel(
+            model_name=self.MODELS[tier],
+            system_instruction=system,
+        )
+
+        # Gemini SDK 는 이미지 바이트를 직접 받을 수 있음
+        parts: list = [text]
+        for b in images:
+            parts.append({"mime_type": "image/jpeg", "data": b})
+
+        def _do() -> str:
+            resp = model.generate_content(
+                parts,
+                generation_config={"max_output_tokens": 4096},
+            )
+            return getattr(resp, "text", "") or ""
+
+        return _with_retry(_do, max_attempts=3, base_delay=2.0)
+
+
+# ─────────────────────────────────────────
 # 레지스트리
 # ─────────────────────────────────────────
 _PROVIDER_CLASSES: dict[str, type[VisionProvider]] = {
     AnthropicProvider.id: AnthropicProvider,
+    GeminiProvider.id: GeminiProvider,
     OpenAIProvider.id: OpenAIProvider,
 }
 
 ALL_PROVIDERS: list[dict] = [
     {"id": AnthropicProvider.id, "label": AnthropicProvider.label,
      "env_var": "ANTHROPIC_API_KEY"},
+    {"id": GeminiProvider.id, "label": GeminiProvider.label,
+     "env_var": "GOOGLE_API_KEY"},
     {"id": OpenAIProvider.id, "label": OpenAIProvider.label,
      "env_var": "OPENAI_API_KEY"},
 ]
@@ -209,6 +262,7 @@ def _key_from_session(provider_id: str) -> Optional[str]:
         secret_key = {
             "anthropic": "ANTHROPIC_API_KEY",
             "openai": "OPENAI_API_KEY",
+            "gemini": "GOOGLE_API_KEY",
         }.get(provider_id)
         if secret_key:
             try:
