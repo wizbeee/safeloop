@@ -53,6 +53,8 @@ DEFAULT_STATE = {
     "ai_provider": None,        # None=자동, "anthropic" | "openai" 등
     "api_key_anthropic": "",
     "api_key_openai": "",
+    "cross_check": False,       # 단계 1 교차 검증 (Anthropic + OpenAI)
+    "image_quality_check": True,
 
     # UX
     "_auth_prefill": "",        # 인증번호 자동 입력 버퍼

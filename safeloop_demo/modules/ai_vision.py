@@ -14,7 +14,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from modules.ai_providers import get_provider
+from modules.ai_providers import _PROVIDER_CLASSES, get_provider
+from modules.image_quality import optimize_only
 from modules.prompts import STAGE1_SYSTEM, STAGE2_SYSTEM, STAGE3_SYSTEM
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,9 +70,15 @@ def _parse_json(raw: str) -> dict:
 # ─────────────────────────────────────────
 # 파이프라인
 # ─────────────────────────────────────────
+def _optimize_batch(images: list[bytes]) -> list[bytes]:
+    """모든 입력 이미지를 자동 회전·리사이즈 (API 비용·전송시간 절감)."""
+    return [optimize_only(b) for b in images]
+
+
 def run_stage1(images: list[bytes], use_cache: bool = True,
                image_labels: Optional[list[str]] = None) -> dict:
     """단계 1 — 공간 유형 식별."""
+    images = _optimize_batch(images)
     provider = get_provider()
     cache_key = _hash_images(images)
     if use_cache:
@@ -99,9 +106,42 @@ def run_stage1(images: list[bytes], use_cache: bool = True,
     return parsed
 
 
+def run_stage1_cross_check(images: list[bytes], use_cache: bool = True) -> dict:
+    """교차 검증 — Anthropic + OpenAI 모두 호출 후 합의/차이 표시."""
+    from modules.ai_providers import _key_from_session
+    images = _optimize_batch(images)
+    results: dict[str, dict] = {}
+    text = f"{len(images)}장의 사진을 보고 공간 유형을 판정하세요."
+    for pid, cls in _PROVIDER_CLASSES.items():
+        inst = cls(api_key=_key_from_session(pid))
+        if not inst.available():
+            continue
+        try:
+            t0 = time.time()
+            raw = inst.call(STAGE1_SYSTEM, text, images, tier="vision")
+            elapsed = time.time() - t0
+            parsed = _parse_json(raw)
+            parsed["_elapsed_sec"] = round(elapsed, 2)
+            results[pid] = parsed
+        except Exception as e:
+            results[pid] = {"error": str(e)}
+
+    types = [r.get("space_type_primary") for r in results.values() if r.get("space_type_primary")]
+    consensus = max(set(types), key=types.count) if types else None
+    agreement = len(set(types)) <= 1 if types else False
+
+    return {
+        "by_provider": results,
+        "consensus": consensus,
+        "agreement": agreement,
+        "_cross_check": True,
+    }
+
+
 def run_stage2(images: list[bytes], space_type: str, use_cache: bool = True,
                image_labels: Optional[list[str]] = None) -> dict:
     """단계 2 — 안전 설비 탐지."""
+    images = _optimize_batch(images)
     provider = get_provider()
     cache_key = f"{_hash_images(images)}_{space_type}"
     if use_cache:

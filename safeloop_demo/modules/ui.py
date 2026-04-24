@@ -188,9 +188,21 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
 """
 
 
+_PWA_META = """
+<link rel="manifest" href="./app/static/manifest.json">
+<meta name="theme-color" content="#D50000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SafeLoop">
+<link rel="apple-touch-icon" href="./app/static/icon-192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+"""
+
+
 def apply_theme() -> None:
-    """페이지 최상단에서 호출 — 공통 CSS 주입."""
+    """페이지 최상단에서 호출 — 공통 CSS + PWA 메타 주입."""
     st.markdown(_CSS, unsafe_allow_html=True)
+    st.markdown(_PWA_META, unsafe_allow_html=True)
 
 
 def hero(kicker: str, title: str, subtitle: str = "") -> None:

@@ -191,6 +191,50 @@ if st.session_state.get("saved_session_id"):
 divider()
 section("04", "에듀파인 발송 준비", "공식 경로 — 결재라인을 거쳐 교육청으로 전달됩니다.")
 
+# 결재 진행 시각 시뮬레이터
+def _render_approval_chain(stage_idx: int) -> None:
+    """담당자 → 부장 → 교감 → 교장 결재선 시각화."""
+    nodes = ["담당자", "부장", "교감", "교장", "교육청 수신"]
+    pieces = []
+    for i, name in enumerate(nodes):
+        if i < stage_idx:
+            color, bg, mark = "#FFFFFF", "#1B8A3A", "✓"
+        elif i == stage_idx:
+            color, bg, mark = "#FFFFFF", "#D50000", "●"
+        else:
+            color, bg, mark = "#9A9A9F", "#FAFAFA", "○"
+        pieces.append(
+            f"<div style='flex:1;text-align:center;'>"
+            f"<div style='display:inline-block;width:42px;height:42px;line-height:42px;"
+            f"border-radius:50%;background:{bg};color:{color};font-weight:700;'>{mark}</div>"
+            f"<div style='font-size:12px;margin-top:6px;color:#0A0A0B;font-weight:600;'>{name}</div>"
+            f"</div>"
+        )
+    arrow = "<div style='align-self:center;color:#D1D1D4;font-size:18px;'>→</div>"
+    st.markdown(
+        "<div style='display:flex;align-items:center;gap:8px;margin:10px 0 18px 0;'>"
+        + arrow.join(pieces)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+_approval_stage = int(st.session_state.get("_approval_demo_stage", 0))
+_render_approval_chain(_approval_stage)
+sim_col1, sim_col2 = st.columns([1, 1])
+with sim_col1:
+    if st.button("결재 한 단계 진행 (시연)", key="approval_step",
+                 disabled=_approval_stage >= 5):
+        st.session_state["_approval_demo_stage"] = min(_approval_stage + 1, 5)
+        if st.session_state["_approval_demo_stage"] >= 4:
+            st.session_state["edufine_approved"] = True
+        st.rerun()
+with sim_col2:
+    if st.button("결재 단계 초기화", key="approval_reset"):
+        st.session_state["_approval_demo_stage"] = 0
+        st.session_state["edufine_approved"] = False
+        st.rerun()
+
 st.markdown(
     "학교 공식 보고는 **에듀파인 결재라인**을 통해 이루어집니다. "
     "앱이 결재·첨부 문서를 자동 생성하므로, 담당자는 에듀파인에 업로드 후 결재만 올리면 됩니다."

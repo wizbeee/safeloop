@@ -87,6 +87,42 @@ if st.session_state["role"] == "교육청":
         st.switch_page("pages/7_교육청수신함.py")
 
 # ─────────────────────────────────────────
+# 첫 방문 온보딩 + 데모 자동재생 (간이)
+# ─────────────────────────────────────────
+divider()
+oc1, oc2 = st.columns(2)
+
+with oc1:
+    if not st.session_state.get("_onboarding_done"):
+        with st.expander("ⓘ 처음 사용하시나요? (3단계 안내)", expanded=True):
+            st.markdown(
+                "**1단계 · 학교 찾기 + 인증** — GPS · 학교명 · 지역 단계 검색 중 편한 방식\n\n"
+                "**2단계 · AI 점검** — 정면·우측·좌측 3장 촬영 후 AI 자동 분석 → 점검표 입력\n\n"
+                "**3단계 · 저장 + 발송** — Human/Machine 이중 저장, 에듀파인 결재 후 교육청 전송"
+            )
+            if st.button("이해했습니다 (다시 보지 않기)", key="dismiss_onboarding"):
+                st.session_state["_onboarding_done"] = True
+                st.rerun()
+    else:
+        st.caption("✓ 온보딩 완료")
+
+with oc2:
+    st.markdown("**시연 자동 재생**")
+    st.caption("심사·발표용 — 임의 학교·샘플 사진·자동 채움으로 90초 워킹 데모")
+    if st.button("자동 재생 시작", use_container_width=True, key="autoplay"):
+        # 가상 학교 + 화학실 샘플 + 시연모드 ON 으로 점검시작 페이지 진입
+        from modules.data_loader import search_schools_by_name, get_school_by_code
+        st.session_state["demo_mode"] = True
+        # 첫 학교 자동 선택 (시연용)
+        df = search_schools_by_name("중학교", limit=1)
+        if not df.empty:
+            st.session_state["school"] = get_school_by_code(df.iloc[0]["정보공시 학교코드"])
+            st.session_state["auth_verified"] = True
+            st.session_state["_autoplay"] = True
+            st.toast("자동 재생: 학교 자동 선택 + 인증 통과")
+        st.switch_page("pages/1_점검시작.py")
+
+# ─────────────────────────────────────────
 # 사이드바 안내
 # ─────────────────────────────────────────
 with st.sidebar:

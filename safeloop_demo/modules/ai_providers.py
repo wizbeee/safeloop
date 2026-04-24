@@ -134,11 +134,27 @@ ALL_PROVIDERS: list[dict] = [
 
 
 def _key_from_session(provider_id: str) -> Optional[str]:
+    """우선순위: 세션 입력 > Streamlit Secrets > None"""
     try:
         import streamlit as st
-        return st.session_state.get(f"api_key_{provider_id}")
+        sess_key = st.session_state.get(f"api_key_{provider_id}")
+        if sess_key:
+            return sess_key
+        # Streamlit Cloud Secrets fallback
+        secret_key = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }.get(provider_id)
+        if secret_key:
+            try:
+                v = st.secrets.get(secret_key)
+                if v:
+                    return v
+            except Exception:
+                pass
     except Exception:
-        return None
+        pass
+    return None
 
 
 def get_provider(name: Optional[str] = None) -> VisionProvider:

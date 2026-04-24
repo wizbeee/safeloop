@@ -174,6 +174,22 @@ for p in _providers:
     src = f" · {p['key_source']}" if p.get("key_source") else ""
     st.markdown(f"- **{p['label']}** — {status}{src}")
 
+st.markdown("##### 추가 옵션")
+multi_avail = sum(1 for p in _providers if p["available"]) >= 2
+cross = st.toggle(
+    "단계 1 교차 검증 (Claude × GPT 합의)",
+    value=st.session_state.get("cross_check", False),
+    disabled=not multi_avail,
+    help="두 공급자가 모두 가능한 경우에만 동작. 비용·속도는 2배.",
+)
+st.session_state["cross_check"] = cross
+img_check = st.toggle(
+    "이미지 품질 사전 검사 (블러·어두움 · 자동 회전·리사이즈)",
+    value=st.session_state.get("image_quality_check", True),
+    help="흐리거나 어두운 사진을 AI에 보내기 전에 차단합니다.",
+)
+st.session_state["image_quality_check"] = img_check
+
 divider()
 section("05", "시스템 상태")
 if api_key_available():

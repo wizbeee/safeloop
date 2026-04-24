@@ -12,7 +12,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from modules.ai_vision import api_key_available, run_stage1, run_stage2, run_stage3
+from modules.ai_vision import (
+    api_key_available, run_stage1, run_stage1_cross_check, run_stage2, run_stage3,
+)
+from modules.image_quality import analyze_and_optimize
 from modules.laws import CATEGORIES
 from modules.recommend import recommend_from_scores
 from modules.score import calculate_safety_score
@@ -511,9 +514,40 @@ if _show_ai_run:
                          disabled=run_disabled, key="run_ai_btn"):
                 images = all_photos
                 labels = all_labels
+
+                # 이미지 품질 사전 검사
+                if st.session_state.get("image_quality_check", True):
+                    issues_found: list[str] = []
+                    for label, img_bytes in zip(labels, images):
+                        rep = analyze_and_optimize(img_bytes)
+                        if rep.issues:
+                            issues_found.append(f"**{label}** — " + "; ".join(rep.issues))
+                    if issues_found:
+                        st.error(
+                            "다음 사진들은 AI 인식이 어려울 수 있습니다. 재촬영을 권장합니다:\n\n"
+                            + "\n".join(f"- {x}" for x in issues_found)
+                            + "\n\n그래도 진행하려면 설정에서 '이미지 품질 사전 검사'를 끄세요."
+                        )
+                        st.stop()
+
                 prog = st.progress(0, text="단계 1/3 · 공간 유형 식별 중…")
                 try:
-                    s1 = run_stage1(images, use_cache=use_cache, image_labels=labels)
+                    # 교차 검증 (선택)
+                    if st.session_state.get("cross_check", False):
+                        cc = run_stage1_cross_check(images, use_cache=use_cache)
+                        st.session_state["stage1_cross_check"] = cc
+                        # 합의 결과를 stage1_result로 사용
+                        if cc.get("consensus"):
+                            anth = cc.get("by_provider", {}).get("anthropic", {})
+                            s1 = anth or next(iter(cc["by_provider"].values()))
+                            s1 = dict(s1)
+                            s1["space_type_primary"] = cc["consensus"]
+                            s1["_cached"] = False
+                            s1["_cross_check_agreement"] = cc["agreement"]
+                        else:
+                            s1 = run_stage1(images, use_cache=use_cache, image_labels=labels)
+                    else:
+                        s1 = run_stage1(images, use_cache=use_cache, image_labels=labels)
                     st.session_state["stage1_result"] = s1
                     prog.progress(33, text=f"단계 1 완료 · {s1.get('_elapsed_sec','?')}초")
 
@@ -560,6 +594,19 @@ if s1 and _show_stage1:
     with col3:
         tag = "캐시" if s1.get("_cached") else "신규"
         st.metric(f"처리 시간({tag})", f"{s1.get('_elapsed_sec','?')}초")
+    # 교차검증 결과 표시
+    cc = st.session_state.get("stage1_cross_check")
+    if cc and cc.get("by_provider"):
+        agree = cc.get("agreement")
+        if agree:
+            st.success(f"교차검증 합의 ✓ — 두 공급자 모두 '{cc.get('consensus')}'로 판정")
+        else:
+            results_str = ", ".join(
+                f"{pid}={(r.get('space_type_primary') or 'ERROR')}"
+                for pid, r in cc["by_provider"].items()
+            )
+            st.warning(f"교차검증 불일치 — {results_str}")
+
     if s1.get("evidence"):
         with st.expander("판단 근거"):
             for ev in s1["evidence"]:
