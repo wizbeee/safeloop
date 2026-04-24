@@ -40,6 +40,14 @@ if not school:
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 
+# 활성 공간 가드 (이전 페이지를 거치지 않은 경우)
+active_space = st.session_state.get("active_space")
+if not active_space:
+    st.warning("점검할 공간이 선택되지 않았습니다. 점검 시작 페이지에서 공간을 선택해 주세요.")
+    if st.button("← 공간 선택으로"):
+        st.switch_page("pages/1_점검시작.py")
+    st.stop()
+
 sr = st.session_state.get("score_result")
 if not sr:
     st.warning("점검 결과가 아직 없습니다. AI 점검을 먼저 완료하세요.")
@@ -50,8 +58,8 @@ if not sr:
 hero(
     "STEP 03",
     "결과 저장 · 발송",
-    f"{school['학교명']} · {st.session_state['active_space']['type']} "
-    f"({st.session_state['active_space'].get('nickname') or '-'})",
+    f"{school['학교명']} · {active_space.get('type', '-')} "
+    f"({active_space.get('nickname') or '-'})",
 )
 
 # ─────────────────────────────────────────

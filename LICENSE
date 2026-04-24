@@ -1,0 +1,30 @@
+MIT License
+
+Copyright (c) 2026 SafeLoop Team
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+본 소프트웨어가 제공·생성하는 학교 안전 점검 데이터의 정확성·완결성에 대해
+저작권자는 어떠한 보증도 하지 않으며, 실제 학교 안전 관리·법령 준수 책임은
+사용자(학교·교육청)에게 있습니다.
+
+샘플 사진 및 학교 식별 데이터(공공데이터포털 출처)의 사용·공개는
+공공데이터법, 개인정보보호법 등 관련 법령을 준수해야 합니다.

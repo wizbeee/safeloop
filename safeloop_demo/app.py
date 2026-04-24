@@ -108,19 +108,39 @@ with oc1:
 
 with oc2:
     st.markdown("**시연 자동 재생**")
-    st.caption("심사·발표용 — 임의 학교·샘플 사진·자동 채움으로 90초 워킹 데모")
+    st.caption("심사·발표용 — 데모 학교·인증 자동 통과 + 화학실 샘플 사진 미리 채움")
     if st.button("자동 재생 시작", use_container_width=True, key="autoplay"):
-        # 가상 학교 + 화학실 샘플 + 시연모드 ON 으로 점검시작 페이지 진입
-        from modules.data_loader import search_schools_by_name, get_school_by_code
+        # 시연 학교 자동 선정 — 학교명에 '중학교'가 포함된 첫 결과
+        from modules.data_loader import (
+            search_schools_by_name, get_school_by_code, list_sido,
+        )
         st.session_state["demo_mode"] = True
-        # 첫 학교 자동 선택 (시연용)
-        df = search_schools_by_name("중학교", limit=1)
-        if not df.empty:
-            st.session_state["school"] = get_school_by_code(df.iloc[0]["정보공시 학교코드"])
+
+        demo_school = None
+        for kw in ["중학교", "고등학교", "초등학교"]:
+            df = search_schools_by_name(kw, limit=10)
+            if not df.empty:
+                demo_school = get_school_by_code(df.iloc[0]["정보공시 학교코드"])
+                break
+
+        if demo_school:
+            st.session_state["school"] = demo_school
             st.session_state["auth_verified"] = True
+            # 데모 공간 등록
+            import uuid
+            demo_space = {
+                "space_id": uuid.uuid4().hex[:10],
+                "school_code": demo_school.get("정보공시 학교코드"),
+                "type": "화학실",
+                "nickname": "데모 · 3층 A",
+            }
+            st.session_state.setdefault("registered_spaces", []).append(demo_space)
+            st.session_state["active_space"] = demo_space
             st.session_state["_autoplay"] = True
-            st.toast("자동 재생: 학교 자동 선택 + 인증 통과")
-        st.switch_page("pages/1_점검시작.py")
+            st.toast(f"데모 학교: {demo_school.get('학교명')} · 화학실(데모) 자동 등록")
+            st.switch_page("pages/2_AI점검.py")
+        else:
+            st.error("데모 학교 데이터를 찾을 수 없습니다.")
 
 # ─────────────────────────────────────────
 # 사이드바 안내

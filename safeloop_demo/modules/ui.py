@@ -196,6 +196,21 @@ _PWA_META = """
 <meta name="apple-mobile-web-app-title" content="SafeLoop">
 <link rel="apple-touch-icon" href="./app/static/icon-192.png">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<!-- Open Graph / 소셜 공유 -->
+<meta property="og:title" content="세이프루프 SafeLoop — 학교 안전 순환 시스템">
+<meta property="og:description" content="공공데이터로 시작해, 공공데이터로 돌아옵니다. AI 비전 기반 학교 맞춤 안전 점검.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="./app/static/icon-512.png">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="SafeLoop · 세이프루프">
+<meta name="twitter:description" content="학교 안전 점검 한 사이클을 AI가 자동화합니다.">
+<meta name="description" content="제8회 교육 공공데이터 AI 활용대회 — AI 비전으로 학교 공간을 인식하고 법령 기반 맞춤 점검표를 자동 생성하는 순환 시스템.">
+
+<!-- favicon -->
+<link rel="icon" type="image/png" sizes="192x192" href="./app/static/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./app/static/icon-512.png">
 """
 
 

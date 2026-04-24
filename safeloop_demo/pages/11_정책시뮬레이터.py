@@ -135,9 +135,9 @@ cat_weight = {}
 for c in CATEGORIES:
     cat_weight[c] = sum(info["weight"] for info in LAW_BASIS.values() if info["category"] == c)
 
-# 가상의 카테고리별 부재율 (실제 운영 시 환원 데이터로 대체)
-np.random.seed(42)
-cat_absent_rate = {c: float(np.random.uniform(0.2, 0.7)) for c in CATEGORIES}
+# 가상의 카테고리별 부재율 (시드 고정으로 매 렌더 동일)
+_RNG = np.random.default_rng(42)
+cat_absent_rate = {c: float(_RNG.uniform(0.2, 0.7)) for c in CATEGORIES}
 
 priority = pd.DataFrame([
     {"카테고리": c,
