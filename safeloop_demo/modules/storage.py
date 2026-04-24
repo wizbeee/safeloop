@@ -575,17 +575,22 @@ def list_edu_inbox(sido: str | None = None) -> list[dict]:
 # ─────────────────────────────────────────
 # 드래프트(촬영 진행 중) — 새로고침 복구용
 # ─────────────────────────────────────────
-def _draft_dir(school_code: str) -> Path:
-    p = STORAGE_DIR / str(school_code or "_unknown") / "_drafts"
+def _draft_dir(school_code: str, space_id: str = "") -> Path:
+    """드래프트 폴더 경로. space_id 가 있으면 공간별, 없으면 학교 공통 (이전 호환)."""
+    base = STORAGE_DIR / str(school_code or "_unknown") / "_drafts"
+    if space_id:
+        p = base / str(space_id)
+    else:
+        p = base
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
-def save_draft_shots(school_code: str, shots: dict) -> None:
-    """촬영 중인 사진들을 디스크에 백업 (새로고침 대비)."""
+def save_draft_shots(school_code: str, shots: dict, space_id: str = "") -> None:
+    """촬영 중인 사진들을 디스크에 백업 (새로고침 대비). 공간별 분리."""
     if not school_code:
         return
-    d = _draft_dir(school_code)
+    d = _draft_dir(school_code, space_id)
     # 기존 파일 정리
     for f in d.glob("*.jpg"):
         try:
@@ -618,11 +623,11 @@ def save_draft_shots(school_code: str, shots: dict) -> None:
     )
 
 
-def load_draft_shots(school_code: str) -> dict:
-    """저장된 드래프트를 shots 형식으로 복원."""
+def load_draft_shots(school_code: str, space_id: str = "") -> dict:
+    """저장된 드래프트를 shots 형식으로 복원. 공간별 분리."""
     if not school_code:
         return {}
-    d = _draft_dir(school_code)
+    d = _draft_dir(school_code, space_id)
     meta_path = d / "_meta.json"
     if not meta_path.exists():
         return {}
@@ -649,16 +654,16 @@ def load_draft_shots(school_code: str) -> dict:
     return shots
 
 
-def has_draft(school_code: str) -> bool:
+def has_draft(school_code: str, space_id: str = "") -> bool:
     if not school_code:
         return False
-    return (_draft_dir(school_code) / "_meta.json").exists()
+    return (_draft_dir(school_code, space_id) / "_meta.json").exists()
 
 
-def draft_summary(school_code: str) -> dict | None:
-    if not has_draft(school_code):
+def draft_summary(school_code: str, space_id: str = "") -> dict | None:
+    if not has_draft(school_code, space_id):
         return None
-    meta_path = _draft_dir(school_code) / "_meta.json"
+    meta_path = _draft_dir(school_code, space_id) / "_meta.json"
     try:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
     except Exception:
@@ -671,11 +676,11 @@ def draft_summary(school_code: str) -> dict | None:
     }
 
 
-def clear_draft(school_code: str) -> None:
+def clear_draft(school_code: str, space_id: str = "") -> None:
     if not school_code:
         return
     import shutil
-    d = _draft_dir(school_code)
+    d = _draft_dir(school_code, space_id)
     if d.exists():
         shutil.rmtree(d, ignore_errors=True)
 

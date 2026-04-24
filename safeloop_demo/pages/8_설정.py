@@ -209,7 +209,7 @@ img_check = st.toggle(
 st.session_state["image_quality_check"] = img_check
 
 divider()
-section("05", "시스템 상태")
+section("05", "AI 시스템 상태")
 if api_key_available():
     st.success(f"AI 파이프라인 사용 가능 — 현재 공급자: {current_provider_label()}")
 else:
@@ -219,7 +219,9 @@ else:
 # 세션 초기화
 # ─────────────────────────────────────────
 divider()
-with st.expander("📦 디스크 사용량 · 캐시 정리 (관리자용)", expanded=False):
+section("06", "디스크 사용량 · 캐시 정리",
+        "현재 Streamlit 서버 호스트 기준. Streamlit Cloud는 재시작 시 초기화.")
+with st.expander("관리자 도구 열기", expanded=False):
     st.caption(
         "이 정보는 **현재 Streamlit 서버가 실행 중인 호스트의 로컬 파일 시스템** 기준입니다. "
         "Streamlit Cloud 환경에선 컨테이너 재시작마다 초기화되므로 관리 의미는 제한적이며, "

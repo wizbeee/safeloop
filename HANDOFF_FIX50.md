@@ -84,59 +84,59 @@ cat HANDOFF_FIX50.md
 
 ## Phase 2 — 흐름 모순 critical (🟡 14개)
 
-### 1-1 GPS 탭 정리 ⏳
+### 1-1 GPS 탭 정리 ✅
 - 파일: `safeloop_demo/pages/1_점검시작.py:128-148`
 - 수정: GPS 탭 제거 또는 "현재 위치 확인 (참고용)" 라벨로 명확화
 
-### 1-5 이미 active_space 있는데 새 등록 시 충돌 ⏳
+### 1-5 이미 active_space 있는데 새 등록 시 충돌 ✅
 - 파일: `safeloop_demo/pages/1_점검시작.py:280-295`
 - 수정: 새 공간 등록 전 reset_inspection 호출
 
-### 1-6 등록된 공간 선택 시 이전 작업 그대로 따라감 ⏳
+### 1-6 등록된 공간 선택 시 이전 작업 그대로 따라감 ✅
 - 파일: `safeloop_demo/pages/1_점검시작.py:265-273`
 - 수정: 다른 공간 선택 시 reset_inspection 호출
 
-### 2-1 드래프트 학교+공간 단위로 분리 ⏳
+### 2-1 드래프트 학교+공간 단위로 분리 ✅
 - 파일: `modules/storage.py` save_draft_shots / load_draft_shots
 - 수정: school_code+space_id 기반 드래프트 (현재 학교만)
 
-### 2-4 시연 모드 샘플 로드 expander 펼침 ⏳
+### 2-4 시연 모드 샘플 로드 expander 펼침 ✅
 - 파일: `safeloop_demo/pages/2_AI점검.py:377`
 - 수정: `expanded=True` (시연 모드 ON일 때)
 
-### 2-9 보완 사진 재분석 자동화 ⏳
+### 2-9 보완 사진 재분석 자동화 ✅
 - 파일: `safeloop_demo/pages/2_AI점검.py:504-507`
 - 수정: 버튼 클릭 시 즉시 stage1·2·3 재실행, ai_run 거치지 않음
 
-### 2-13 "설비 확정 저장" 버튼 무동작 ⏳
+### 2-13 "설비 확정 저장" 버튼 무동작 ✅
 - 파일: `safeloop_demo/pages/2_AI점검.py:819-820`
 - 수정: 버튼 제거 (저장은 매 rerun 자동)
 
-### 3-1 추천 생성 버튼 중복 ⏳
+### 3-1 추천 생성 버튼 중복 ✅
 - 파일: `safeloop_demo/pages/3_결과저장.py:117-119`
 - 수정: 추천 자동 표시, 버튼은 "재생성"으로 변경
 
-### 3-7 결재라인 단일 진입점 ⏳
+### 3-7 결재라인 단일 진입점 ✅
 - 파일: `safeloop_demo/pages/3_결과저장.py:267-274`
 - 수정: 결과 저장 페이지에선 영구 저장 옵션 추가하거나 "설정에서 변경" 링크만
 
-### 8-1 설정 페이지 06번 누락 ⏳
+### 8-1 설정 페이지 06번 누락 ✅
 - 파일: `safeloop_demo/pages/8_설정.py`
 - 수정: 06 = 디스크 사용량(현재 expander 안), 07 = 세션 관리
 
-### 8-7 세션 초기화 단일화 ⏳
+### 8-7 세션 초기화 단일화 ✅
 - 파일: `safeloop_demo/app.py:148-152` + `safeloop_demo/pages/8_설정.py:250`
 - 수정: 설정 페이지에만 두기
 
-### G-1 페이지 라벨 통일 ⏳
+### G-1 페이지 라벨 통일 🔄
 - 파일: 모든 페이지 hero + section + 사이드바
 - 수정: "AI 점검" 으로 통일 (사이드바 = hero = 섹션)
 
-### G-3 empty_state 통일 적용 ⏳
+### G-3 empty_state 통일 적용 🔄
 - 파일: `safeloop_demo/pages/6_데이터순환.py`, `pages/10_점검이력.py`, `pages/7_교육청수신함.py`
 - 수정: st.info → empty_state() 헬퍼 사용
 
-### G-5 사이드바에 공간 정보 표시 ⏳
+### G-5 사이드바에 공간 정보 표시 ✅
 - 파일: `modules/ui.py render_sidebar`
 - 수정: active_space 있으면 컨텍스트 카드에 표시 (이미 코드 있음 — 동작 확인만)
 

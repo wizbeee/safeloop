@@ -58,7 +58,9 @@ if current:
         st.rerun()
 
 if not current:
-    tab_name, tab_region, tab_gps = st.tabs(["학교명으로", "지역으로", "GPS 자동"])
+    tab_name, tab_region, tab_gps = st.tabs([
+        "학교명으로", "지역으로", "GPS (참고용)"
+    ])
 
     # -- 학교명 검색 --
     with tab_name:
@@ -125,14 +127,14 @@ if not current:
                             st.session_state["auth_verified"] = False
                             st.rerun()
 
-    # -- GPS --
+    # -- GPS (참고용 — 학교 선택은 다른 탭으로) --
     with tab_gps:
         st.markdown(
             "<div class='sl-card'>"
-            "<b>GPS 자동 탐색</b><br>"
+            "<b>현재 위치 확인 (참고용)</b><br>"
             "<span style='color:#6B6B70;font-size:13px'>"
-            "현재 위치로 가장 가까운 학교를 자동 탐색합니다(편의용). "
-            "iOS Safari에선 <b>HTTPS 접속</b>이 필요합니다."
+            "GPS는 위치 표시만 제공합니다. <b>학교 선택은 ‘학교명으로’ 또는 ‘지역으로’ 탭</b>에서 진행하세요. "
+            "iOS Safari에선 HTTPS 접속이 필요합니다."
             "</span></div>",
             unsafe_allow_html=True,
         )
@@ -141,7 +143,6 @@ if not current:
             loc = streamlit_geolocation()
             if loc and loc.get("latitude") and loc.get("longitude"):
                 st.success(f"현재 위치: {loc['latitude']:.5f}, {loc['longitude']:.5f}")
-                st.caption("시연 앱은 주소→좌표 DB가 없어 후보만 제시합니다. 학교명/지역 탭으로 선택하세요.")
             else:
                 st.caption("브라우저 위치 권한을 허용해주세요.")
         except Exception:
@@ -264,7 +265,13 @@ if st.session_state.get("auth_verified"):
                     )
                 with c2:
                     if st.button("선택", key=f"pick_space_{sp['space_id']}"):
+                        # 1-6: 다른 공간 선택 시 이전 점검 작업 정리
+                        prev = st.session_state.get("active_space") or {}
+                        if prev.get("space_id") and prev.get("space_id") != sp["space_id"]:
+                            from modules.session import reset_inspection
+                            reset_inspection()
                         st.session_state["active_space"] = sp
+                        st.rerun()
 
     with tab_new:
         SPACE_TYPES = [
@@ -278,6 +285,11 @@ if st.session_state.get("auth_verified"):
         with c2:
             sp_nickname = st.text_input("별칭 (선택)", placeholder="예: 3층 화학실 A", max_chars=40)
         if st.button("등록·선택", type="primary"):
+            # 1-5: 이미 진행 중 작업이 있으면 정리
+            prev = st.session_state.get("active_space") or {}
+            if prev.get("space_id"):
+                from modules.session import reset_inspection
+                reset_inspection()
             new_sp = {
                 "space_id": uuid.uuid4().hex[:10],
                 "school_code": school_code,

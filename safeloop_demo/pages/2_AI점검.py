@@ -125,9 +125,10 @@ else:
 shots_state: dict = st.session_state["shots"]
 
 # ─────────────────────────────────────────
-# 드래프트 복원 안내 (새로고침/재진입 시) — 정제된 인라인 카드
+# 드래프트 복원 안내 (새로고침/재진입 시) — 학교+공간 단위
 # ─────────────────────────────────────────
 school_code = school.get("정보공시 학교코드", "")
+space_id = (space or {}).get("space_id", "")
 empty_now = sum(len(v) for v in shots_state.values()) == 0
 has_stale_results = empty_now and any(
     st.session_state.get(k) for k in ["stage1_result", "stage2_result", "stage3_result"]
@@ -140,8 +141,8 @@ if has_stale_results and not st.session_state.get("_draft_restored"):
         st.session_state[_k] = None
     st.toast("이전 분석 결과를 정리했습니다 (사진이 비어있음)", icon="ℹ️")
 
-if empty_now and has_draft(school_code) and not st.session_state.get("_draft_restored"):
-    summary = draft_summary(school_code) or {}
+if empty_now and has_draft(school_code, space_id) and not st.session_state.get("_draft_restored"):
+    summary = draft_summary(school_code, space_id) or {}
     n = summary.get("photo_count", 0)
     when = (summary.get("updated_at") or "")[:16].replace("T", " ")
     st.markdown(
@@ -160,14 +161,14 @@ if empty_now and has_draft(school_code) and not st.session_state.get("_draft_res
     with rc1:
         if st.button("이어서 작업", type="primary", key="restore_draft",
                       use_container_width=True):
-            restored = load_draft_shots(school_code)
+            restored = load_draft_shots(school_code, space_id)
             for k, v in restored.items():
                 shots_state[k] = v
             st.session_state["_draft_restored"] = True
             st.rerun()
     with rc2:
         if st.button("새로 시작", key="discard_draft", use_container_width=True):
-            clear_draft(school_code)
+            clear_draft(school_code, space_id)
             st.session_state["_draft_restored"] = True
             st.rerun()
 
@@ -383,9 +384,9 @@ if classic_mode:
 else:
     _render_progress(step)
 
-# 시연 모드 — 샘플 일괄 로드
+# 시연 모드 — 샘플 일괄 로드 (시연 모드일 땐 펼침)
 if st.session_state.get("demo_mode"):
-    with st.expander("시연 모드 · 샘플 사진 일괄 로드", expanded=False):
+    with st.expander("시연 모드 · 샘플 사진 일괄 로드", expanded=True):
         sample_choice = st.radio(
             "샘플 공간",
             ["화학실 샘플 (6장)", "물리실 샘플 (7장)"],
@@ -420,7 +421,7 @@ def _reset_all() -> None:
                "item_scores", "score_result", "recommendations"]:
         st.session_state[_k] = None
     st.session_state["wizard_step"] = "shoot_1"
-    clear_draft(school_code)
+    clear_draft(school_code, space_id)
     st.session_state["_draft_restored"] = False
     st.rerun()
 
@@ -513,9 +514,11 @@ else:
 
         supplement_photos = shots_state.get("close_supplement", [])
         if supplement_photos:
-            if st.button("보완 사진으로 AI 재분석", type="primary",
+            if st.button("보완 사진으로 AI 재분석 (즉시)", type="primary",
                          use_container_width=True, key="rerun_ai_supplement"):
-                _go_to_step("ai_run")
+                # 즉시 stage1·2·3 재실행 (ai_run 거치지 않음)
+                st.session_state["_trigger_rerun_supplement"] = True
+                st.rerun()
 
         _render_wizard_nav(
             prev_step="ai_run",
@@ -551,9 +554,9 @@ def _flatten_photos_with_labels() -> tuple[list[bytes], list[str]]:
 
 
 def _persist_draft() -> None:
-    """샷 변경 시마다 호출 — 디스크에 자동 백업."""
+    """샷 변경 시마다 호출 — 디스크에 자동 백업 (학교+공간 단위)."""
     try:
-        save_draft_shots(school_code, shots_state)
+        save_draft_shots(school_code, shots_state, space_id)
     except Exception:
         pass  # 백업 실패는 사용자 흐름 차단하지 않음
 
@@ -600,12 +603,15 @@ if _show_ai_run:
         with col_a:
             use_cache = st.checkbox("캐시 사용", value=True,
                                      help="동일 사진 재분석 시 API 호출 생략.")
+        # 보완 재분석 트리거 자동 처리
+        triggered_by_supplement = st.session_state.pop("_trigger_rerun_supplement", False)
         with col_b:
             run_disabled = not analysis_ready
             btn_label = ("▶  AI 분석 시작 (공간 식별 → 설비 탐지 → 점검표 생성)"
                          if analysis_ready else "필수 3장 촬영 후 활성화")
-            if st.button(btn_label, type="primary", use_container_width=True,
-                         disabled=run_disabled, key="run_ai_btn"):
+            user_clicked = st.button(btn_label, type="primary", use_container_width=True,
+                                      disabled=run_disabled, key="run_ai_btn")
+            if user_clicked or (triggered_by_supplement and analysis_ready):
                 images = all_photos
                 labels = all_labels
                 # 사진 수 기반 예상 시간
@@ -828,9 +834,12 @@ if s2 and _show_stage2_confirm:
                 })
         confirmed["ambiguous_resolutions"] = resolved
 
+    # 자동 저장 (매 rerun) — 별도 버튼 불필요
     st.session_state["stage2_confirmed"] = confirmed
-    if st.button("설비 확정 저장", type="primary"):
-        st.success(f"확정 완료 · 수정 {len(confirmed.get('user_corrections', []))}건 기록")
+    st.caption(
+        f"수정 사항은 자동 저장됩니다 · "
+        f"기록된 사용자 수정 {len(confirmed.get('user_corrections', []))}건"
+    )
 
 # 단계 3 결과
 if s3 and _show_checklist_and_score:
