@@ -70,7 +70,15 @@ def ensure_state() -> None:
 
 def reset_inspection() -> None:
     """한 공간 점검 세션 초기화 (다른 공간 이어서 점검 시).
-    학교 선택과 인증 상태, 등록된 공간 목록은 유지."""
+    학교 선택과 인증 상태, 등록된 공간 목록, 직전 저장 ID 이력은 유지."""
+    # 직전 저장된 세션 ID는 별도 보관 → 결과 페이지에서 이력 추적 가능
+    last_saved = st.session_state.get("saved_session_id")
+    if last_saved:
+        st.session_state.setdefault("_recent_saved_ids", [])
+        if last_saved not in st.session_state["_recent_saved_ids"]:
+            st.session_state["_recent_saved_ids"].insert(0, last_saved)
+            st.session_state["_recent_saved_ids"] = st.session_state["_recent_saved_ids"][:10]
+
     for k in [
         "active_space", "captured_images",
         "stage1_result", "stage2_result", "stage1_cross_check",
@@ -86,6 +94,10 @@ def reset_inspection() -> None:
     st.session_state["wizard_step"] = "shoot_1"
     if "_approval_demo_stage" in st.session_state:
         st.session_state["_approval_demo_stage"] = 0
+    # 검토 B-1: cam_ctr 카운터 모두 회전 (사진 잔상 방지)
+    for k in list(st.session_state.keys()):
+        if k.startswith("cam_ctr_"):
+            st.session_state[k] += 1
 
 
 def reset_all() -> None:

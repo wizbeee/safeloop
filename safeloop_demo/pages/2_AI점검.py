@@ -129,6 +129,17 @@ shots_state: dict = st.session_state["shots"]
 # ─────────────────────────────────────────
 school_code = school.get("정보공시 학교코드", "")
 empty_now = sum(len(v) for v in shots_state.values()) == 0
+has_stale_results = empty_now and any(
+    st.session_state.get(k) for k in ["stage1_result", "stage2_result", "stage3_result"]
+)
+if has_stale_results and not st.session_state.get("_draft_restored"):
+    # 사진 없는데 이전 AI 결과만 남은 경우 → 확실히 초기화
+    for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
+                "stage3_result", "stage1_cross_check", "item_scores",
+                "score_result", "recommendations"]:
+        st.session_state[_k] = None
+    st.toast("이전 분석 결과를 정리했습니다 (사진이 비어있음)", icon="ℹ️")
+
 if empty_now and has_draft(school_code) and not st.session_state.get("_draft_restored"):
     summary = draft_summary(school_code) or {}
     n = summary.get("photo_count", 0)
@@ -644,6 +655,7 @@ if _show_ai_run:
                         st.stop()
 
                 prog = st.progress(0, text="단계 1/3 · 공간 유형 식별 중…")
+                pipeline_ok = False
                 try:
                     # 교차 검증 (선택)
                     if st.session_state.get("cross_check", False):
@@ -676,10 +688,7 @@ if _show_ai_run:
                     s3 = run_stage3(s1, s2, use_cache=use_cache)
                     st.session_state["stage3_result"] = s3
                     prog.progress(100, text=f"단계 3 완료 · {s3.get('_elapsed_sec','?')}초")
-
-                    # 위저드에서는 AI 완료 후 자동으로 보완 스텝으로
-                    if not classic_mode:
-                        _go_to_step("supplement")
+                    pipeline_ok = True
                 except Exception as e:
                     err_msg = str(e).lower()
                     if "rate" in err_msg or "429" in err_msg:
@@ -693,6 +702,10 @@ if _show_ai_run:
                     else:
                         hint = "잠시 후 다시 시도하세요. 반복되면 사진을 줄이거나 공급자를 교체해 보세요."
                     friendly_error("AI 점검표 생성", e, hint=hint)
+
+                # try 바깥에서 페이지 이동 (rerun이 except 블록을 막지 않도록)
+                if pipeline_ok and not classic_mode:
+                    _go_to_step("supplement")
 
 # 결과 데이터 참조 (모든 스텝에서 필요)
 s1 = st.session_state.get("stage1_result")

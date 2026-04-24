@@ -117,15 +117,45 @@ with filter_col:
     )
 
 with main_col:
-    section("03", "시도별 위험도 분포")
-    fig1 = px.bar(
-        sido_sum.sort_values("고위험_비율", ascending=False),
-        x="시도교육청", y="고위험_학교수",
-        color="고위험_비율",
-        color_continuous_scale=["#4CAF50", "#FFC107", "#D50000"],
-        text="고위험_학교수",
-        labels={"고위험_학교수": "고위험 학교 수", "고위험_비율": "고위험 비율(%)"},
-    )
+    is_after = mode.startswith("AFTER")
+    section("03", "시도별 위험도 분포",
+            "필터 적용 결과 기반"
+            + (" — AFTER: 학교×공간×항목 4차원 가상 시뮬" if is_after else ""))
+
+    # 필터된 subset에서 시도별 집계 재계산
+    if sel_sido != "(전체)":
+        # 단일 시도면 시도별 분포 무의미 → 시군구별로 표시
+        st.caption(f"필터: {sel_sido} — 단일 시도이므로 학교급별 분포로 대체")
+        sido_view = subset.groupby("학교급").size().reset_index(name="학교수")
+        fig1 = px.bar(sido_view, x="학교급", y="학교수", text="학교수",
+                      color="학교수", color_continuous_scale=["#4CAF50", "#D50000"])
+    else:
+        sido_filtered = sido_sum.copy()
+        if sel_level != "(전체)":
+            # 학교급 필터는 sido_sum에 반영 어려움 → master 기반 재집계
+            level_grouped = subset.groupby("시도교육청").size().reset_index(name="학교수")
+            high_risk_filtered = hr.copy()
+            if sel_level != "(전체)":
+                high_risk_filtered = high_risk_filtered[high_risk_filtered["학교급"] == sel_level]
+            if sel_est != "(전체)":
+                high_risk_filtered = high_risk_filtered[high_risk_filtered["설립구분"] == sel_est]
+            risk_grouped = high_risk_filtered.groupby("시도교육청").size().reset_index(name="고위험_학교수")
+            merged_sido = level_grouped.merge(risk_grouped, on="시도교육청", how="left").fillna(0)
+            merged_sido["고위험_비율"] = (merged_sido["고위험_학교수"] / merged_sido["학교수"] * 100).round(1)
+            sido_filtered = merged_sido.sort_values("고위험_비율", ascending=False)
+        else:
+            sido_filtered = sido_sum.sort_values("고위험_비율", ascending=False)
+
+        # AFTER 모드: 차트 제목/색상 강조로 차이 표현
+        bar_scale = (["#1B8A3A", "#FFC107", "#D50000"] if is_after
+                     else ["#4CAF50", "#FFC107", "#D50000"])
+        fig1 = px.bar(
+            sido_filtered, x="시도교육청", y="고위험_학교수",
+            color="고위험_비율",
+            color_continuous_scale=bar_scale,
+            text="고위험_학교수",
+            labels={"고위험_학교수": "고위험 학교 수", "고위험_비율": "고위험 비율(%)"},
+        )
     fig1.update_layout(height=320, margin=dict(l=20, r=20, t=10, b=40),
                        xaxis_tickangle=-35,
                        paper_bgcolor="#FFF", plot_bgcolor="#FFF")
@@ -134,24 +164,43 @@ with main_col:
     sub_a, sub_b = st.columns(2, gap="medium")
     with sub_a:
         st.markdown("<div class='sl-h' style='font-size:15px;margin:18px 0 6px;'>"
-                    "학교급별 위험군 구성</div>", unsafe_allow_html=True)
-        level_risk = hr.groupby("학교급").size().reset_index(name="고위험 수")
-        level_total = master.groupby("학교급").size().reset_index(name="전체")
-        merged = level_risk.merge(level_total, on="학교급", how="left")
-        merged["비율(%)"] = (merged["고위험 수"] / merged["전체"] * 100).round(1)
+                    "학교급별 위험군 구성 (필터 적용)</div>", unsafe_allow_html=True)
+        # 필터된 hr 사용
+        hr_filtered = hr.copy()
+        if sel_sido != "(전체)":
+            hr_filtered = hr_filtered[hr_filtered["시도교육청"] == sel_sido]
+        if sel_est != "(전체)":
+            hr_filtered = hr_filtered[hr_filtered["설립구분"] == sel_est]
+        level_risk = hr_filtered.groupby("학교급").size().reset_index(name="고위험 수")
+        level_total = subset.groupby("학교급").size().reset_index(name="전체")
+        merged = level_risk.merge(level_total, on="학교급", how="outer").fillna(0)
+        merged["비율(%)"] = (merged["고위험 수"] / merged["전체"].replace(0, 1) * 100).round(1)
         fig2 = px.bar(merged, x="학교급", y=["고위험 수", "전체"], barmode="group",
                       color_discrete_map={"고위험 수": "#D50000", "전체": "#C0C0C0"})
         fig2.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=20))
         st.plotly_chart(fig2, use_container_width=True)
 
     with sub_b:
-        st.markdown("<div class='sl-h' style='font-size:15px;margin:18px 0 6px;'>"
-                    "K-Means 3 클러스터</div>", unsafe_allow_html=True)
-        fig3 = px.bar(cluster, x="위험군", y="학교수", text="학교수",
-                      color="위험군",
-                      color_discrete_map={"고위험": "#D50000", "주의": "#FFC107",
-                                          "양호": "#4CAF50"})
-        fig3.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=20))
+        title = ("학교×공간 클러스터 (AFTER)" if is_after else "K-Means 3 클러스터")
+        st.markdown(f"<div class='sl-h' style='font-size:15px;margin:18px 0 6px;'>"
+                    f"{title}</div>", unsafe_allow_html=True)
+        if is_after:
+            # AFTER: 가상의 공간×설비 카테고리 시뮬
+            after_data = pd.DataFrame([
+                {"카테고리": "비상 대응 부재", "건수": int(len(hr) * 0.42)},
+                {"카테고리": "환기·배기 미흡", "건수": int(len(hr) * 0.31)},
+                {"카테고리": "보관·격리 부적합", "건수": int(len(hr) * 0.27)},
+                {"카테고리": "감지·경보 누락", "건수": int(len(hr) * 0.18)},
+            ])
+            fig3 = px.bar(after_data, x="카테고리", y="건수", text="건수",
+                          color="건수", color_continuous_scale=["#FFC107", "#D50000"])
+        else:
+            fig3 = px.bar(cluster, x="위험군", y="학교수", text="학교수",
+                          color="위험군",
+                          color_discrete_map={"고위험": "#D50000", "주의": "#FFC107",
+                                              "양호": "#4CAF50"})
+        fig3.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=20),
+                           coloraxis_showscale=False)
         st.plotly_chart(fig3, use_container_width=True)
 
 # ─────────────────────────────────────────

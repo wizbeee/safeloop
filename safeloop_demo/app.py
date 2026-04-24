@@ -109,45 +109,74 @@ with oc1:
 
 with oc2:
     st.markdown("**시연 자동 재생**")
-    st.caption("심사·발표용 — 데모 학교·인증 자동 통과 + 화학실 샘플 사진 미리 채움")
-    if st.button("자동 재생 시작", use_container_width=True, key="autoplay"):
-        # 시연 학교 자동 선정 — 학교명에 '중학교'가 포함된 첫 결과
-        from modules.data_loader import (
-            search_schools_by_name, get_school_by_code, list_sido,
+    st.caption("심사·발표용 — 데모 학교·인증 자동 통과 + 화학실 샘플 등록")
+    has_existing = bool(st.session_state.get("school")) or bool(st.session_state.get("active_space"))
+    if has_existing:
+        st.markdown(
+            "<div style='background:#FFF2F2; border:1px solid #F8D0D0; "
+            "border-radius:6px; padding:8px 12px; font-size:12px; color:#D50000;'>"
+            "기존 선택된 학교·공간·진행 중 작업이 모두 초기화됩니다."
+            "</div>",
+            unsafe_allow_html=True,
         )
+    if confirm_button(
+        "자동 재생 시작",
+        key="autoplay",
+        message="현재 선택된 학교·공간·촬영본·AI 결과가 모두 초기화되고 데모 학교로 전환됩니다."
+        if has_existing else "데모 학교로 즉시 전환합니다.",
+        use_container_width=True,
+    ):
+        from modules.data_loader import search_schools_by_name, get_school_by_code
+        from modules.session import reset_inspection
+        from modules.storage import clear_draft
+
+        # 0-4: 이전 세션·드래프트 모두 정리
+        old_school = st.session_state.get("school") or {}
+        old_code = old_school.get("정보공시 학교코드")
+        if old_code:
+            try:
+                clear_draft(old_code)
+            except Exception:
+                pass
+        reset_inspection()
         st.session_state["demo_mode"] = True
 
+        # 데모 학교 — 결정적 선택 (정렬된 첫 결과)
         demo_school = None
-        for kw in ["중학교", "고등학교", "초등학교"]:
-            df = search_schools_by_name(kw, limit=10)
-            if not df.empty:
-                demo_school = get_school_by_code(df.iloc[0]["정보공시 학교코드"])
-                break
+        df = search_schools_by_name("중학교", limit=50)
+        if not df.empty:
+            df = df.sort_values("학교명").reset_index(drop=True)
+            demo_school = get_school_by_code(df.iloc[0]["정보공시 학교코드"])
 
-        if demo_school:
+        if not demo_school:
+            st.error("데모 학교 데이터를 찾을 수 없습니다.")
+        else:
             st.session_state["school"] = demo_school
             st.session_state["auth_verified"] = True
-            # 데모 공간 등록
-            import uuid
-            demo_space = {
-                "space_id": uuid.uuid4().hex[:10],
-                "school_code": demo_school.get("정보공시 학교코드"),
-                "type": "화학실",
-                "nickname": "데모 · 3층 A",
-            }
-            st.session_state.setdefault("registered_spaces", []).append(demo_space)
+
+            # 0-2: 동일 데모 공간 재사용 (누적 방지)
+            school_code = demo_school.get("정보공시 학교코드")
+            existing_demo = next(
+                (sp for sp in st.session_state.get("registered_spaces", [])
+                 if sp.get("school_code") == school_code
+                 and sp.get("type") == "화학실"
+                 and sp.get("nickname") == "데모 · 3층 A"),
+                None,
+            )
+            if existing_demo:
+                demo_space = existing_demo
+            else:
+                import uuid
+                demo_space = {
+                    "space_id": uuid.uuid4().hex[:10],
+                    "school_code": school_code,
+                    "type": "화학실",
+                    "nickname": "데모 · 3층 A",
+                }
+                st.session_state.setdefault("registered_spaces", []).append(demo_space)
             st.session_state["active_space"] = demo_space
             st.session_state["_autoplay"] = True
-            st.toast(f"데모 학교: {demo_school.get('학교명')} · 화학실(데모) 자동 등록")
+            st.toast(f"데모 학교: {demo_school.get('학교명')}")
             st.switch_page("pages/2_AI점검.py")
-        else:
-            st.error("데모 학교 데이터를 찾을 수 없습니다.")
 
-# 사이드바 푸터에 세션 초기화 (홈에서만)
-with st.sidebar:
-    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
-    if confirm_button("세션 초기화", key="sb_reset_home",
-                       message="현재 세션의 모든 입력·선택이 삭제됩니다.",
-                       use_container_width=True):
-        reset_all()
-        st.rerun()
+# 8-7: 세션 초기화는 설정 페이지에만 두기 (사이드바 중복 제거)

@@ -76,11 +76,17 @@ def _optimize_batch(images: list[bytes]) -> list[bytes]:
 
 
 def run_stage1(images: list[bytes], use_cache: bool = True,
-               image_labels: Optional[list[str]] = None) -> dict:
-    """단계 1 — 공간 유형 식별."""
+               image_labels: Optional[list[str]] = None,
+               wide_only: bool = True) -> dict:
+    """단계 1 — 공간 유형 식별.
+
+    wide_only: True면 첫 3장(광각)만 사용해 캐시 키 안정화 (보완 사진 추가해도
+               stage1 결과 재사용 가능 → 비용 절감).
+    """
     images = _optimize_batch(images)
+    cache_inputs = images[:3] if wide_only and len(images) >= 3 else images
     provider = get_provider()
-    cache_key = _hash_images(images)
+    cache_key = _hash_images(cache_inputs)
     if use_cache:
         cached = _read_cache("stage1", cache_key, provider.id)
         if cached:
@@ -91,9 +97,11 @@ def run_stage1(images: list[bytes], use_cache: bool = True,
     if image_labels:
         labels_hint = "\n첨부된 이미지 라벨(순서대로): " + ", ".join(image_labels)
 
-    text = f"{len(images)}장의 사진을 보고 공간 유형을 판정하세요.{labels_hint}"
+    # stage1은 광각 3장만으로도 충분 — 보완 사진은 무시 (비용 절감)
+    api_input_images = cache_inputs
+    text = f"{len(api_input_images)}장의 사진을 보고 공간 유형을 판정하세요.{labels_hint}"
     t0 = time.time()
-    raw = provider.call(STAGE1_SYSTEM, text, images, tier="vision")
+    raw = provider.call(STAGE1_SYSTEM, text, api_input_images, tier="vision")
     elapsed = time.time() - t0
 
     parsed = _parse_json(raw)

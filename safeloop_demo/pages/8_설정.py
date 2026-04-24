@@ -190,13 +190,17 @@ for p in _providers:
 
 st.markdown("##### 추가 옵션")
 multi_avail = sum(1 for p in _providers if p["available"]) >= 2
+# 사용 불가 상태면 세션 값 강제 정리 (잔존 방지)
+if not multi_avail and st.session_state.get("cross_check"):
+    st.session_state["cross_check"] = False
 cross = st.toggle(
     "단계 1 교차 검증 (Claude × GPT 합의)",
     value=st.session_state.get("cross_check", False),
     disabled=not multi_avail,
     help="두 공급자가 모두 가능한 경우에만 동작. 비용·속도는 2배.",
 )
-st.session_state["cross_check"] = cross
+# 토글 disabled여도 사용자가 cross 변수에 입력은 못 하지만, 안전 차 추가 가드
+st.session_state["cross_check"] = bool(cross) and multi_avail
 img_check = st.toggle(
     "이미지 품질 사전 검사 (블러·어두움 · 자동 회전·리사이즈)",
     value=st.session_state.get("image_quality_check", True),
