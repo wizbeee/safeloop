@@ -29,14 +29,16 @@ if st.session_state.get("role") == "교육청":
         "🏛 **교육청 담당자 모드** — '본교 현황' 은 학교 담당자가 자신의 학교 데이터를 "
         "확인하는 내부용 화면입니다. 교육청 관점에서는 '전국 대시보드' 를 사용하세요."
     )
-    if st.button("→ 전국 대시보드로 이동", type="primary"):
+    if st.button("→ 전국 대시보드로 이동", key="dash_guard_national",
+                  type="primary", use_container_width=True):
         st.switch_page("pages/5_전국대시보드.py")
     st.stop()
 
 school = st.session_state.get("school")
 if not school:
     st.warning("학교가 선택되지 않았습니다. 점검 시작에서 학교를 선택하세요.")
-    if st.button("← 점검 시작"):
+    if st.button("← 점검 시작", key="dash_noschool_to_start",
+                  use_container_width=True):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 

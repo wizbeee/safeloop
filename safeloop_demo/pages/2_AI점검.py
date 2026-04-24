@@ -35,14 +35,16 @@ render_sidebar(active_key="ai")
 
 school = require_school()
 if not school:
-    if st.button("← 학교 찾기로"):
+    if st.button("← 학교 찾기로", key="ai_noschool_back",
+                  use_container_width=True):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 
 space = st.session_state.get("active_space")
 if not space:
     st.warning("점검할 공간이 선택되지 않았습니다.")
-    if st.button("← 공간 선택으로"):
+    if st.button("← 공간 선택으로", key="ai_nospace_back",
+                  use_container_width=True):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 

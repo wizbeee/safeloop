@@ -60,156 +60,172 @@ c4.metric("고위험 비율", f"{len(hr) / len(master) * 100:.1f}%",
           help="전체 학교 대비 고위험군 비율")
 
 # ─────────────────────────────────────────
-# 01 어떤 학교를 볼까? (필터 간소화 — 시도만)
+# 17개 시도 대표 좌표 (정부 행정구역 중심 근사값) — 지도 시각화용
+# ─────────────────────────────────────────
+SIDO_COORDS = {
+    "서울특별시교육청": (37.5665, 126.9780),
+    "부산광역시교육청": (35.1796, 129.0756),
+    "대구광역시교육청": (35.8714, 128.6014),
+    "인천광역시교육청": (37.4563, 126.7052),
+    "광주광역시교육청": (35.1595, 126.8526),
+    "대전광역시교육청": (36.3504, 127.3845),
+    "울산광역시교육청": (35.5384, 129.3114),
+    "세종특별자치시교육청": (36.4800, 127.2890),
+    "경기도교육청":       (37.4138, 127.5183),
+    "강원특별자치도교육청": (37.8228, 128.1555),
+    "충청북도교육청":     (36.6357, 127.4917),
+    "충청남도교육청":     (36.5184, 126.8000),
+    "전북특별자치도교육청": (35.7175, 127.1530),
+    "전라남도교육청":     (34.8679, 126.9910),
+    "경상북도교육청":     (36.4919, 128.8889),
+    "경상남도교육청":     (35.4606, 128.2132),
+    "제주특별자치도교육청": (33.4996, 126.5312),
+}
+
+# ─────────────────────────────────────────
+# 01 어떤 학교를 볼까? — 시도 다중선택 + 학교급/설립
 # ─────────────────────────────────────────
 divider()
-section("01", "지역 필터",
-        "한 번에 하나의 질문만 던지세요 — ‘어느 시도의 어떤 학교급이 가장 위험한가’")
+section("01", "필터",
+        "시도는 2~5개까지 비교 가능 · 선택 없으면 전국 집계")
 
-f_col_a, f_col_b, f_col_c = st.columns(3)
+f_col_a, f_col_b = st.columns([2, 1])
 with f_col_a:
-    sidos = ["(전체)"] + sorted(master["시도교육청"].dropna().unique().tolist())
-    sel_sido = st.selectbox("시도교육청", sidos, key="flt_sido",
-                              help="선택 시 해당 시도 학교만 집계")
+    all_sidos = sorted(master["시도교육청"].dropna().unique().tolist())
+    sel_sidos = st.multiselect(
+        "시도교육청 (최대 5개까지 비교)",
+        options=all_sidos,
+        max_selections=5,
+        key="flt_sidos",
+        help="1개: 상세 보기 · 2~5개: 나란히 비교",
+    )
 with f_col_b:
     levels = ["(전체)"] + sorted(master["학교급"].dropna().unique().tolist())
     sel_level = st.selectbox("학교급", levels, key="flt_level")
-with f_col_c:
-    establishment = ["(전체)"] + sorted(master["설립구분"].dropna().unique().tolist())
-    sel_est = st.selectbox("설립구분 (국·공·사립)", establishment, key="flt_est")
 
 # 필터 적용
 subset = master.copy()
 hr_filtered = hr.copy()
-if sel_sido != "(전체)":
-    subset = subset[subset["시도교육청"] == sel_sido]
-    hr_filtered = hr_filtered[hr_filtered["시도교육청"] == sel_sido]
+if sel_sidos:
+    subset = subset[subset["시도교육청"].isin(sel_sidos)]
+    hr_filtered = hr_filtered[hr_filtered["시도교육청"].isin(sel_sidos)]
 if sel_level != "(전체)":
     subset = subset[subset["학교급"] == sel_level]
     hr_filtered = hr_filtered[hr_filtered["학교급"] == sel_level]
-if sel_est != "(전체)":
-    subset = subset[subset["설립구분"] == sel_est]
-    hr_filtered = hr_filtered[hr_filtered["설립구분"] == sel_est]
 
-# 필터 요약 — 자연스러운 문장으로
-filter_desc_parts = []
-if sel_sido != "(전체)":
-    filter_desc_parts.append(f"**{sel_sido}**")
+# 필터 요약
+if sel_sidos:
+    sido_desc = " · ".join(f"**{s.replace('교육청','')}**" for s in sel_sidos)
 else:
-    filter_desc_parts.append("**전국**")
-if sel_level != "(전체)":
-    filter_desc_parts.append(f"**{sel_level}**")
-if sel_est != "(전체)":
-    filter_desc_parts.append(f"**{sel_est}**")
-filter_desc = " · ".join(filter_desc_parts)
-
+    sido_desc = "**전국**"
+filter_desc = sido_desc + (f" · **{sel_level}**" if sel_level != "(전체)" else "")
 ratio_now = (len(hr_filtered) / len(subset) * 100) if len(subset) else 0
 
 st.markdown(
     f"<div style='border:1px solid #E5E5E8;border-left:3px solid #D50000;"
     f"background:#FAFAFA;border-radius:6px;padding:12px 16px;margin:10px 0;"
     f"font-size:14px;line-height:1.7;'>"
-    f"현재 보고 있는 데이터: {filter_desc} 의 과학실 보유 학교 "
+    f"현재 보고 있는 데이터: {filter_desc} 과학실 보유 학교 "
     f"<b>{len(subset):,}개교</b> 중 "
     f"<b style='color:#D50000;'>{len(hr_filtered):,}개교 ({ratio_now:.1f}%)</b> "
-    f"가 고위험군으로 분류됩니다."
+    f"가 고위험군입니다."
     f"</div>",
     unsafe_allow_html=True,
 )
 
 # ─────────────────────────────────────────
-# 02 TOP 10 시도별 비교 (간결하게 한 차트만)
+# 02 시도별 고위험 비율 — 항상 17개 시도 가로 막대 + 선택 시도 강조
 # ─────────────────────────────────────────
 divider()
-section("02", "시도별 고위험 비율 TOP 10",
-        "선택한 필터 조건에서 — 가로 막대 하나로 순위를 한눈에")
+section("02", "시도별 고위험 비율 비교",
+        "선택한 시도는 빨간색 · 나머지는 회색 (필터 조건 반영)")
 
-if sel_sido != "(전체)":
-    # 단일 시도 → 시도별 차트 대신 학교급 비교로 대체
-    st.caption(f"💡 단일 시도({sel_sido}) 선택 — 학교급별 고위험 비율로 대체 표시")
-    by_level = (
-        subset.groupby("학교급").size().reset_index(name="전체")
-        .merge(hr_filtered.groupby("학교급").size().reset_index(name="고위험"),
-                on="학교급", how="left").fillna(0)
-    )
-    by_level["고위험 비율(%)"] = (by_level["고위험"] / by_level["전체"].replace(0, 1) * 100).round(1)
-    by_level = by_level.sort_values("고위험 비율(%)", ascending=True)
-    fig_main = px.bar(
-        by_level, x="고위험 비율(%)", y="학교급", orientation="h",
-        text="고위험 비율(%)",
-        color="고위험 비율(%)",
-        color_continuous_scale=["#4CAF50", "#FFC107", "#D50000"],
-        range_x=[0, 100],
-    )
-    fig_main.update_traces(texttemplate="%{text:.1f}%")
-else:
-    # 전국 — 시도별 TOP 10
-    by_sido = (
-        subset.groupby("시도교육청").size().reset_index(name="전체")
-        .merge(hr_filtered.groupby("시도교육청").size().reset_index(name="고위험"),
-                on="시도교육청", how="left").fillna(0)
-    )
-    by_sido["고위험 비율(%)"] = (by_sido["고위험"] / by_sido["전체"].replace(0, 1) * 100).round(1)
-    by_sido = by_sido.sort_values("고위험 비율(%)", ascending=False).head(10) \
-        .sort_values("고위험 비율(%)", ascending=True)
-    fig_main = px.bar(
-        by_sido, x="고위험 비율(%)", y="시도교육청", orientation="h",
-        text="고위험 비율(%)",
-        color="고위험 비율(%)",
-        color_continuous_scale=["#4CAF50", "#FFC107", "#D50000"],
-        range_x=[0, max(by_sido["고위험 비율(%)"].max() + 3, 20)],
-    )
-    fig_main.update_traces(texttemplate="%{text:.1f}%")
+# 학교급 필터 적용한 상태에서 시도별 재계산 (시도 멀티셀렉트는 강조용으로만 사용)
+subset_level = master.copy()
+hr_level = hr.copy()
+if sel_level != "(전체)":
+    subset_level = subset_level[subset_level["학교급"] == sel_level]
+    hr_level = hr_level[hr_level["학교급"] == sel_level]
 
-fig_main.update_layout(
-    height=360, margin=dict(l=20, r=20, t=10, b=20),
-    coloraxis_showscale=False, yaxis_title=None,
+by_sido = (
+    subset_level.groupby("시도교육청").size().reset_index(name="전체")
+    .merge(hr_level.groupby("시도교육청").size().reset_index(name="고위험"),
+            on="시도교육청", how="left").fillna(0)
+)
+by_sido["고위험 비율(%)"] = (
+    by_sido["고위험"] / by_sido["전체"].replace(0, 1) * 100
+).round(1)
+by_sido["선택"] = by_sido["시도교육청"].isin(sel_sidos) if sel_sidos else True
+by_sido = by_sido.sort_values("고위험 비율(%)", ascending=True)
+
+fig_bar = px.bar(
+    by_sido, x="고위험 비율(%)", y="시도교육청", orientation="h",
+    text="고위험 비율(%)",
+    color="선택" if sel_sidos else None,
+    color_discrete_map={True: "#D50000", False: "#D1D1D4"} if sel_sidos else None,
+    hover_data=["전체", "고위험"],
+)
+fig_bar.update_traces(texttemplate="%{text:.1f}%")
+fig_bar.update_layout(
+    height=460, margin=dict(l=20, r=20, t=10, b=20),
+    yaxis_title=None, showlegend=False,
     paper_bgcolor="#FFF", plot_bgcolor="#FFF",
 )
-st.plotly_chart(fig_main, use_container_width=True)
+st.plotly_chart(fig_bar, use_container_width=True)
 
 # ─────────────────────────────────────────
-# 03 설립구분별 위험도 — 간단한 도넛 + 설명
+# 03 지도 시각화 — 17개 시도 버블 지도 (고위험 비율=색, 고위험 수=크기)
 # ─────────────────────────────────────────
 divider()
-section("03", "설립구분별 고위험 분포",
-        "국·공·사립 중 어디에 고위험이 많이 몰려 있을까")
+section("03", "지도에서 한눈에 보기",
+        "버블 크기 = 고위험 학교 수 · 색 = 고위험 비율(%) · 호버로 상세")
 
-est_sum = (
-    hr_filtered.groupby("설립구분").size().reset_index(name="고위험 수")
-    .sort_values("고위험 수", ascending=False)
+map_df = by_sido.copy()
+map_df["lat"] = map_df["시도교육청"].map(lambda s: SIDO_COORDS.get(s, (None, None))[0])
+map_df["lon"] = map_df["시도교육청"].map(lambda s: SIDO_COORDS.get(s, (None, None))[1])
+map_df = map_df.dropna(subset=["lat", "lon"])
+
+fig_map = px.scatter_mapbox(
+    map_df,
+    lat="lat", lon="lon",
+    size="고위험",
+    color="고위험 비율(%)",
+    color_continuous_scale=["#4CAF50", "#FFC107", "#D50000"],
+    size_max=45,
+    zoom=5.8,
+    center={"lat": 36.3, "lon": 127.8},
+    hover_name="시도교육청",
+    hover_data={"전체": True, "고위험": True, "고위험 비율(%)": True,
+                  "lat": False, "lon": False},
+    mapbox_style="open-street-map",
+    height=520,
 )
-if len(est_sum):
-    col_dn, col_exp = st.columns([2, 3])
-    with col_dn:
-        fig_dn = px.pie(est_sum, values="고위험 수", names="설립구분", hole=0.55,
-                         color_discrete_sequence=["#D50000", "#FFC107", "#9A9A9F", "#4CAF50"])
-        fig_dn.update_layout(height=280, margin=dict(l=10, r=10, t=10, b=10),
-                              showlegend=True,
-                              legend=dict(orientation="h", yanchor="bottom", y=-0.15))
-        st.plotly_chart(fig_dn, use_container_width=True)
-    with col_exp:
-        top_est = est_sum.iloc[0]
-        other_total = est_sum["고위험 수"].sum() - top_est["고위험 수"]
-        st.markdown(
-            f"<div style='padding:16px 0;font-size:14px;line-height:1.8;'>"
-            f"• 고위험군의 <b style='color:#D50000;'>{top_est['고위험 수']:,}개</b> "
-            f"({top_est['고위험 수']/est_sum['고위험 수'].sum()*100:.0f}%)가 "
-            f"<b>{top_est['설립구분']}</b> 에 집중<br>"
-            f"• 나머지 {other_total:,}개는 다른 설립구분에 분산<br>"
-            f"<span style='color:#6B6B70;font-size:12px;'>※ 비율은 필터 조건 내에서 "
-            f"계산됩니다. 설립구분 필터 적용 시 해당 구분만 표시됩니다.</span>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-else:
-    st.info("선택한 필터 조건에 해당하는 고위험 학교가 없습니다.")
+fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+st.plotly_chart(fig_map, use_container_width=True)
+st.caption(
+    "※ 좌표는 각 시도 행정구역 중심 근사값 · 클러스터링이 아닌 시도 단위 요약입니다. "
+    "지도 상단의 + / − 또는 드래그로 확대·이동 가능."
+)
+
+# ─────────────────────────────────────────
+# 04 선택 시도 비교 테이블 (2개 이상 선택 시)
+# ─────────────────────────────────────────
+if sel_sidos and len(sel_sidos) >= 2:
+    divider()
+    section("04", "선택 시도 비교 테이블",
+            f"{len(sel_sidos)}개 시도 — 숫자로 한 번 더 확인")
+    cmp_df = by_sido[by_sido["시도교육청"].isin(sel_sidos)].copy()
+    cmp_df = cmp_df[["시도교육청", "전체", "고위험", "고위험 비율(%)"]]
+    cmp_df.columns = ["시도교육청", "전체 학교 수", "고위험 학교 수", "고위험 비율(%)"]
+    cmp_df = cmp_df.sort_values("고위험 비율(%)", ascending=False).reset_index(drop=True)
+    st.dataframe(cmp_df, use_container_width=True, hide_index=True)
 
 # ─────────────────────────────────────────
 # 풀폭: 고위험군 통계 요약 (개별 학교 리스트는 제거 — 공공 대시보드 취지상 부적절)
 # ─────────────────────────────────────────
 divider()
-section("04", "고위험군 위험도 분포",
+_risk_sec = "05" if (sel_sidos and len(sel_sidos) >= 2) else "04"
+section(_risk_sec, "고위험군 위험도 분포",
         "현재 필터 조건의 고위험 학교들이 얼마나 심각한지 한눈에")
 
 if len(hr_filtered):
@@ -245,7 +261,8 @@ st.caption(
 # 05 신뢰도 — 민감도 (고급 정보로 접어두기)
 # ─────────────────────────────────────────
 divider()
-section("05", "모델 신뢰도 (참고)",
+_sens_sec = "06" if (sel_sidos and len(sel_sidos) >= 2) else "05"
+section(_sens_sec, "모델 신뢰도 (참고)",
         "가중치를 ±20% 변경해도 판정이 얼마나 바뀌지 않는지 — '이 결과를 믿어도 되는가'")
 with st.expander("📊 민감도 상세 보기 (고급)", expanded=False):
     st.caption(

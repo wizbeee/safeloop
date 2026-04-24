@@ -224,13 +224,19 @@ with oc1:
     st.markdown("**🎓 튜토리얼**")
     st.caption("3단계 플로우를 30초 안에 이해합니다. 언제든 다시 볼 수 있습니다.")
     if st.button("튜토리얼 열기", key="open_tutorial", use_container_width=True):
+        # dialog 호출 실패 시 인라인 expander 로 폴백 (안전망)
+        _tut_ok = False
         if _use_dialog:
-            _show_tutorial_dialog()
-        else:
+            try:
+                _show_tutorial_dialog()
+                _tut_ok = True
+            except Exception:
+                _tut_ok = False
+        if not _tut_ok:
             st.session_state["_tutorial_inline"] = True
             st.rerun()
-    # 폴백(old Streamlit): 인라인 expander
-    if not _use_dialog and st.session_state.get("_tutorial_inline"):
+    # 폴백: 인라인 expander (구버전 Streamlit 또는 dialog 실패)
+    if st.session_state.get("_tutorial_inline"):
         with st.expander("SafeLoop 사용 가이드", expanded=True):
             _render_tutorial_content()
             if st.button("닫기", key="close_tutorial_inline"):

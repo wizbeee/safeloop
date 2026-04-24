@@ -24,6 +24,7 @@ DEFAULT_STATE = {
 
     # AI 파이프라인 (Step 4)
     "stage1_result": None,
+    "stage1_cross_check": None,   # Claude × GPT 교차 검증 결과 (optional)
     "stage2_result": None,
     "stage2_confirmed": None,   # 사용자 확정 결과
     "stage3_result": None,
@@ -86,8 +87,12 @@ def reset_inspection() -> None:
         "item_scores", "score_result", "recommendations",
         "saved_session_id", "edu_package_ready", "edu_app_sent", "edufine_approved",
     ]:
-        st.session_state[k] = DEFAULT_STATE[k] if not isinstance(DEFAULT_STATE[k], (list, dict)) \
-            else type(DEFAULT_STATE[k])(DEFAULT_STATE[k])
+        # DEFAULT_STATE 에 없는 키도 안전하게 처리 (KeyError 방지)
+        default_v = DEFAULT_STATE.get(k)
+        if isinstance(default_v, (list, dict)):
+            st.session_state[k] = type(default_v)(default_v)
+        else:
+            st.session_state[k] = default_v
     # 샷 카운터·드래프트 복원 플래그도 정리
     st.session_state["shots"] = {}
     st.session_state["_draft_restored"] = False

@@ -24,7 +24,7 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="settings")
 
-hero("SETTINGS", "설정", "운영 모드 · 결재라인 · 사전 등록 · 시스템 상태")
+hero("SETTINGS", "설정", "운영 모드 · 공간 사전 등록 · AI 공급자 · 시스템 상태")
 
 # ─────────────────────────────────────────
 # 모드 토글

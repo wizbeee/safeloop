@@ -33,16 +33,15 @@ if st.session_state.get("role") != "교육청":
     )
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("← 홈으로 돌아가기"):
+        if st.button("← 홈으로 돌아가기", key="inbox_guard_home",
+                      use_container_width=True):
             st.switch_page("app.py")
     with col_b:
-        if st.button("교육청 담당자로 전환", type="primary"):
-            from modules.session import reset_inspection
-            reset_inspection()
-            st.session_state["school"] = None
-            st.session_state["auth_verified"] = False
+        if st.button("교육청 담당자로 전환", key="inbox_guard_switch",
+                      type="primary", use_container_width=True):
+            # 역할만 전환하고 홈으로 이동 — 홈에서 카드 기반 세션 정리가 체계적으로 수행됨
             st.session_state["role"] = "교육청"
-            st.rerun()
+            st.switch_page("app.py")
     st.stop()
 
 # 수신함 리스트

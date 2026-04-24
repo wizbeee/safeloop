@@ -38,16 +38,14 @@ if st.session_state.get("role") != "교육청":
     )
     col_a, col_b = st.columns(2)
     with col_a:
-        if st.button("← 홈으로 돌아가기"):
+        if st.button("← 홈으로 돌아가기", key="policy_guard_home",
+                      use_container_width=True):
             st.switch_page("app.py")
     with col_b:
-        if st.button("교육청 담당자로 전환", type="primary"):
-            from modules.session import reset_inspection
-            reset_inspection()
-            st.session_state["school"] = None
-            st.session_state["auth_verified"] = False
+        if st.button("교육청 담당자로 전환", key="policy_guard_switch",
+                      type="primary", use_container_width=True):
             st.session_state["role"] = "교육청"
-            st.rerun()
+            st.switch_page("app.py")
     st.stop()
 
 hero("STAGE 04 EXTENSION", "정책 시뮬레이터",

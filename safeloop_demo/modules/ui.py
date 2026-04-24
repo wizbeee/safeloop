@@ -461,8 +461,10 @@ def render_sidebar(active_key: str = "") -> None:
                 try:
                     st.page_link(target, label=label)
                 except Exception:
-                    # page_link 실패 시 fallback
-                    if st.button(label, key=f"sb_fb_{target}", use_container_width=True):
+                    # page_link 실패 시 fallback — key 는 경로 슬래시·한글 제거된 해시로 안정화
+                    import hashlib as _hl_sb
+                    _fb_key = _hl_sb.md5(target.encode("utf-8")).hexdigest()[:8]
+                    if st.button(label, key=f"sb_fb_{_fb_key}", use_container_width=True):
                         st.switch_page(target)
 
         # ── 푸터 (idle 알림 + 역할) ──
