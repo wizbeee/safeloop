@@ -938,93 +938,184 @@ if s1 and _show_stage1:
             for ev in s1["evidence"]:
                 st.markdown(f"- {ev}")
 
-# (C) 단계 2 결과 사용자 확정
+# (C) 단계 2 결과 사용자 확정 — 카드 + "반영하기" 일괄 적용 패턴
 if s2 and _show_stage2_confirm:
     st.markdown("<div class='sl-num' style='margin-top:18px;'>결과 02</div>"
                 "<div class='sl-h'>설비 탐지 · 사용자 확정</div>"
-                "<div class='sl-h-sub'>AI 결과를 확인하고 필요 시 수정하세요. 수정 내역은 AI 재학습에 활용됩니다.</div>",
+                "<div class='sl-h-sub'>AI 결과를 확인하고 표시한 뒤 <b>'반영하기'</b> 를 눌러 점검표에 적용하세요. "
+                "체크해도 항목은 사라지지 않으며, 반영 전까지 자유롭게 수정 가능합니다.</div>",
                 unsafe_allow_html=True)
 
     detected = s2.get("detected_equipment", []) or []
     absent = s2.get("likely_absent_equipment", []) or []
     ambiguous = s2.get("ambiguous_items", []) or []
 
-    confirmed = st.session_state.get("stage2_confirmed") or {
-        "detected_equipment": [dict(x) for x in detected],
-        "likely_absent_equipment": [dict(x) for x in absent],
-        "ambiguous_items": list(ambiguous),
-        "user_corrections": [],
-    }
+    # 사용자 마킹 상태 (체크해도 항목은 유지)
+    # detected → "remove" (제거 표시) / 부재 → "actually_exists" / 모호 → 라디오 선택
+    if "stage2_user_marks" not in st.session_state:
+        st.session_state["stage2_user_marks"] = {
+            "detected_remove": {},   # {idx: bool}
+            "absent_exists": {},     # {idx: bool}
+            "ambig_decision": {},    # {idx: str}
+        }
+    marks = st.session_state["stage2_user_marks"]
 
     tab_d, tab_a, tab_m = st.tabs(
-        [f"탐지 {len(detected)}개", f"부재 {len(absent)}개", f"모호 {len(ambiguous)}개"]
+        [f"탐지 {len(detected)}", f"부재 {len(absent)}", f"모호 {len(ambiguous)}"]
     )
 
     with tab_d:
-        st.caption("AI가 사진에서 실제로 확인한 설비입니다. `출처 사진`은 AI가 판단 근거로 삼은 사진입니다.")
-        keep_d = []
-        for i, item in enumerate(confirmed["detected_equipment"]):
-            key = f"detected_{i}"
+        st.caption(
+            "AI 가 사진에서 실제로 확인한 설비입니다. **잘못 탐지된 것** 만 체크하세요 → "
+            "'반영하기' 클릭 시 점검표에서 제거됩니다."
+        )
+        for i, item in enumerate(detected):
             ref = item.get("image_ref") or item.get("note_ref") or "-"
-            checked = st.checkbox(
-                f"**{item.get('name','?')}** — {item.get('status','')} · "
-                f"{item.get('category','')}  \n"
-                f"<span style='color:#9A9A9F;font-size:11px'>출처 사진: {ref}</span>",
-                value=True, key=key,
-            )
-            if checked:
-                keep_d.append(item)
-            else:
-                confirmed["user_corrections"].append({"type": "remove_detected", "item": item})
-        confirmed["detected_equipment"] = keep_d
+            loc = item.get("location") or ""
+            cat = item.get("category", "")
+            status = item.get("status", "")
+            name = item.get("name", "?")
+            # 카드 컨테이너
+            col_chk, col_info = st.columns([1, 12])
+            with col_chk:
+                marks["detected_remove"][i] = st.checkbox(
+                    " ", key=f"chk_remove_{i}",
+                    value=marks["detected_remove"].get(i, False),
+                    label_visibility="collapsed",
+                )
+            with col_info:
+                loc_html = f" · 📍 {loc}" if loc else ""
+                st.markdown(
+                    f"<div style='padding:6px 8px;font-size:13.5px;'>"
+                    f"<b>{name}</b> "
+                    f"<span style='font-size:11px;color:#6B6B70;'>"
+                    f"· {status} · {cat}</span>"
+                    f"<div style='font-size:11px;color:#9A9A9F;margin-top:2px;'>"
+                    f"출처: {ref}{loc_html}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
     with tab_a:
-        st.caption("AI가 '없다'고 판단한 설비입니다. 실제로 있다면 체크하세요 → 탐지됨으로 이동합니다.")
-        keep_a = []
-        move_to_detected = []
-        for i, item in enumerate(confirmed["likely_absent_equipment"]):
-            key = f"absent_{i}"
-            actually_exists = st.checkbox(
-                f"**{item.get('name','?')}** — 실제로 존재함",
-                value=False, key=key, help=item.get("reason", ""),
-            )
-            if actually_exists:
-                move_to_detected.append({
-                    "category": item.get("category", ""),
-                    "name": item.get("name", ""),
-                    "status": "존재확인(사용자 수정)",
-                    "note": "사용자가 부재→탐지로 수정",
-                })
-                confirmed["user_corrections"].append({"type": "absent_to_detected", "item": item})
-            else:
-                keep_a.append(item)
-        confirmed["likely_absent_equipment"] = keep_a
-        confirmed["detected_equipment"].extend(move_to_detected)
+        st.caption(
+            "AI 가 '없다' 고 판정한 설비입니다. **실제로 존재한다면** 체크하세요 → "
+            "'반영하기' 클릭 시 탐지됨으로 이동합니다."
+        )
+        for i, item in enumerate(absent):
+            cat = item.get("category", "")
+            name = item.get("name", "?")
+            reason = item.get("reason", "")
+            col_chk, col_info = st.columns([1, 12])
+            with col_chk:
+                marks["absent_exists"][i] = st.checkbox(
+                    " ", key=f"chk_exists_{i}",
+                    value=marks["absent_exists"].get(i, False),
+                    label_visibility="collapsed",
+                )
+            with col_info:
+                st.markdown(
+                    f"<div style='padding:6px 8px;font-size:13.5px;'>"
+                    f"<b>{name}</b> "
+                    f"<span style='font-size:11px;color:#6B6B70;'>· {cat}</span>"
+                    f"<div style='font-size:11px;color:#9A9A9F;margin-top:2px;'>"
+                    f"AI 판정 이유: {reason}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
     with tab_m:
-        st.caption("AI가 확신하지 못한 항목입니다. 하나씩 판단해 주세요.")
-        resolved = []
-        for i, item_text in enumerate(confirmed["ambiguous_items"]):
-            key = f"ambig_{i}"
-            decision = st.radio(
-                item_text,
-                ["판단 유보", "존재함 (탐지)", "없음 (부재)"],
-                key=key, horizontal=True,
+        st.caption(
+            "AI 가 확신하지 못한 항목입니다. 각 항목별로 판정한 뒤 '반영하기' 클릭."
+        )
+        for i, item_text in enumerate(ambiguous):
+            st.markdown(
+                f"<div style='padding:6px 8px;font-size:13.5px;'>{item_text}</div>",
+                unsafe_allow_html=True,
             )
-            resolved.append({"text": item_text, "decision": decision})
-            if decision != "판단 유보":
-                confirmed["user_corrections"].append({
-                    "type": f"ambig_resolved_{decision}",
-                    "item": item_text,
-                })
-        confirmed["ambiguous_resolutions"] = resolved
+            marks["ambig_decision"][i] = st.radio(
+                f"판정 #{i+1}",
+                ["판단 유보", "존재함 (탐지)", "없음 (부재)"],
+                key=f"radio_ambig_{i}",
+                index=["판단 유보", "존재함 (탐지)", "없음 (부재)"].index(
+                    marks["ambig_decision"].get(i, "판단 유보")
+                ),
+                horizontal=True,
+                label_visibility="collapsed",
+            )
 
-    # 자동 저장 (매 rerun) — 별도 버튼 불필요
-    st.session_state["stage2_confirmed"] = confirmed
-    st.caption(
-        f"수정 사항은 자동 저장됩니다 · "
-        f"기록된 사용자 수정 {len(confirmed.get('user_corrections', []))}건"
+    # ─── 반영하기 버튼 (일괄 적용) ───
+    pending_changes = (
+        sum(1 for v in marks["detected_remove"].values() if v)
+        + sum(1 for v in marks["absent_exists"].values() if v)
+        + sum(1 for v in marks["ambig_decision"].values() if v != "판단 유보")
     )
+
+    apply_col1, apply_col2 = st.columns([3, 1])
+    with apply_col1:
+        if pending_changes:
+            st.markdown(
+                f"<div style='padding:8px 14px;background:#FFF6F6;"
+                f"border:1px solid #F8D0D0;border-radius:6px;font-size:13px;'>"
+                f"⚠ <b>아직 반영되지 않은 수정 {pending_changes}건</b> — "
+                f"우측 '반영하기' 버튼을 눌러야 점검표에 적용됩니다."
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            already = st.session_state.get("stage2_confirmed")
+            n_done = len((already or {}).get("user_corrections", []))
+            if n_done:
+                st.markdown(
+                    f"<div style='padding:8px 14px;background:#F0F7F0;"
+                    f"border:1px solid #C8E6C9;border-radius:6px;font-size:13px;'>"
+                    f"✓ 사용자 수정 <b>{n_done}건</b> 반영 완료"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("AI 결과를 그대로 사용하려면 별도 작업 없이 다음 단계로 진행하세요.")
+    with apply_col2:
+        if st.button("반영하기", type="primary", key="apply_stage2_marks",
+                      use_container_width=True,
+                      disabled=(pending_changes == 0)):
+            # 적용: detected 에서 제거 표시된 것 빼기, 부재 → 탐지 이동, 모호 분류
+            new_detected = []
+            user_corrections = []
+            for i, item in enumerate(detected):
+                if marks["detected_remove"].get(i):
+                    user_corrections.append({"type": "remove_detected", "item": item})
+                else:
+                    new_detected.append(dict(item))
+            new_absent = []
+            for i, item in enumerate(absent):
+                if marks["absent_exists"].get(i):
+                    new_detected.append({
+                        "category": item.get("category", ""),
+                        "name": item.get("name", ""),
+                        "status": "존재확인(사용자 수정)",
+                        "note": "사용자가 부재→탐지로 수정",
+                    })
+                    user_corrections.append({"type": "absent_to_detected", "item": item})
+                else:
+                    new_absent.append(dict(item))
+            resolved = []
+            for i, item_text in enumerate(ambiguous):
+                d = marks["ambig_decision"].get(i, "판단 유보")
+                resolved.append({"text": item_text, "decision": d})
+                if d != "판단 유보":
+                    user_corrections.append({
+                        "type": f"ambig_resolved_{d}",
+                        "item": item_text,
+                    })
+            st.session_state["stage2_confirmed"] = {
+                "detected_equipment": new_detected,
+                "likely_absent_equipment": new_absent,
+                "ambiguous_items": list(ambiguous),
+                "ambiguous_resolutions": resolved,
+                "user_corrections": user_corrections,
+            }
+            st.toast(f"반영 완료 — 사용자 수정 {len(user_corrections)}건", icon="✅")
+            st.rerun()
 
 # 단계 3 결과
 if s3 and _show_checklist_and_score:
@@ -1035,15 +1126,55 @@ if s3 and _show_checklist_and_score:
     st.caption(f"{s3.get('checklist_name','-')} · 총 {len(items)}개 항목")
     if s3.get("rationale"):
         st.info(f"맞춤화 근거: {s3['rationale']}")
+
+    # AI 가 사진에서 실제 인식한 설비명 (Stage 2 detected_equipment)
+    _confirmed = st.session_state.get("stage2_confirmed") or {}
+    _detected_names = {
+        x.get("name", "") for x in
+        (_confirmed.get("detected_equipment") or s2.get("detected_equipment", []) or [])
+    }
+
+    def _is_photo_based(item_title: str, item_category: str) -> bool:
+        """이 점검 항목이 실제 사진에서 인식된 설비를 다루는지."""
+        haystack = f"{item_title} {item_category}"
+        for name in _detected_names:
+            if name and name in haystack:
+                return True
+        return False
+
+    # 카테고리별 묶기
+    by_cat: dict[str, list[dict]] = {}
+    for itm in items:
+        cat = itm.get("category", "기타")
+        by_cat.setdefault(cat, []).append(itm)
+
     if items:
-        df = pd.DataFrame(items)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        # 가로 스크롤 없는 컴팩트 테이블 (요약만)
+        with st.expander(f"📋 점검표 미리보기 (전체 {len(items)}개 — 카테고리별 정리)",
+                          expanded=False):
+            summary_rows = []
+            for cat, cat_items in by_cat.items():
+                photo_ct = sum(1 for x in cat_items
+                                if _is_photo_based(x.get("title", ""), x.get("category", "")))
+                summary_rows.append({
+                    "카테고리": cat,
+                    "항목 수": len(cat_items),
+                    "사진 기반": f"{photo_ct}건",
+                    "표준 권장": f"{len(cat_items) - photo_ct}건",
+                })
+            st.dataframe(pd.DataFrame(summary_rows), use_container_width=True,
+                          hide_index=True)
+            st.caption(
+                "💡 **사진 기반** = AI 가 사진에서 실제로 인식한 설비를 점검 / "
+                "**표준 권장** = 해당 공간에 법령상 필요해 AI 가 권장한 점검"
+            )
 
     # ─────────────────────────────────────────
-    # (D) 현장 점검
+    # (D) 현장 점검 — 카테고리별 expander 로 그룹화
     # ─────────────────────────────────────────
     divider()
-    section("03", "현장 점검 입력", "AI가 생성한 점검표에 현장 결과를 입력하세요.")
+    section("03", "현장 점검 입력",
+            f"카테고리 {len(by_cat)}개 · 총 {len(items)}개 항목 — 카테고리를 펼쳐 입력하세요")
 
     if st.session_state.get("demo_mode"):
         col_a, col_b, col_c = st.columns(3)
@@ -1062,30 +1193,62 @@ if s3 and _show_checklist_and_score:
             st.rerun()
 
     scores: dict[str, float] = dict(st.session_state.get("item_scores") or {})
-    for itm in items:
-        no = str(itm.get("no"))
-        basis = itm.get("basis") or ""
-        basis_html = (f"<div style='color:#9A9A9F;font-size:11px;margin-top:2px;'>"
-                      f"근거: {basis}</div>" if basis else "")
-        st.markdown(
-            f"<div style='padding:10px 0 2px 0;'>"
-            f"<b style='color:#D50000'>{itm.get('no')}.</b> {itm.get('title','')}"
-            f"{basis_html}</div>",
-            unsafe_allow_html=True,
-        )
-        try:
-            current = float(scores.get(no, 1.0))
-        except (TypeError, ValueError):
-            current = 1.0
-        idx = [1.0, 0.5, 0.0].index(current) if current in [1.0, 0.5, 0.0] else 0
-        val = st.radio(
-            "충족도",
-            options=[1.0, 0.5, 0.0],
-            format_func=lambda x: {1.0: "양호", 0.5: "불량", 0.0: "부재"}[x],
-            index=idx, horizontal=True, key=f"score_{no}",
-            label_visibility="collapsed",
-        )
-        scores[no] = val
+
+    # 카테고리별 expander — 카테고리당 입력 진행률 표시
+    for cat, cat_items in by_cat.items():
+        cat_filled = sum(1 for itm in cat_items
+                         if str(itm.get("no")) in scores)
+        cat_total = len(cat_items)
+        with st.expander(
+            f"**{cat}** — {cat_filled}/{cat_total} 입력",
+            expanded=(cat_filled < cat_total),
+        ):
+            for itm in cat_items:
+                no = str(itm.get("no"))
+                title = itm.get("title", "")
+                location = itm.get("location") or ""
+                basis = itm.get("basis") or ""
+                method = itm.get("method", "")
+                criterion = itm.get("criterion", "")
+                photo_based = _is_photo_based(title, itm.get("category", ""))
+
+                badge = (
+                    "<span style='background:#E8F5E9;color:#2E7D32;padding:1px 6px;"
+                    "border-radius:999px;font-size:10px;font-weight:600;margin-left:6px;'>"
+                    "📷 사진 기반</span>"
+                    if photo_based else
+                    "<span style='background:#FAFAFA;color:#6B6B70;padding:1px 6px;"
+                    "border-radius:999px;font-size:10px;font-weight:500;margin-left:6px;'>"
+                    "표준 권장</span>"
+                )
+                loc_html = (f"<div style='color:#9A9A9F;font-size:11px;margin-top:2px;'>"
+                            f"📍 위치: {location}</div>") if location else ""
+                method_html = (f"<div style='color:#6B6B70;font-size:11px;margin-top:2px;'>"
+                               f"방법: {method}</div>") if method else ""
+                criterion_html = (f"<div style='color:#6B6B70;font-size:11px;margin-top:2px;'>"
+                                  f"기준: {criterion}</div>") if criterion else ""
+                basis_html = (f"<div style='color:#9A9A9F;font-size:11px;margin-top:2px;'>"
+                              f"근거: {basis}</div>") if basis else ""
+
+                st.markdown(
+                    f"<div style='padding:10px 0 2px 0;'>"
+                    f"<b style='color:#D50000'>{itm.get('no')}.</b> {title} {badge}"
+                    f"{loc_html}{method_html}{criterion_html}{basis_html}</div>",
+                    unsafe_allow_html=True,
+                )
+                try:
+                    current = float(scores.get(no, 1.0))
+                except (TypeError, ValueError):
+                    current = 1.0
+                idx = [1.0, 0.5, 0.0].index(current) if current in [1.0, 0.5, 0.0] else 0
+                val = st.radio(
+                    "충족도",
+                    options=[1.0, 0.5, 0.0],
+                    format_func=lambda x: {1.0: "양호", 0.5: "불량", 0.0: "부재"}[x],
+                    index=idx, horizontal=True, key=f"score_{no}",
+                    label_visibility="collapsed",
+                )
+                scores[no] = val
     st.session_state["item_scores"] = scores
 
     # (E) 점수 계산
@@ -1115,6 +1278,18 @@ if s3 and _show_checklist_and_score:
     auto_map, unmapped = _map_items_to_std(items)
     total_items = len(items)
     mapped_ratio = (len(auto_map) / total_items) if total_items else 0
+
+    # 매핑이란? — 사용자에게 친절하게 설명
+    with st.expander("ℹ️ 자동 매핑 / 수동 매핑이 무엇인가요?", expanded=False):
+        st.markdown(
+            "**자동 매핑** — AI 가 생성한 점검표(예: '흄후드 작동 상태 점검')를 "
+            "법령에 정의된 **표준 설비**(예: '흄후드') 목록과 자동으로 연결하는 작업입니다. "
+            "이름 매칭으로 진행되어, AI 가 다른 표현을 쓰면(예: '국소배기 시스템') 자동 연결이 안 될 수 있습니다.\n\n"
+            "**수동 매핑** — 자동 매핑이 못 찾은 항목을 사용자가 직접 표준 설비와 연결하는 작업입니다. "
+            "예: AI 항목 '실험대 하단 배기' → 표준 설비 '국소배기장치' 로 연결.\n\n"
+            "**왜 매핑이 필요한가?** — 점수 계산은 표준 설비 가중치 기반으로 산정됩니다. "
+            "매핑이 안 된 항목은 점수 계산에서 제외(부재 처리)되므로, 수동 매핑을 추가하면 점수 정확도가 올라갑니다."
+        )
 
     # 매핑 실패가 있으면 수동 매핑 UI 노출
     if total_items and (mapped_ratio < 0.7 or unmapped):
@@ -1180,11 +1355,20 @@ if sr and _show_checklist_and_score:
     divider()
     section("04", "안전 점수 결과")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("종합 점수", f"{sr['score']}점")
     c2.metric("등급", sr["grade"])
     desc = sr.get("grade_description", "") or ""
-    c3.metric("등급 설명", desc[:24] + ("…" if len(desc) > 24 else ""))
+    if desc:
+        # 등급 설명을 truncation 없이 카드로 표시
+        st.markdown(
+            f"<div style='border:1px solid #E5E5E8;border-left:3px solid #D50000;"
+            f"background:#FAFAFA;border-radius:6px;padding:12px 16px;margin:8px 0;"
+            f"font-size:13.5px;line-height:1.7;color:#0A0A0B;'>"
+            f"<b style='color:#D50000;'>등급 설명</b> · {desc}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     # 게이지
     fig = go.Figure(go.Indicator(

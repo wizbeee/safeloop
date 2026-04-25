@@ -221,137 +221,61 @@ if st.session_state.get("saved_session_id"):
     )
 
 # ─────────────────────────────────────────
-# (4) 에듀파인 발송 준비
+# (4) 에듀파인 업로드용 PDF 생성
+# 결재라인·공식 경로 안내·ZIP·결재 시뮬은 모두 제거 — 실제 결재는 K-에듀파인에서.
+# 본 앱은 결재 첨부용 통합 PDF 만 제공.
 # ─────────────────────────────────────────
 divider()
-section("04", "에듀파인 발송 준비", "공식 경로 — 결재라인을 거쳐 교육청으로 전달됩니다.")
+section("04", "에듀파인 업로드용 PDF",
+        "공문 + 점검 결과 보고서를 하나의 PDF 로 묶어 다운로드 → 에듀파인에 첨부")
 
-# 결재 진행 시각 시뮬레이터
-def _render_approval_chain(stage_idx: int) -> None:
-    """담당자 → 부장 → 교감 → 교장 결재선 시각화."""
-    nodes = ["담당자", "부장", "교감", "교장", "교육청 수신"]
-    pieces = []
-    for i, name in enumerate(nodes):
-        if i < stage_idx:
-            color, bg, mark = "#FFFFFF", "#1B8A3A", "✓"
-        elif i == stage_idx:
-            color, bg, mark = "#FFFFFF", "#D50000", "●"
-        else:
-            color, bg, mark = "#9A9A9F", "#FAFAFA", "○"
-        pieces.append(
-            f"<div style='flex:1;text-align:center;'>"
-            f"<div style='display:inline-block;width:42px;height:42px;line-height:42px;"
-            f"border-radius:50%;background:{bg};color:{color};font-weight:700;'>{mark}</div>"
-            f"<div style='font-size:12px;margin-top:6px;color:#0A0A0B;font-weight:600;'>{name}</div>"
-            f"</div>"
-        )
-    arrow = "<div style='align-self:center;color:#D1D1D4;font-size:18px;'>→</div>"
-    st.markdown(
-        "<div style='display:flex;align-items:center;gap:8px;margin:10px 0 18px 0;'>"
-        + arrow.join(pieces)
-        + "</div>",
-        unsafe_allow_html=True,
-    )
+if st.button("📄 통합 PDF 생성", type="primary",
+              key="build_edufine_pdf", use_container_width=True):
+    if not st.session_state.get("saved_session_id"):
+        save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
+    st.session_state["edu_package_ready"] = True
+    st.session_state["_edufine_letter_cache"] = None
+    st.session_state["_edufine_report_cache"] = None
+    st.success("PDF 가 준비되었습니다. 아래에서 다운로드하세요.")
 
-
-_approval_stage = int(st.session_state.get("_approval_demo_stage", 0))
-_render_approval_chain(_approval_stage)
-sim_col1, sim_col2, sim_col3 = st.columns(3)
-with sim_col1:
-    if st.button("한 단계 진행", key="approval_step",
-                 disabled=_approval_stage >= 5, use_container_width=True):
-        st.session_state["_approval_demo_stage"] = min(_approval_stage + 1, 5)
-        if st.session_state["_approval_demo_stage"] >= 4:
-            st.session_state["edufine_approved"] = True
-        st.rerun()
-with sim_col2:
-    if st.button("결재 즉시 완료 (시연용)", key="approval_fastforward",
-                 type="primary",
-                 disabled=_approval_stage >= 4 or not st.session_state.get("demo_mode", True),
-                 use_container_width=True):
-        st.session_state["_approval_demo_stage"] = 4
-        st.session_state["edufine_approved"] = True
-        st.rerun()
-with sim_col3:
-    if st.button("초기화", key="approval_reset", use_container_width=True):
-        st.session_state["_approval_demo_stage"] = 0
-        st.session_state["edufine_approved"] = False
-        st.rerun()
-
-st.markdown(
-    "학교 공식 보고는 **에듀파인 결재라인**을 통해 이루어집니다. "
-    "앱이 결재·첨부 문서를 자동 생성하므로, 담당자는 에듀파인에 업로드 후 결재만 올리면 됩니다."
-)
-
-with st.expander("결재라인 지정 (담당자 → 부장 → 교감 → 교장)"):
-    eduline = st.session_state.get("eduline") or {}
-    c1, c2, c3, c4 = st.columns(4)
-    eduline["담당자"] = c1.text_input("담당자", value=eduline.get("담당자", ""))
-    eduline["부장"] = c2.text_input("부장", value=eduline.get("부장", ""))
-    eduline["교감"] = c3.text_input("교감", value=eduline.get("교감", ""))
-    eduline["교장"] = c4.text_input("교장", value=eduline.get("교장", ""))
-    st.session_state["eduline"] = eduline
-
-    # 영구 저장 옵션 (학교 프로필에 기록)
-    col_save_el1, col_save_el2 = st.columns([2, 3])
-    with col_save_el1:
-        if st.button("이 결재라인을 학교 프로필에 영구 저장", key="save_eduline_perm"):
-            try:
-                from modules.storage import save_school_profile
-                save_school_profile(school.get("정보공시 학교코드", ""), {"eduline": eduline})
-                st.success("영구 저장 — 다음 점검에 자동 채움")
-            except Exception as e:
-                st.error(f"저장 실패: {e}")
-    with col_save_el2:
-        st.caption(
-            "※ 이 결재라인은 **공문 PDF 자동 채움용**입니다. "
-            "실제 결재는 에듀파인/K-에듀파인에서 진행됩니다."
-        )
-
-col_pkg1, col_pkg2 = st.columns([2, 1])
-with col_pkg1:
-    if st.button("에듀파인 업로드용 패키지(ZIP) 생성", use_container_width=True):
-        if not st.session_state.get("saved_session_id"):
-            save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
-        st.session_state["edu_package_ready"] = True
-        # 3-3 수정: 세션 내 ZIP 캐시 초기화 (새로 빌드 필요 플래그)
-        st.session_state["_edufine_zip_cache"] = None
-        st.session_state["_edufine_letter_cache"] = None
-        st.success("패키지가 준비되었습니다. 아래에서 다운로드하세요.")
-
-with col_pkg2:
-    if st.session_state.get("edu_package_ready"):
-        # 3-3 수정: 세션 캐시 — rerun 시마다 매번 ZIP 재빌드하지 않음
-        sid = st.session_state.get("saved_session_id", "")
-        cache = st.session_state.get("_edufine_zip_cache") or {}
-        if cache.get("sid") != sid or cache.get("bytes") is None:
-            zip_bytes = build_edufine_zip({**st.session_state, "session_id": sid})
-            st.session_state["_edufine_zip_cache"] = {"sid": sid, "bytes": zip_bytes}
-        else:
-            zip_bytes = cache["bytes"]
-        st.download_button(
-            "에듀파인 ZIP 다운로드",
-            zip_bytes,
-            file_name=f"에듀파인_패키지_{sid}.zip",
-            mime="application/zip",
-            use_container_width=True,
-            type="primary",
-        )
-
-# 첨부파일 미리보기 — ZIP 내용을 사용자가 알아보게 표시
+# 첨부파일 — 통합 PDF (공문 + 점검 보고서 단일 PDF) 다운로드
 if st.session_state.get("edu_package_ready"):
     sid = st.session_state.get("saved_session_id", "")
+
+    # 공문 PDF
     letter_cache = st.session_state.get("_edufine_letter_cache") or {}
     if letter_cache.get("sid") != sid or letter_cache.get("bytes") is None:
         master = build_master_record({**st.session_state, "session_id": sid})
         letter_bytes = build_official_letter_pdf(master)
-        st.session_state["_edufine_letter_cache"] = {"sid": sid, "bytes": letter_bytes}
+        st.session_state["_edufine_letter_cache"] = {"sid": sid, "bytes": letter_bytes,
+                                                       "master": master}
     else:
         letter_bytes = letter_cache["bytes"]
+        master = letter_cache.get("master") or build_master_record({**st.session_state, "session_id": sid})
 
-    # 첨부파일 UX: ZIP 내부 구성 명시 + 각 파일별 개별 다운로드 + 용도 설명
-    import zipfile, io as _io
-    zip_bytes_for_list = (st.session_state.get("_edufine_zip_cache") or {}).get("bytes")
+    # 점검 결과 보고서 PDF
+    report_cache = st.session_state.get("_edufine_report_cache") or {}
+    if report_cache.get("sid") != sid or report_cache.get("bytes") is None:
+        from modules.storage import build_pdf_report
+        report_bytes = build_pdf_report(master)
+        st.session_state["_edufine_report_cache"] = {"sid": sid, "bytes": report_bytes}
+    else:
+        report_bytes = report_cache["bytes"]
+
+    # 두 PDF 를 결합한 통합 PDF
+    try:
+        from pypdf import PdfWriter, PdfReader
+        import io as _io
+        merger = PdfWriter()
+        merger.append(PdfReader(_io.BytesIO(letter_bytes)))
+        merger.append(PdfReader(_io.BytesIO(report_bytes)))
+        merged_buf = _io.BytesIO()
+        merger.write(merged_buf)
+        merger.close()
+        merged_bytes = merged_buf.getvalue()
+    except Exception:
+        # pypdf 없거나 실패 시 — 두 PDF 를 별도 다운로드로만 제공
+        merged_bytes = None
 
     def _fmt_size(b: int) -> str:
         if b < 1024:
@@ -360,138 +284,156 @@ if st.session_state.get("edu_package_ready"):
             return f"{b/1024:.1f} KB"
         return f"{b/1024/1024:.2f} MB"
 
-    FILE_META = {
-        "00_에듀파인_품의서.pdf": (
-            "📄 공문 (품의서)",
-            "결재 상신용 — 에듀파인에 이 파일을 본문으로 첨부하세요.",
-            "application/pdf",
-        ),
-        "01_점검결과보고서.pdf": (
-            "📊 점검 결과 보고서",
-            "안전점수·카테고리별 분석·법령 근거 — 결재 시 함께 첨부하는 상세 보고서.",
-            "application/pdf",
-        ),
-        "02_점검결과.xlsx": (
-            "📈 결과 엑셀",
-            "KEIIS/내부 집계용 — 요약·점검표·카테고리점수·추천 4개 시트 포함.",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ),
-        "03_점검결과.csv": (
-            "📑 결과 CSV",
-            "다른 시스템 집계용 평문 CSV — Excel 불가 환경에서 사용.",
-            "text/csv",
-        ),
-        "04_master.json": (
-            "🗂 마스터 JSON",
-            "전체 세션의 원본 구조화 데이터 — 감사·재현·API 연동용.",
-            "application/json",
-        ),
-        "05_edu_package.json": (
-            "📡 교육청 송신 패키지",
-            "'앱 직접 발송' 시 교육청 수신함에 실제로 저장되는 JSON.",
-            "application/json",
-        ),
-        "06_opendata_package.json": (
-            "🌐 공공데이터 환원 패키지",
-            "익명화·집계 후 공공데이터포털 환원용 JSON (학교 식별 정보 제거됨).",
-            "application/json",
-        ),
-    }
-
-    with st.expander("📦 ZIP 안에 들어 있는 파일 보기 (7개)", expanded=True):
-        st.caption(
-            "아래 7개 파일이 ZIP 안에 포함됩니다. 각 파일의 **용도와 어디에 쓰는지** 를 확인하고, "
-            "원하는 파일만 개별로도 내려받을 수 있습니다."
+    if merged_bytes:
+        st.download_button(
+            f"📄 통합 PDF 다운로드 ({_fmt_size(len(merged_bytes))})",
+            merged_bytes,
+            file_name=f"안전점검_결재첨부_{sid}.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+            key="dl_edufine_merged",
         )
-        if zip_bytes_for_list:
-            try:
-                zf = zipfile.ZipFile(_io.BytesIO(zip_bytes_for_list))
-                infos = {i.filename: i for i in zf.infolist()}
-                for fname in FILE_META:
-                    icon_title, desc, mime = FILE_META[fname]
-                    info = infos.get(fname)
-                    size = info.file_size if info else 0
-                    col_desc, col_dl = st.columns([3, 1])
-                    with col_desc:
-                        st.markdown(
-                            f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
-                            f"border-left:3px solid #D50000;border-radius:6px;"
-                            f"background:#FFF;margin:4px 0;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:#0A0A0B;'>"
-                            f"{icon_title} <span style='color:#9A9A9F;font-weight:500;font-size:11px;"
-                            f"margin-left:8px;'>{fname} · {_fmt_size(size)}</span></div>"
-                            f"<div style='font-size:12px;color:#6B6B70;margin-top:4px;'>{desc}</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
-                    with col_dl:
-                        try:
-                            payload = zf.read(fname) if info else b""
-                        except Exception:
-                            payload = b""
-                        if payload:
-                            # key 를 ASCII 로 안정화 (한글 파일명에도 안전)
-                            import hashlib as _hl
-                            _safe_key = _hl.md5(fname.encode("utf-8")).hexdigest()[:10]
-                            st.download_button(
-                                "다운로드",
-                                payload,
-                                file_name=fname,
-                                mime=mime,
-                                key=f"dl_{_safe_key}",
-                                use_container_width=True,
-                            )
-            except Exception as e:
-                st.warning(f"ZIP 미리보기 실패: {e}")
-        else:
-            st.info("ZIP 을 먼저 생성하면 파일 목록이 표시됩니다.")
+
+    with st.expander("개별 PDF 로 받기 (선택)", expanded=False):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(
+                f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
+                f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
+                f"<b>📄 공문 (품의서)</b><br>"
+                f"<span style='font-size:11px;color:#6B6B70;'>결재 상신용 본문 · "
+                f"{_fmt_size(len(letter_bytes))}</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.download_button(
+                "다운로드", letter_bytes,
+                file_name=f"공문_품의서_{sid}.pdf",
+                mime="application/pdf",
+                key="dl_letter_only", use_container_width=True,
+            )
+        with col_b:
+            st.markdown(
+                f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
+                f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
+                f"<b>📊 점검 결과 보고서</b><br>"
+                f"<span style='font-size:11px;color:#6B6B70;'>안전점수·카테고리·법령 근거 · "
+                f"{_fmt_size(len(report_bytes))}</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.download_button(
+                "다운로드", report_bytes,
+                file_name=f"점검결과보고서_{sid}.pdf",
+                mime="application/pdf",
+                key="dl_report_only", use_container_width=True,
+            )
 
 # ─────────────────────────────────────────
-# (5) 앱 직접 발송 (옵션 2)
+# (5) 교육청 수신함 전송 — 본교 점검 이력에서 다중 선택
 # ─────────────────────────────────────────
 divider()
-section("05", "앱 직접 발송", "에듀파인 결재 완료 후 구조화 JSON을 교육청 담당자에게 직접 전송합니다.")
+section("05", "교육청 수신함 전송",
+        "본교에 누적된 점검 이력 중 보낼 항목을 선택해 일괄 전송 (현재 점검만 또는 여러 건 동시)")
 
-st.markdown(
-    "에듀파인 공문과 **동일 내용의 구조화 JSON**을 교육청 담당자 수신 모듈로 직접 전송합니다. "
-    "KEIIS 입력·공공데이터 환원 자동화를 위한 경로로, **에듀파인 결재 완료 후에만 활성화**됩니다."
-)
+# 본교 점검 이력 로드
+from modules.storage import list_recent_sessions
+all_sessions = list_recent_sessions(limit=200)
+school_code = (school or {}).get("정보공시 학교코드")
+school_sessions = [s for s in all_sessions
+                    if s.get("school_code") == school_code]
 
-col_ap1, col_ap2 = st.columns(2)
-with col_ap1:
-    auto_approved = st.session_state.get("_approval_demo_stage", 0) >= 4
-    approved = st.checkbox(
-        "에듀파인 결재 완료 확인",
-        value=st.session_state.get("edufine_approved", False),
-        disabled=auto_approved,
-        help=("자동 결재 시뮬이 완료되어 체크 고정됨" if auto_approved
-              else "에듀파인에서 결재가 완료된 경우에만 체크하세요."),
+if not school_sessions:
+    st.info(
+        "본교에 저장된 점검 이력이 없습니다. 위에서 '학교 클라우드에 저장' 을 먼저 수행해주세요."
     )
-    if not auto_approved:
-        st.session_state["edufine_approved"] = approved
-    approved = st.session_state.get("edufine_approved", False)
+else:
+    # 현재 세션을 기본 선택, 나머지는 사용자 선택
+    cur_sid = st.session_state.get("saved_session_id")
+    options = []
+    labels: dict[str, str] = {}
+    for s in school_sessions:
+        sid = s.get("session_id")
+        if not sid:
+            continue
+        ts = (s.get("timestamp") or "")[:16].replace("T", " ")
+        space_label = s.get("space_type") or "-"
+        nick = s.get("space_nickname") or ""
+        score = s.get("score")
+        score_part = f" · {score:.1f}점" if isinstance(score, (int, float)) else ""
+        labels[sid] = f"{ts} · {space_label}{(' (' + nick + ')') if nick else ''}{score_part}"
+        options.append(sid)
 
-with col_ap2:
-    if st.button("교육청 수신함으로 전송", type="primary", use_container_width=True,
-                 disabled=not approved):
-        if not st.session_state.get("saved_session_id"):
-            save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
-        result = send_to_edu_app({**st.session_state,
-                                   "session_id": st.session_state.get("saved_session_id")})
-        if result.get("ok"):
+    default_selected = [cur_sid] if cur_sid in options else (options[:1] if options else [])
+    selected_sids = st.multiselect(
+        "전송할 점검 세션 (여러 건 선택 가능)",
+        options=options,
+        default=default_selected,
+        format_func=lambda s: labels.get(s, s),
+        key="edu_send_select",
+    )
+
+    n_sel = len(selected_sids)
+    sent_label = f"교육청 수신함으로 전송 ({n_sel}건)" if n_sel else "전송 대상을 선택하세요"
+    if st.button(sent_label, type="primary",
+                  disabled=(n_sel == 0),
+                  use_container_width=True,
+                  key="send_to_edu_app_multi"):
+        results = []
+        # 선택한 세션 각각에 대해 master.json 을 다시 로드해 send_to_edu_app 실행
+        from pathlib import Path as _P
+        from modules.storage import STORAGE_DIR as _STO
+        for sid in selected_sids:
+            # storage 폴더에서 해당 세션 master.json 찾기
+            master_path = _P(_STO) / school_code / sid / "master.json"
+            if not master_path.exists():
+                results.append((sid, False, "master.json 없음"))
+                continue
+            try:
+                import json as _json
+                master = _json.loads(master_path.read_text(encoding="utf-8"))
+                # send_to_edu_app 은 session(dict) 받음 — master 구조로 합성
+                synth_session = {
+                    "school": {
+                        "정보공시 학교코드": school_code,
+                        "학교명": (master.get("school") or {}).get("name"),
+                    },
+                    "active_space": {
+                        "type": (master.get("space") or {}).get("type"),
+                        "nickname": (master.get("space") or {}).get("nickname"),
+                    },
+                    "score_result": (master.get("inspection") or {}).get("score_result"),
+                    "stage2_confirmed": (master.get("inspection") or {}).get("stage2_confirmed"),
+                    "edufine_approved": True,  # 사용자가 전송 의사 표명 시 결재 완료 가정
+                    "session_id": sid,
+                    "timestamp": master.get("timestamp"),
+                }
+                r = send_to_edu_app(synth_session)
+                results.append((sid, r.get("ok", False), r.get("reason") or r.get("path", "")))
+            except Exception as e:
+                results.append((sid, False, str(e)[:80]))
+
+        ok_count = sum(1 for _, ok, _ in results if ok)
+        fail_count = n_sel - ok_count
+        if ok_count:
             st.session_state["edu_app_sent"] = True
-            st.success(f"전송 완료 · 수신 위치: `{result['path']}`")
-            st.balloons()
+            st.success(f"전송 완료 — 성공 {ok_count}건 / 실패 {fail_count}건")
+            if fail_count == 0:
+                st.balloons()
         else:
-            st.error(result.get("reason", "전송 실패"))
+            st.error("모든 전송이 실패했습니다.")
+
+        with st.expander("전송 상세 보기", expanded=(fail_count > 0)):
+            for sid, ok, info in results:
+                ico = "✅" if ok else "❌"
+                st.markdown(f"- {ico} `{sid}` — {info}")
 
 if st.session_state.get("edu_app_sent"):
     st.info(
         "교육청 수신함에서 검증·익명화 후 KEIIS 업로드 → 공공데이터 환원이 이어집니다. "
-        "진행 상황은 **🔁 데이터 순환** 페이지에서 확인할 수 있습니다."
+        "진행 상황은 **🔁 내 제출 추적** 페이지에서 확인할 수 있습니다."
     )
     colN1, colN2 = st.columns(2)
-    if colN1.button("데이터 순환 보기", use_container_width=True):
+    if colN1.button("내 제출 추적 보기", use_container_width=True):
         st.switch_page("pages/6_데이터순환.py")
     if colN2.button("본교 현황 보기", use_container_width=True):
         st.switch_page("pages/4_본교현황.py")
