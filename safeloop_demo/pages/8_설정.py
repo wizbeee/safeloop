@@ -178,18 +178,19 @@ for p in _providers:
     st.markdown(f"- **{p['label']}** — {status}{src}")
 
 st.markdown("##### 추가 옵션")
-multi_avail = sum(1 for p in _providers if p["available"]) >= 2
-# 사용 불가 상태면 세션 값 강제 정리 (잔존 방지)
-if not multi_avail and st.session_state.get("cross_check"):
+# Stage 1 (공간 식별) 호출이 제거되었으므로 cross_check 토글은 더 이상 동작하지 않음
+# 세션 잔존 정리만 수행하고 deprecated 안내 표시
+if st.session_state.get("cross_check"):
     st.session_state["cross_check"] = False
-cross = st.toggle(
-    "단계 1 교차 검증 (Claude × GPT 합의)",
-    value=st.session_state.get("cross_check", False),
-    disabled=not multi_avail,
-    help="두 공급자가 모두 가능한 경우에만 동작. 비용·속도는 2배.",
+st.markdown(
+    "<div style='padding:10px 14px;background:#FAFAFA;border:1px solid #E5E5E8;"
+    "border-radius:6px;font-size:12px;color:#6B6B70;line-height:1.6;margin:4px 0 10px 0;'>"
+    "<b>📦 deprecated</b> — '단계 1 교차 검증' 옵션은 제거되었습니다. "
+    "공간 유형은 점검 시작 페이지에서 담당자가 명시 선택하므로 AI 식별·검증이 "
+    "불필요해졌습니다. 비용·시간 절감 효과."
+    "</div>",
+    unsafe_allow_html=True,
 )
-# 토글 disabled여도 사용자가 cross 변수에 입력은 못 하지만, 안전 차 추가 가드
-st.session_state["cross_check"] = bool(cross) and multi_avail
 img_check = st.toggle(
     "이미지 품질 사전 검사 (블러·어두움 · 자동 회전·리사이즈)",
     value=st.session_state.get("image_quality_check", True),

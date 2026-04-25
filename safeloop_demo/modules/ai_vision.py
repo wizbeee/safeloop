@@ -304,57 +304,85 @@ def has_cached_demo_results() -> bool:
         return False
 
 
-def samples_hit_cache(images: list[bytes]) -> bool:
-    """현재 업로드된 사진 해시가 실제 캐시 stage1 파일과 일치할 때만 True.
+def samples_hit_cache(images: list[bytes],
+                       space_type: Optional[str] = None) -> bool:
+    """현재 업로드된 사진 + 공간 유형 조합이 Stage 2 캐시와 일치하면 True.
 
-    2-12 수정: `has_cached_demo_results` 는 "어떤 캐시라도 있으면 True" 라
-    사용자가 다른 사진을 올려도 '캐시 폴백 활성화' 배너가 떴다.
-    여기선 stage1 캐시 키(광각 3장 해시)와 정확 매칭만 허용.
+    Stage 1 호출이 제거되었으므로 stage2 캐시 키(`{img_hash}_{space_type}`)
+    기준으로 검사한다. space_type 미지정 시는 주어진 사진 해시 prefix 만으로
+    매칭 (어떤 공간이든 일치하면 True).
     """
     if not images:
         return False
     try:
-        cache_inputs = images[:3] if len(images) >= 3 else images
-        key = _hash_images(cache_inputs)
-        for provider_id in ("anthropic", "openai"):
-            if (CACHE_DIR / f"stage1_{provider_id}_{key}.json").exists():
-                return True
+        img_hash = _hash_images(images)
+        for provider_id in ("anthropic", "openai", "gemini"):
+            if space_type:
+                if (CACHE_DIR / f"stage2_{provider_id}_{img_hash}_{space_type}.json").exists():
+                    return True
+            else:
+                # space_type 미지정 — prefix 매칭 (어느 공간이든 캐시 있으면 True)
+                if any(CACHE_DIR.glob(f"stage2_{provider_id}_{img_hash}_*.json")):
+                    return True
         return False
     except Exception:
         return False
 
 
-def load_demo_pipeline_for_samples(images: list[bytes]) -> Optional[dict]:
-    """샘플 사진 해시와 일치하는 캐시가 있으면 단계 1·2·3 결과를 한꺼번에 반환."""
+def load_demo_pipeline_for_samples(images: list[bytes],
+                                     space_type: Optional[str] = None) -> Optional[dict]:
+    """샘플 사진 + 공간 유형에 매칭되는 Stage 2/3 캐시가 있으면 한꺼번에 반환.
+
+    Stage 1 은 호출하지 않고 사용자 등록 정보로 합성한다.
+    Stage 2 캐시 키: `{img_hash}_{space_type}`
+    Stage 3 캐시 키: hash(stage1_synth + stage2)
+    """
     if not images:
         return None
     img_hash = _hash_images(images)
-    # 어떤 공급자든 캐시되어 있으면 사용
-    for provider_id in ("anthropic", "openai"):
-        s1_path = CACHE_DIR / f"stage1_{provider_id}_{img_hash}.json"
-        if not s1_path.exists():
-            continue
-        try:
-            s1 = json.loads(s1_path.read_text(encoding="utf-8"))
-            space_type = s1.get("space_type_primary", "")
-            s2_key = f"{img_hash}_{space_type}"
-            s2_path = CACHE_DIR / f"stage2_{provider_id}_{s2_key}.json"
+    for provider_id in ("anthropic", "openai", "gemini"):
+        # space_type 지정 — 정확 매칭, 미지정 — 어느 캐시든
+        if space_type:
+            candidates = [(CACHE_DIR / f"stage2_{provider_id}_{img_hash}_{space_type}.json", space_type)]
+        else:
+            candidates = []
+            for p in CACHE_DIR.glob(f"stage2_{provider_id}_{img_hash}_*.json"):
+                # 파일명에서 space_type 추출
+                stem = p.stem  # stage2_anthropic_{hash}_{space_type}
+                parts = stem.split("_")
+                if len(parts) >= 4:
+                    sp_type = "_".join(parts[3:])
+                    candidates.append((p, sp_type))
+        for s2_path, sp_type in candidates:
             if not s2_path.exists():
                 continue
-            s2 = json.loads(s2_path.read_text(encoding="utf-8"))
-            # stage3 키 (stage1·2 결과 해시)
-            clean1 = {k: v for k, v in s1.items() if not k.startswith("_")}
-            clean2 = {k: v for k, v in s2.items() if not k.startswith("_")}
-            payload = json.dumps({"stage1": clean1, "stage2": clean2},
-                                  ensure_ascii=False, sort_keys=True)
-            s3_key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
-            s3_path = CACHE_DIR / f"stage3_{provider_id}_{s3_key}.json"
-            if not s3_path.exists():
+            try:
+                s2 = json.loads(s2_path.read_text(encoding="utf-8"))
+                # Stage 1 합성 (사용자 등록 정보 기반)
+                s1 = {
+                    "space_type_primary": sp_type,
+                    "confidence": 1.0,
+                    "evidence": ["담당자 등록 정보"],
+                    "secondary_hypothesis": None,
+                    "notes": "사용자 등록 정보 (Stage 1 생략)",
+                    "_elapsed_sec": 0.0,
+                    "_provider": "user-input",
+                    "_cached": True,
+                    "_skipped": True,
+                }
+                # Stage 3 캐시 키
+                clean1 = {k: v for k, v in s1.items() if not k.startswith("_")}
+                clean2 = {k: v for k, v in s2.items() if not k.startswith("_")}
+                payload = json.dumps({"stage1": clean1, "stage2": clean2},
+                                      ensure_ascii=False, sort_keys=True)
+                s3_key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+                s3_path = CACHE_DIR / f"stage3_{provider_id}_{s3_key}.json"
+                if not s3_path.exists():
+                    continue
+                s3 = json.loads(s3_path.read_text(encoding="utf-8"))
+                s2["_cached"] = True
+                s3["_cached"] = True
+                return {"stage1": s1, "stage2": s2, "stage3": s3}
+            except Exception:
                 continue
-            s3 = json.loads(s3_path.read_text(encoding="utf-8"))
-            for r in (s1, s2, s3):
-                r["_cached"] = True
-            return {"stage1": s1, "stage2": s2, "stage3": s3}
-        except Exception:
-            continue
     return None

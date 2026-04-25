@@ -715,12 +715,13 @@ if _show_ai_run:
     )
 
     key_ok = api_key_available()
-    # 2-12 수정: 단순히 "캐시 파일이 있음" 이 아니라 "현재 사진이 캐시와 정확 매칭" 인지 확인
-    _opt_for_cache = (
-        [analyze_and_optimize(b).optimized_bytes for b in all_photos[:3]]
-        if len(all_photos) >= 3 else []
+    # Stage 1 호출 제거 후 → Stage 2 캐시(`{img_hash}_{space_type}`) 정확 매칭 검사
+    _opt_all = (
+        [analyze_and_optimize(b).optimized_bytes for b in all_photos]
+        if all_photos else []
     )
-    cache_match = samples_hit_cache(_opt_for_cache)
+    _user_space = (space or {}).get("type")
+    cache_match = samples_hit_cache(_opt_all, space_type=_user_space)
     cached_demo = cache_match and st.session_state.get("demo_mode", True)
     cached_possible = (
         has_cached_demo_results()
@@ -769,7 +770,7 @@ if _show_ai_run:
             st.info("🎬 시연 자동 재생 — 샘플 사진으로 AI 분석을 즉시 실행합니다...")
         with col_b:
             run_disabled = not analysis_ready
-            btn_label = ("▶  AI 분석 시작 (공간 식별 → 설비 탐지 → 점검표 생성)"
+            btn_label = ("▶  AI 분석 시작 (설비 탐지 → 맞춤 점검표 생성)"
                          if analysis_ready else f"필수 {_MIN_REQUIRED_FILLED}컷 이상 촬영 후 활성화")
             user_clicked = st.button(btn_label, type="primary", use_container_width=True,
                                       disabled=run_disabled, key="run_ai_btn")
@@ -783,7 +784,8 @@ if _show_ai_run:
                 # 1) API 키 없을 때 시연 캐시 폴백 우선 시도
                 if not key_ok:
                     cached_pipeline = load_demo_pipeline_for_samples(
-                        [analyze_and_optimize(b).optimized_bytes for b in images]
+                        [analyze_and_optimize(b).optimized_bytes for b in images],
+                        space_type=space["type"],
                     )
                     if cached_pipeline:
                         st.session_state["stage1_result"] = cached_pipeline["stage1"]
@@ -822,40 +824,38 @@ if _show_ai_run:
                         )
                         st.stop()
 
-                prog = st.progress(0, text="단계 1/3 · 공간 유형 식별 중…")
+                # Stage 1 (공간 유형 식별) 은 호출하지 않음 — 담당자가 1_점검시작 페이지에서
+                # 드롭다운으로 명시 선택했으므로 그 정보를 그대로 사용 (AI 비용·시간 절감).
+                # cross_check 옵션도 deprecated.
+                space_type = space["type"]
+                s1 = {
+                    "space_type_primary": space_type,
+                    "confidence": 1.0,
+                    "evidence": ["담당자가 점검 시작 페이지에서 명시 선택"],
+                    "secondary_hypothesis": None,
+                    "notes": "사용자 등록 정보 (Stage 1 AI 식별 생략 — 신뢰도 100%)",
+                    "_elapsed_sec": 0.0,
+                    "_provider": "user-input",
+                    "_cached": False,
+                    "_skipped": True,
+                }
+                st.session_state["stage1_result"] = s1
+                # 이전 cross_check 잔존 정리
+                st.session_state["stage1_cross_check"] = None
+
+                prog = st.progress(0, text="단계 1/2 · 안전 설비 탐지 중…")
                 pipeline_ok = False
                 try:
-                    # 교차 검증 (선택)
-                    if st.session_state.get("cross_check", False):
-                        cc = run_stage1_cross_check(images, use_cache=use_cache)
-                        st.session_state["stage1_cross_check"] = cc
-                        # 합의 결과를 stage1_result로 사용
-                        if cc.get("consensus"):
-                            anth = cc.get("by_provider", {}).get("anthropic", {})
-                            s1 = anth or next(iter(cc["by_provider"].values()))
-                            s1 = dict(s1)
-                            s1["space_type_primary"] = cc["consensus"]
-                            s1["_cached"] = False
-                            s1["_cross_check_agreement"] = cc["agreement"]
-                        else:
-                            s1 = run_stage1(images, use_cache=use_cache, image_labels=labels)
-                    else:
-                        s1 = run_stage1(images, use_cache=use_cache, image_labels=labels)
-                    st.session_state["stage1_result"] = s1
-                    prog.progress(33, text=f"단계 1 완료 · {s1.get('_elapsed_sec','?')}초")
-
-                    space_type = s1.get("space_type_primary") or space["type"]
-                    prog.progress(40, text="단계 2/3 · 안전 설비 탐지 중…")
                     s2 = run_stage2(images, space_type, use_cache=use_cache,
                                     image_labels=labels)
                     st.session_state["stage2_result"] = s2
                     st.session_state["stage2_confirmed"] = None
-                    prog.progress(66, text=f"단계 2 완료 · {s2.get('_elapsed_sec','?')}초")
+                    prog.progress(50, text=f"단계 1 완료 · {s2.get('_elapsed_sec','?')}초")
 
-                    prog.progress(75, text="단계 3/3 · 맞춤 점검표 생성 중…")
+                    prog.progress(60, text="단계 2/2 · 맞춤 점검표 생성 중…")
                     s3 = run_stage3(s1, s2, use_cache=use_cache)
                     st.session_state["stage3_result"] = s3
-                    prog.progress(100, text=f"단계 3 완료 · {s3.get('_elapsed_sec','?')}초")
+                    prog.progress(100, text=f"단계 2 완료 · {s3.get('_elapsed_sec','?')}초")
                     pipeline_ok = True
                 except Exception as e:
                     err_msg = str(e).lower()
@@ -887,16 +887,34 @@ _show_checklist_and_score = classic_mode or step == "review"
 
 if s1 and _show_stage1:
     st.markdown("<div class='sl-num' style='margin-top:18px;'>결과 01</div>"
-                "<div class='sl-h'>공간 유형 식별</div>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.metric("공간 유형", s1.get("space_type_primary", "-"))
-    with col2:
-        conf = s1.get("confidence", 0) or 0
-        st.metric("신뢰도", f"{float(conf)*100:.0f}%")
-    with col3:
-        tag = "캐시" if s1.get("_cached") else "신규"
-        st.metric(f"처리 시간({tag})", f"{s1.get('_elapsed_sec','?')}초")
+                "<div class='sl-h'>점검 공간</div>", unsafe_allow_html=True)
+    if s1.get("_skipped"):
+        # 사용자 등록 정보 사용 — Stage 1 호출 생략
+        col1, col2 = st.columns([2, 3])
+        with col1:
+            st.metric("공간 유형", s1.get("space_type_primary", "-"))
+        with col2:
+            st.markdown(
+                "<div style='padding:14px 18px;background:#FAFAFA;"
+                "border:1px solid #E5E5E8;border-left:3px solid #4CAF50;"
+                "border-radius:6px;font-size:13px;line-height:1.7;'>"
+                "<b style='color:#4CAF50;'>✓ 담당자 등록 정보</b><br>"
+                "점검 시작 페이지에서 담당자가 직접 선택한 공간 유형입니다. "
+                "AI 가 사진으로 공간을 다시 추정하지 않고 등록 정보를 그대로 사용합니다."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+    else:
+        # 호환: 구 캐시 등에서 _skipped 플래그 없는 경우
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.metric("공간 유형", s1.get("space_type_primary", "-"))
+        with col2:
+            conf = s1.get("confidence", 0) or 0
+            st.metric("신뢰도", f"{float(conf)*100:.0f}%")
+        with col3:
+            tag = "캐시" if s1.get("_cached") else "신규"
+            st.metric(f"처리 시간({tag})", f"{s1.get('_elapsed_sec','?')}초")
     # 교차검증 결과 표시 (ERROR 경우 포함)
     cc = st.session_state.get("stage1_cross_check")
     if cc and cc.get("by_provider"):
