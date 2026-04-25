@@ -245,7 +245,21 @@ with oc1:
 
 with oc2:
     st.markdown("**🎬 시연 자동 재생**")
-    st.caption("심사·발표용 — 학교·공간·샘플 3장 로드 + AI 분석 화면으로 즉시 이동 (원클릭)")
+    st.caption("심사·발표용 — 공간 선택 후 학교·공간·샘플 7장 자동 로드")
+
+    # 공간 유형 토글 — 화학실 / 일반교실 / 미술실
+    DEMO_SPACES = {
+        "화학실": "chemistry_lab",
+        "일반교실": "classroom",
+        "미술실": "art_lab",
+    }
+    autoplay_space = st.radio(
+        "데모 공간",
+        options=list(DEMO_SPACES.keys()),
+        horizontal=True,
+        key="autoplay_space_choice",
+    )
+
     has_existing = bool(st.session_state.get("school")) or bool(st.session_state.get("active_space"))
     if has_existing:
         st.markdown(
@@ -256,7 +270,7 @@ with oc2:
             unsafe_allow_html=True,
         )
     # 원클릭 자동재생 — 2단계 확인 없이 즉시 실행 (발표 시 빠르게)
-    if st.button("▶ 자동 재생 시작", key="autoplay_btn",
+    if st.button(f"▶ 자동 재생 시작 ({autoplay_space})", key="autoplay_btn",
                   type="primary", use_container_width=True):
         from modules.data_loader import search_schools_by_name, get_school_by_code
         from modules.session import reset_inspection
@@ -297,10 +311,11 @@ with oc2:
 
             # 0-2: 동일 데모 공간 재사용 (누적 방지)
             school_code = demo_school.get("정보공시 학교코드")
+            demo_space_type = autoplay_space  # "화학실" / "일반교실" / "미술실"
             existing_demo = next(
                 (sp for sp in st.session_state.get("registered_spaces", [])
                  if sp.get("school_code") == school_code
-                 and sp.get("type") == "화학실"
+                 and sp.get("type") == demo_space_type
                  and sp.get("nickname") == "데모 · 3층 A"),
                 None,
             )
@@ -311,36 +326,53 @@ with oc2:
                 demo_space = {
                     "space_id": uuid.uuid4().hex[:10],
                     "school_code": school_code,
-                    "type": "화학실",
+                    "type": demo_space_type,
                     "nickname": "데모 · 3층 A",
                 }
                 st.session_state.setdefault("registered_spaces", []).append(demo_space)
             st.session_state["active_space"] = demo_space
 
-            # 🎬 시연 자동 재생 실제화 — 샘플 사진도 즉시 분배 + AI 자동실행 플래그
-            sample_root = Path(__file__).resolve().parent / "sample_images" / "chemistry_lab"
+            # 🎬 시연 자동 재생 실제화 — 새 7컷 구조에 샘플 분배 + AI 자동실행
+            sample_folder = DEMO_SPACES.get(autoplay_space, "chemistry_lab")
+            sample_root = Path(__file__).resolve().parent / "sample_images" / sample_folder
+            # 7컷 기본 키 (close_supplement·back_door_diag 는 선택)
+            SHOT_KEYS = [
+                "entrance_diag", "front_view", "center_window", "center_corridor",
+                "center_front_door", "center_back_door", "ceiling",
+            ]
+            shots = {k: [] for k in SHOT_KEYS + ["back_door_diag", "close_supplement"]}
+
+            # 폴더에 7장 이상 있으면 그대로, 부족하면 화학실 폴백 후 그것도 부족하면 가용한 만큼만 분배
+            available_paths: list[Path] = []
             if sample_root.exists():
-                paths = sorted(sample_root.glob("*.jpg"))[:3]  # 광각 3장만
-                if paths:
-                    SHOT_KEYS = ["wide_front", "wide_right", "wide_left"]
-                    shots = {k: [] for k in SHOT_KEYS + ["close_supplement"]}
-                    for i, p in enumerate(paths):
-                        shots[SHOT_KEYS[i]].append({
+                available_paths = sorted(sample_root.glob("*.jpg"))
+            if len(available_paths) < 3:
+                # 폴백: chemistry_lab 으로 (현재 가장 많은 샘플 보유)
+                fallback = Path(__file__).resolve().parent / "sample_images" / "chemistry_lab"
+                if fallback.exists():
+                    available_paths = sorted(fallback.glob("*.jpg"))
+
+            # 7컷에 가용 사진을 균등 분배 (사진이 부족하면 일부 컷은 비어 있음)
+            if available_paths:
+                for i, key in enumerate(SHOT_KEYS):
+                    if i < len(available_paths):
+                        p = available_paths[i]
+                        shots[key].append({
                             "name": p.name,
                             "bytes": p.read_bytes(),
                             "source": "sample",
                         })
-                    st.session_state["shots"] = shots
-                    # 이전 AI 결과 클리어 (다시 분석하도록)
-                    for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
-                                "stage3_result", "item_scores", "score_result",
-                                "recommendations"]:
-                        st.session_state[_k] = None
+                st.session_state["shots"] = shots
+                # 이전 AI 결과 클리어 (다시 분석하도록)
+                for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
+                           "stage3_result", "item_scores", "score_result",
+                           "recommendations"]:
+                    st.session_state[_k] = None
 
             st.session_state["_autoplay"] = True
             # 2_AI점검 페이지가 이 플래그를 감지해 캐시 폴백 가능 시 즉시 분석 실행
             st.session_state["_autoplay_run_ai"] = True
-            st.toast(f"데모 학교·공간·샘플 세팅 완료 → AI 점검 이동", icon="🎬")
+            st.toast(f"데모: {autoplay_space} 7컷 세팅 완료 → AI 점검 이동", icon="🎬")
             st.switch_page("pages/2_AI점검.py")
 
 # 8-7: 세션 초기화는 설정 페이지에만 두기 (사이드바 중복 제거)

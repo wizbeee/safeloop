@@ -6,7 +6,7 @@ AI 안전 설비·시설·장비 추천 모듈.
 """
 from __future__ import annotations
 
-from modules.laws import LAW_BASIS
+from modules.laws import LAW_BASIS, items_for_space
 
 
 def _priority_label(weight: int) -> tuple[str, str]:
@@ -17,10 +17,18 @@ def _priority_label(weight: int) -> tuple[str, str]:
     return ("★", "권고 조치")
 
 
-def recommend_from_scores(item_scores: dict[str, float]) -> list[dict]:
-    """항목별 점수를 받아 불량·부재 항목에 대한 추천 리스트 반환."""
+def recommend_from_scores(item_scores: dict[str, float],
+                            space_type: str | None = None,
+                            floor: int | None = None) -> list[dict]:
+    """항목별 점수를 받아 불량·부재 항목에 대한 추천 리스트 반환.
+
+    space_type 이 주어지면 해당 공간에 적용되는 항목만 추천 대상.
+    """
+    applicable = set(items_for_space(space_type, floor)) if space_type else set(LAW_BASIS.keys())
     recs: list[dict] = []
     for name, info in LAW_BASIS.items():
+        if name not in applicable:
+            continue
         s = float(item_scores.get(name, 0.0))
         if s >= 1.0:
             continue  # 양호는 추천 불필요

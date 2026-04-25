@@ -16,7 +16,10 @@ from typing import Optional
 
 from modules.ai_providers import _PROVIDER_CLASSES, get_provider
 from modules.image_quality import optimize_only
-from modules.prompts import STAGE1_SYSTEM, STAGE2_SYSTEM, STAGE3_SYSTEM
+from modules.prompts import (
+    STAGE1_SYSTEM, STAGE2_SYSTEM, STAGE3_SYSTEM,
+    stage2_system_for, stage3_system_for,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = ROOT / "school_storage" / "_ai_cache"
@@ -225,11 +228,13 @@ def run_stage2(images: list[bytes], space_type: str, use_cache: bool = True,
         )
 
     text = (
-        f"이 공간은 '{space_type}'으로 식별되었습니다. 해당 공간 유형에서 필요한 안전설비를 탐지해주세요."
+        f"이 공간은 '{space_type}'으로 식별되었습니다. 해당 공간 유형에서 필요한 안전설비와 그 위치를 탐지해주세요."
         + labels_hint
     )
+    # 공간 유형별 카테고리 우선순위가 반영된 시스템 프롬프트 사용
+    sys_prompt = stage2_system_for(space_type)
     t0 = time.time()
-    raw = provider.call(STAGE2_SYSTEM, text, images, tier="vision")
+    raw = provider.call(sys_prompt, text, images, tier="vision")
     elapsed = time.time() - t0
 
     parsed = _parse_json(raw)
@@ -259,10 +264,14 @@ def run_stage3(stage1_result: dict, stage2_result: dict, use_cache: bool = True)
     text = (
         f"단계 1 결과:\n{json.dumps(clean1, ensure_ascii=False, indent=2)}\n\n"
         f"단계 2 결과:\n{json.dumps(clean2, ensure_ascii=False, indent=2)}\n\n"
-        "위 결과를 근거로 이 공간만을 위한 맞춤형 점검표를 생성하세요."
+        "위 결과를 근거로 이 공간만을 위한 맞춤형 점검표를 생성하세요. "
+        "각 항목의 location 필드에 Stage 2 의 위치 정보를 활용해주세요."
     )
+    # 공간 유형별 우선순위가 반영된 Stage 3 시스템 프롬프트
+    space_type = (clean1 or {}).get("space_type_primary")
+    sys_prompt = stage3_system_for(space_type)
     t0 = time.time()
-    raw = provider.call(STAGE3_SYSTEM, text, [], tier="text")
+    raw = provider.call(sys_prompt, text, [], tier="text")
     elapsed = time.time() - t0
 
     parsed = _parse_json(raw)

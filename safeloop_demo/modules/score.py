@@ -7,7 +7,9 @@ S = Σ(wᵢ × sᵢ) / Σwᵢ × 100
 """
 from __future__ import annotations
 
-from modules.laws import CATEGORIES, LAW_BASIS, STANDARD_ITEMS, items_by_category
+from modules.laws import (
+    CATEGORIES, LAW_BASIS, STANDARD_ITEMS, items_by_category, items_for_space,
+)
 
 
 def get_grade(score: float) -> str:
@@ -32,11 +34,16 @@ def grade_description(grade: str) -> str:
     }.get(grade, "")
 
 
-def calculate_safety_score(item_scores: dict[str, float]) -> dict:
+def calculate_safety_score(item_scores: dict[str, float],
+                            space_type: str | None = None,
+                            floor: int | None = None) -> dict:
     """
     Args:
         item_scores: {"비상샤워": 1.0, "세안기": 0.5, ...}
                      값이 주어지지 않은 항목은 0.0 으로 간주
+        space_type: 공간 유형. 주어지면 해당 공간에 적용되는 항목만 점수 계산
+                    대상에 포함 (다른 공간 전용 설비는 점수 분모에서 제외)
+        floor: 층수. 완강기·창문 추락방지 등 층수 조건 항목에 사용
     Returns:
         {
           "score": float (0~100),
@@ -45,12 +52,17 @@ def calculate_safety_score(item_scores: dict[str, float]) -> dict:
           "raw": {항목: 점수},
         }
     """
+    # 공간이 주어지면 해당 공간 항목만; 아니면 전체
+    applicable = set(items_for_space(space_type, floor)) if space_type else set(LAW_BASIS.keys())
+
     total_weighted = 0.0
     total_weight = 0.0
     category_breakdown: dict[str, dict] = {c: {"weighted": 0.0, "weight": 0.0, "items": []} for c in CATEGORIES}
     raw: dict[str, float] = {}
 
     for name, info in LAW_BASIS.items():
+        if name not in applicable:
+            continue
         s = float(item_scores.get(name, 0.0))
         w = float(info["weight"])
         raw[name] = s

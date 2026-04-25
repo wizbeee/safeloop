@@ -79,42 +79,83 @@ st.markdown(
 )
 
 # ─────────────────────────────────────────
-# 촬영 샷 정의 — 사용자 움직임 기반 (문 → 우측 → 좌측)
-#   필수 3장(광각)이면 AI가 공간·설비를 자동 인식.
-#   보조 1장(근접)은 AI가 놓친 항목을 보완할 때만 사용.
+# 촬영 샷 정의 — 7컷 기본(공간 맵핑) + 1컷 선택(뒷문 있을 때) + 보완 1컷
+#
+# 다각도 + 천장으로 AI 가 공간 레이아웃과 안전 장비 위치를 동시에 추론.
+# 별도 "위치샷" 강제 촬영은 없음 — AI 가 모호 판정 시 보완 단계에서 안내.
 # ─────────────────────────────────────────
 SHOTS: list[dict] = [
     {
-        "key": "wide_front",
+        "key": "entrance_diag",
         "no": "01",
-        "title": "정면 · 문을 열고 들어서면 보이는 장면",
-        "guide": "출입문을 등지고 서서, 앞쪽 전경이 프레임에 한 번에 담기도록 촬영하세요. "
-                 "천장 · 바닥 · 양쪽 벽면 일부가 모두 보이면 가장 좋습니다. 가로 구도 권장.",
+        "title": "입구 대각선 · 들어왔을 때 첫인상",
+        "guide": "출입문 안쪽에 서서 공간 안쪽을 사선 광각으로 촬영하세요. "
+                 "출입 동선과 공간 전체 분위기가 한 프레임에 담기게.",
         "required": True,
     },
     {
-        "key": "wide_right",
+        "key": "front_view",
         "no": "02",
-        "title": "오른쪽 · 몸을 오른쪽으로 돌려 바라본 장면",
-        "guide": "같은 자리에서 오른쪽으로 몸을 돌려, 오른쪽 벽면과 그 앞에 놓인 집기 · 수납장 · 벽 부착물이 "
-                 "한 프레임에 담기도록 촬영하세요.",
+        "title": "교탁(실험대) 앞 · 학생석 정면",
+        "guide": "교탁(또는 실험대) 앞에 서서 학생석을 향해 촬영하세요. "
+                 "칠판·게시판·앞문·앞쪽 콘센트가 한 프레임에 담기게.",
         "required": True,
     },
     {
-        "key": "wide_left",
+        "key": "center_window",
         "no": "03",
-        "title": "왼쪽 · 몸을 왼쪽으로 돌려 바라본 장면",
-        "guide": "이번엔 왼쪽으로 몸을 돌려, 왼쪽 벽면과 집기, 그리고 들어왔던 출입구 쪽이 "
-                 "함께 보이도록 촬영하세요.",
+        "title": "공간 중앙 → 창문쪽",
+        "guide": "공간 한가운데에 서서 창문 방향을 촬영하세요. "
+                 "창문·완강기 보관함(고층)·창가 환기구가 보이도록.",
         "required": True,
+    },
+    {
+        "key": "center_corridor",
+        "no": "04",
+        "title": "공간 중앙 → 복도쪽",
+        "guide": "공간 한가운데에서 복도(반대편 벽) 방향을 촬영하세요. "
+                 "게시판·복도쪽 콘센트·청소도구함·소화기가 보이도록.",
+        "required": True,
+    },
+    {
+        "key": "center_front_door",
+        "no": "05",
+        "title": "공간 중앙 → 앞문쪽",
+        "guide": "공간 한가운데에서 앞문 방향을 촬영하세요. "
+                 "앞문·비상구 표시등·출입 동선이 보이도록.",
+        "required": True,
+    },
+    {
+        "key": "center_back_door",
+        "no": "06",
+        "title": "공간 중앙 → 뒷문쪽",
+        "guide": "공간 한가운데에서 뒷문(또는 후면 벽) 방향을 촬영하세요. "
+                 "후면 게시·뒷문 비상구·청소도구·악기·표본 보관 등.",
+        "required": True,
+    },
+    {
+        "key": "ceiling",
+        "no": "07",
+        "title": "천장 (위로 향해)",
+        "guide": "스마트폰을 위로 향해 천장 한 장. "
+                 "화재감지기·연기감지기·스프링클러·환기구·조명이 함께 보이도록.",
+        "required": True,
+    },
+    {
+        "key": "back_door_diag",
+        "no": "08",
+        "title": "뒷문 대각선 (뒷문이 있을 때만)",
+        "guide": "뒷문이 있다면 뒷문 안쪽에서 공간 안쪽을 사선으로. "
+                 "뒷문에서 본 출입 동선·반대편 비상구를 함께 확인. 뒷문 없으면 건너뛰세요.",
+        "required": False,
     },
     {
         "key": "close_supplement",
-        "no": "04",
-        "title": "보완 촬영 · AI가 놓친 항목만 근접 (선택)",
-        "guide": "먼저 위 3장을 올리고 AI 분석을 실행하세요. AI가 특정 설비를 인식하지 못했거나 "
-                 "'모호' 상태로 표시한 경우에만 해당 설비 · 표지 · 천장 감지기 등을 가까이서 추가 촬영합니다. "
-                 "AI가 이미 인식했다면 이 단계는 건너뛰어도 됩니다.",
+        "no": "09",
+        "title": "보완 촬영 · AI가 모호 판정한 항목만 (선택)",
+        "guide": "기본 7~8컷을 올려 AI 분석을 먼저 실행하세요. AI 가 특정 설비를 "
+                 "'모호' 또는 '부재 의심' 으로 표시한 경우에만, 해당 영역(예: 가려진 캐비닛 뒤, "
+                 "사각지대)을 추가 촬영하세요.",
         "required": False,
     },
 ]
@@ -202,15 +243,20 @@ required_filled = sum(1 for s in SHOTS if s["required"] and shots_state.get(s["k
 required_total = sum(1 for s in SHOTS if s["required"])
 
 # ─────────────────────────────────────────
-# 위저드 상태 (한 구도씩 한 화면)
+# 위저드 상태 (한 구도씩 한 화면) — 7~8컷 + 보완
 # ─────────────────────────────────────────
 WIZARD_STEPS = [
-    ("shoot_1", "01 정면", "wide_front"),
-    ("shoot_2", "02 우측", "wide_right"),
-    ("shoot_3", "03 좌측", "wide_left"),
-    ("ai_run", "AI 분석", None),
-    ("supplement", "보완", "close_supplement"),
-    ("review", "결과", None),
+    ("shoot_1", "01 입구 대각선",  "entrance_diag"),
+    ("shoot_2", "02 앞 정면",       "front_view"),
+    ("shoot_3", "03 창문쪽",        "center_window"),
+    ("shoot_4", "04 복도쪽",        "center_corridor"),
+    ("shoot_5", "05 앞문쪽",        "center_front_door"),
+    ("shoot_6", "06 뒷문쪽",        "center_back_door"),
+    ("shoot_7", "07 천장",          "ceiling"),
+    ("shoot_8", "08 뒷문 대각선",   "back_door_diag"),    # 선택
+    ("ai_run",  "AI 분석",          None),
+    ("supplement", "보완",          "close_supplement"),
+    ("review",  "결과",             None),
 ]
 _STEP_KEYS = [s[0] for s in WIZARD_STEPS]
 _SHOT_OF_STEP = {s[0]: s[2] for s in WIZARD_STEPS}
@@ -221,13 +267,16 @@ if "wizard_step" not in st.session_state:
 if st.session_state["wizard_step"] not in _STEP_KEYS:
     st.session_state["wizard_step"] = "shoot_1"
 
-# 🎬 자동재생 진입 — 필수 3장이 모두 있고 _autoplay 플래그가 있으면 ai_run 스텝으로 점프
+# 🎬 자동재생 진입 — 필수 컷 중 일정 비율 이상 채워지면 ai_run 스텝으로 점프
+# 샘플 폴더에 7컷 전체가 없는 경우(시연용)도 진행 가능하도록 임계 80%
 if st.session_state.get("_autoplay") and not st.session_state.get("_autoplay_consumed"):
-    _required_keys_auto = ["wide_front", "wide_right", "wide_left"]
-    _all_wide_ready = all(
-        st.session_state.get("shots", {}).get(k) for k in _required_keys_auto
-    )
-    if _all_wide_ready:
+    _required_keys_auto = [
+        "entrance_diag", "front_view", "center_window", "center_corridor",
+        "center_front_door", "center_back_door", "ceiling",
+    ]
+    _filled = sum(1 for k in _required_keys_auto
+                  if st.session_state.get("shots", {}).get(k))
+    if _filled >= 5:  # 7개 중 5개 이상 = 71% 이상이면 진행 (3장 광각 + 천장만 있어도 가능)
         st.session_state["wizard_step"] = "ai_run"
         st.session_state["_autoplay_consumed"] = True
 
@@ -402,16 +451,16 @@ if classic_mode:
     section(
         "01", "사진 촬영",
         f"누적 {total_photos}장 · 필수 구도 {required_filled}/{required_total} 충족"
-        + (" · AI 분석 가능" if total_photos >= 3 and required_filled >= required_total
+        + (" · AI 분석 가능" if total_photos >= required_total and required_filled >= required_total
            else ""),
     )
     st.markdown(
         "<div style='font-size:13px; color:#6B6B70; margin-bottom:12px; line-height:1.65;'>"
-        "<b style='color:#0A0A0B;'>촬영은 3장이면 충분합니다.</b> "
-        "문을 열고 들어선 그 자리에서 <b>정면 → 오른쪽 → 왼쪽</b> 순서로 몸을 돌려 3장 찍으세요. "
-        "AI가 이 광각 사진에서 공간 유형과 설비를 자동으로 인식합니다. "
-        "AI가 놓친 항목이 있을 때만 맨 아래 <b>보완 촬영(선택)</b> 을 사용하세요. "
-        "<b>iPhone은 HTTPS 접속 필요.</b>"
+        "<b style='color:#0A0A0B;'>기본 7~8컷</b>으로 공간 전체와 천장까지 한 번에 담습니다. "
+        "입구 대각선 → 앞 정면 → 중앙 4방향(창문/복도/앞문/뒷문) → 천장 → (뒷문 대각선, 있을 때) 순. "
+        "AI 가 이 다각도 사진들로 <b>공간 레이아웃 + 안전 장비 위치</b>를 동시에 식별합니다. "
+        "AI가 모호 판정한 항목만 맨 아래 <b>보완 촬영(선택)</b> 을 사용하세요. "
+        "<b>iPhone 은 HTTPS 접속 필요.</b>"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -421,26 +470,39 @@ else:
 # 시연 모드 — 샘플 일괄 로드 (시연 모드일 땐 펼침)
 if st.session_state.get("demo_mode"):
     with st.expander("시연 모드 · 샘플 사진 일괄 로드", expanded=True):
+        SAMPLE_FOLDERS = {
+            "화학실 샘플": "chemistry_lab",
+            "물리실 샘플": "physics_lab",
+            "일반교실 샘플 (폴백: 화학실)": "classroom",
+            "미술실 샘플 (폴백: 화학실)": "art_lab",
+        }
         sample_choice = st.radio(
             "샘플 공간",
-            ["화학실 샘플 (6장)", "물리실 샘플 (7장)"],
+            list(SAMPLE_FOLDERS.keys()),
             horizontal=True,
             key="sample_choice",
         )
         st.caption(
-            "광각 3장만 업로드합니다 (AI 분석에 필요한 최소 입력). "
-            "나머지 근접 사진은 AI 실행 후 '보완' 단계에서 직접 선택해 업로드하세요."
+            "기본 7컷 (입구·앞·중앙 4방향·천장) 위치에 가용한 사진을 분배합니다. "
+            "샘플이 부족하면 일부 컷이 비어 있을 수 있고, 폴더가 없으면 화학실로 폴백합니다."
         )
-        if st.button("샘플 불러와서 구도별 분배", use_container_width=True):
+        if st.button("샘플 불러와서 7컷에 분배", use_container_width=True):
             root = Path(__file__).resolve().parent.parent / "sample_images"
-            sub = "chemistry_lab" if "화학실" in sample_choice else "physics_lab"
-            paths = sorted((root / sub).glob("*.jpg"))
-            # 2-5 수정: 광각 3장만 분배 · 나머지는 무시 (보완은 사용자가 직접 선택)
+            folder = SAMPLE_FOLDERS[sample_choice]
+            sub_path = root / folder
+            if not sub_path.exists() or not list(sub_path.glob("*.jpg")):
+                sub_path = root / "chemistry_lab"  # 폴백
+            paths = sorted(sub_path.glob("*.jpg"))
+            # 모든 샷 키 비움
             for s in SHOTS:
                 shots_state[s["key"]] = []
-            wide_keys = [s["key"] for s in SHOTS if s["required"]]
-            for i, p in enumerate(paths[:len(wide_keys)]):
-                shots_state[wide_keys[i]].append({
+            # 7컷 필수 키에 순서대로 분배 (샘플이 부족하면 일부 비어 있음)
+            target_keys = [
+                "entrance_diag", "front_view", "center_window", "center_corridor",
+                "center_front_door", "center_back_door", "ceiling",
+            ]
+            for i, p in enumerate(paths[:len(target_keys)]):
+                shots_state[target_keys[i]].append({
                     "name": p.name, "bytes": p.read_bytes(), "source": "sample",
                 })
             for k in ["stage1_result", "stage2_result", "stage2_confirmed", "stage3_result"]:
@@ -479,19 +541,45 @@ if classic_mode:
             _reset_all()
 else:
     # ─── 위저드: 스텝별 한 화면 ───
-    if step in ("shoot_1", "shoot_2", "shoot_3"):
+    SHOOT_STEPS = ("shoot_1", "shoot_2", "shoot_3", "shoot_4",
+                    "shoot_5", "shoot_6", "shoot_7", "shoot_8")
+
+    if step in SHOOT_STEPS:
         shot = _SHOT_BY_KEY[_SHOT_OF_STEP[step]]
         _render_shot_card(shot)
-        shot_done = bool(shots_state.get(shot["key"]))
-        prev_map = {"shoot_1": None, "shoot_2": "shoot_1", "shoot_3": "shoot_2"}
-        next_map = {"shoot_1": "shoot_2", "shoot_2": "shoot_3", "shoot_3": "ai_run"}
-        _render_wizard_nav(
-            prev_step=prev_map[step],
-            next_step=next_map[step],
-            next_label=("다음 구도 →" if step != "shoot_3" else "AI 분석 단계로 →"),
-            next_disabled=not shot_done,
+        shot_done = bool(shots_state.get(shot["key"])) or not shot["required"]
+
+        # 스텝 인덱스 기반 prev/next
+        idx = SHOOT_STEPS.index(step)
+        prev_step = SHOOT_STEPS[idx - 1] if idx > 0 else None
+        # 마지막 촬영 단계 다음은 ai_run
+        next_step = SHOOT_STEPS[idx + 1] if idx < len(SHOOT_STEPS) - 1 else "ai_run"
+
+        is_last_required = (step == "shoot_7")  # 7번까지 필수, 8번(뒷문 대각선) 은 선택
+        next_label = (
+            "다음 구도 →" if step != "shoot_8" else
+            "AI 분석 단계로 →"
         )
-        if not shot_done:
+        # 8번 (뒷문 대각선) 은 선택이므로 미촬영이어도 진행 허용
+        if step == "shoot_8":
+            next_step = "ai_run"
+            next_label = "AI 분석 단계로 →"
+
+        _render_wizard_nav(
+            prev_step=prev_step,
+            next_step=next_step,
+            next_label=next_label,
+            next_disabled=(not shot_done),
+        )
+
+        if step == "shoot_7" and shot_done:
+            st.caption(
+                "💡 **뒷문이 있다면** 다음 단계(08 뒷문 대각선)에서 한 장 더 찍어주세요. "
+                "뒷문이 없으면 바로 'AI 분석 단계로' 진행하셔도 됩니다."
+            )
+        elif step == "shoot_8":
+            st.caption("뒷문이 없으면 건너뛰고 바로 AI 분석으로 진행하세요.")
+        elif not shot_done:
             st.caption("이 구도를 최소 한 장 촬영하면 다음으로 진행할 수 있어요.")
 
     elif step == "ai_run":
@@ -503,30 +591,37 @@ else:
             "<div class='sl-shot-title'>사진 확인 및 AI 분석</div>"
             "</div>"
             "<div class='sl-shot-guide'>"
-            "아래 3장을 AI가 분석해 공간 유형을 판정하고 안전 설비를 자동으로 탐지합니다. "
-            "다시 찍고 싶다면 ‘이전’으로 돌아가세요."
+            "아래 7~8장을 AI가 분석해 공간 유형 판정 + 안전 설비 위치까지 한 번에 식별합니다. "
+            "사진을 다시 찍으려면 ‘이전’으로 돌아가세요."
             "</div></div>",
             unsafe_allow_html=True,
         )
-        wide_keys = [k for k in ["wide_front", "wide_right", "wide_left"]]
-        cols = st.columns(3)
-        for i, k in enumerate(wide_keys):
-            shot = _SHOT_BY_KEY[k]
-            with cols[i]:
-                st.markdown(
-                    f"<div style='font-size:12px;color:#6B6B70;margin-bottom:4px;'>"
-                    f"{shot['no']} · {shot['title'].split(' · ')[0]}</div>",
-                    unsafe_allow_html=True,
-                )
-                ps = shots_state.get(k, [])
-                if ps:
-                    st.image(ps[0]["bytes"], use_container_width=True)
-                    st.caption(f"{len(ps)}장")
-                else:
-                    st.warning("미촬영")
+        # 모든 기본 촬영 컷 한눈에 보여주기
+        all_keys = [s["key"] for s in SHOTS if s["key"] != "close_supplement"]
+        # 4개씩 그리드
+        rows = [all_keys[i:i+4] for i in range(0, len(all_keys), 4)]
+        for row_keys in rows:
+            cols = st.columns(len(row_keys))
+            for i, k in enumerate(row_keys):
+                shot = _SHOT_BY_KEY[k]
+                with cols[i]:
+                    label = shot["title"].split(" · ")[0]
+                    st.markdown(
+                        f"<div style='font-size:11px;color:#6B6B70;margin-bottom:4px;'>"
+                        f"{shot['no']} · {label}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    ps = shots_state.get(k, [])
+                    if ps:
+                        st.image(ps[0]["bytes"], use_container_width=True)
+                    else:
+                        if shot.get("required"):
+                            st.warning("미촬영")
+                        else:
+                            st.caption("(선택 — 건너뜀)")
 
         _render_wizard_nav(
-            prev_step="shoot_3",
+            prev_step="shoot_8",
             next_step=None,
         )  # 다음은 AI 실행 버튼이 대신함
 
@@ -602,7 +697,10 @@ def _persist_draft() -> None:
 
 all_photos, all_labels = _flatten_photos_with_labels()
 total_filled = len(all_photos)
-analysis_ready = total_filled >= 3 and required_filled >= required_total
+# 7컷 전체 강제하지 않음 — 최소 5컷 (입구·앞·중앙 4방향 중 충분히 채워야)
+# AI 가 부족분은 보완 단계에서 안내
+_MIN_REQUIRED_FILLED = 5
+analysis_ready = total_filled >= _MIN_REQUIRED_FILLED and required_filled >= _MIN_REQUIRED_FILLED
 
 _show_ai_run = classic_mode or step == "ai_run"
 
@@ -613,7 +711,7 @@ if _show_ai_run:
         f"Claude 비전 AI가 사진에서 공간 유형과 설비를 직접 식별합니다 · "
         f"누적 {total_filled}장 · 필수 구도 {required_filled}/{required_total}"
         + (" · <b style=\"color:#D50000\">실행 준비 완료</b>" if analysis_ready
-           else " · 필수 3장을 먼저 채우세요"),
+           else f" · 필수 {required_total}컷을 먼저 채우세요"),
     )
 
     key_ok = api_key_available()
@@ -672,7 +770,7 @@ if _show_ai_run:
         with col_b:
             run_disabled = not analysis_ready
             btn_label = ("▶  AI 분석 시작 (공간 식별 → 설비 탐지 → 점검표 생성)"
-                         if analysis_ready else "필수 3장 촬영 후 활성화")
+                         if analysis_ready else f"필수 {_MIN_REQUIRED_FILLED}컷 이상 촬영 후 활성화")
             user_clicked = st.button(btn_label, type="primary", use_container_width=True,
                                       disabled=run_disabled, key="run_ai_btn")
             if user_clicked or (triggered_by_supplement and analysis_ready) or triggered_by_autoplay:
@@ -1045,11 +1143,16 @@ if s3 and _show_checklist_and_score:
             )
             st.stop()
 
-        result = calculate_safety_score(std_scores)
+        # 공간 유형(+층수) 을 점수·추천에 전달 — 해당 공간에 적용 항목만 사용
+        _space_type = (space or {}).get("type")
+        _floor = None  # TODO: 층수 입력 UI 가 생기면 여기 결합
+        result = calculate_safety_score(std_scores, space_type=_space_type, floor=_floor)
         st.session_state["score_result"] = result
-        st.session_state["recommendations"] = recommend_from_scores(std_scores)
+        st.session_state["recommendations"] = recommend_from_scores(
+            std_scores, space_type=_space_type, floor=_floor
+        )
         st.success(
-            f"계산 완료 · 점수 산정에 사용된 표준 설비 {len(std_scores)}건"
+            f"계산 완료 · 공간({_space_type or '전체'}) 적용 표준 설비 {len(std_scores)}건"
         )
         st.rerun()
 
