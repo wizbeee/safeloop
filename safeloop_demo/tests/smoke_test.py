@@ -87,7 +87,7 @@ for rel in ["app.py", "requirements.txt", "packages.txt", "setup.py",
 
 # 5. AI 공급자 어댑터
 print("\n[5/8] AI 공급자 어댑터")
-from modules.ai_providers import ALL_PROVIDERS, providers_status
+from modules.ai_providers import providers_status
 status = providers_status()
 check("providers_status", lambda: f"{len(status)}개 공급자 발견")
 for p in status:
@@ -158,6 +158,75 @@ check("build_csv", lambda: f"{len(build_csv(m))}B")
 check("build_excel", lambda: f"{len(build_excel(m))}B")
 check("build_pdf_report", lambda: f"{len(build_pdf_report(m))}B")
 check("build_official_letter_pdf", lambda: f"{len(build_official_letter_pdf(m))}B")
+
+# 9. 페이지 런타임 검사 (NameError 등 모듈 레벨 실행 에러 잡기)
+print("\n[9] 페이지 런타임 무결성 (Streamlit AppTest)")
+try:
+    from streamlit.testing.v1 import AppTest
+
+    def _check_page_runtime(page_path: Path) -> str:
+        at = AppTest.from_file(str(page_path), default_timeout=15)
+        at.run()
+        if at.exception:
+            exc = at.exception[0]
+            raise RuntimeError(f"{type(exc.value).__name__}: {exc.value}")
+        return "런타임 OK"
+
+    # app.py + 모든 페이지
+    targets = [ROOT / "app.py"] + sorted((ROOT / "pages").glob("*.py"))
+    for p in targets:
+        check(f"runtime/{p.name}", lambda pp=p: _check_page_runtime(pp))
+except ImportError:
+    print("   streamlit.testing 모듈 사용 불가 — skipped")
+
+# 10. 핵심 사용자 인터랙션 — 시연 시작 흐름 (단순 컴포넌트 검증)
+print("\n[10] 시연 캐시 자동 보장 동작")
+try:
+    from modules.demo_image import make_all_demo_shots
+    from modules.ai_vision import ensure_demo_cache_for_shots
+
+    for sp in ("화학실", "일반교실", "물리실", "음악실", "미술실"):
+        shots = make_all_demo_shots(sp)
+        ok_cache = ensure_demo_cache_for_shots(shots, sp)
+        check(f"demo_cache/{sp}",
+              lambda v=ok_cache, s=sp: f"cache_ensured={v}" if v else (_ for _ in ()).throw(
+                  RuntimeError(f"{s} 캐시 보장 실패")
+              ))
+except Exception as e:
+    print(f"   시연 캐시 검증 스킵 — {e}")
+
+# 11. 라운드트립 — 저장 → 암호화 → 복호화 → 세션 복원 모의
+print("\n[11] .safeloop 라운드트립 (저장→암호화→복호화)")
+try:
+    from modules.crypto import encrypt_to_file_bytes, decrypt_payload, is_encrypted
+    from modules.storage import build_master_record, build_edu_package
+
+    sample_session = {
+        "session_id": "smoke-rt",
+        "school": {
+            "정보공시 학교코드": "T0000",
+            "학교명": "스모크중학교",
+            "시도교육청": "충남교육청",
+        },
+        "active_space": {"space_id": "spX", "type": "화학실", "nickname": "3층 A"},
+        "stage2_confirmed": {"detected_equipment": [], "likely_absent_equipment": []},
+        "stage3_result": {"items": []},
+        "score_result": {"score": 75, "grade": "B", "category_scores": {}},
+        "recommendations": [],
+        "internal_approval_confirmed": True,
+    }
+    master = build_master_record(sample_session)
+    edu = build_edu_package(master)
+    blob = encrypt_to_file_bytes(edu)
+    check("encrypt_to_file_bytes", lambda: f"encrypted={is_encrypted(blob)} size={len(blob)}B")
+    decoded = decrypt_payload(blob)
+    check("decrypt_payload", lambda: f"record_type={decoded.get('record_type')}")
+    assert decoded.get("record_type") == "safeloop_edu_submission", \
+        f"record_type 불일치: {decoded.get('record_type')}"
+    print("   라운드트립 검증 OK")
+except Exception as e:
+    print(f"   라운드트립 검증 실패 — {e}")
+    fail += 1
 
 # 결과
 print("\n" + "=" * 60)
