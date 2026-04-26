@@ -17,6 +17,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from modules.auth import is_authenticated_session
 from modules.data_loader import load_high_risk
 from modules.laws import LAW_BASIS, CATEGORIES
 from modules.session import ensure_state
@@ -28,25 +29,20 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="policy")
 
-# 역할 가드 — '정책 시뮬레이터' 는 교육청 담당자의 예산 편성 의사결정 도구
-# 학교 담당자는 개별 학교 안전 점검이 주 업무이므로 이 기능을 노출하지 않음
-if st.session_state.get("role") != "교육청":
+# 인증 가드 — 세션만 검사 (쿠키 IFrame 로드 회피로 깜빡임 방지).
+# 미인증 시 홈으로 보내 거기서 자동 로그인 또는 PIN 입력 받음.
+if not is_authenticated_session("edu"):
     st.warning(
-        "🏫 **학교 담당자 모드** — '정책 시뮬레이터' 는 교육청 담당자가 관할 위험군 526개교에 "
-        "예산을 투입할 때의 효과를 추정하는 의사결정 도구입니다. 학교 담당자는 개별 학교의 "
-        "안전 점검과 결재가 주 업무이므로 이 기능은 필요하지 않습니다."
+        "🔐 **교육청 담당자 인증이 필요합니다** — 홈으로 돌아가 PIN 입력 또는 "
+        "자동 로그인을 해주세요."
     )
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("← 홈으로 돌아가기", key="policy_guard_home",
-                      use_container_width=True):
-            st.switch_page("app.py")
-    with col_b:
-        if st.button("교육청 담당자로 전환", key="policy_guard_switch",
-                      type="primary", use_container_width=True):
-            st.session_state["role"] = "교육청"
-            st.switch_page("app.py")
+    if st.button("← 홈으로 돌아가서 인증", type="primary",
+                  width="stretch", key="policy_back_home"):
+        st.session_state["_show_pin_edu"] = True
+        st.switch_page("app.py")
     st.stop()
+
+st.session_state["role"] = "교육청"
 
 hero("STAGE 04 EXTENSION", "정책 시뮬레이터",
      "위험군에 예산을 투입했을 때 안전도 변화 추정 · 실무 단가 기준 로그 감쇠 모델")
@@ -71,6 +67,7 @@ CATEGORY_UNIT_COST = {   # 단위: 만원 (1개 학교 · 1개 공간당)
     "감지·경보": 220,       # 감지기 3종 + 비상벨
     "개인보호구": 80,       # 학급 분량 PPE 일괄
     "안내·표지": 15,        # MSDS·포스터 (저비용 고효과)
+    "시설·전기": 350,       # 절연 콘센트(GFCI) + 안전 LED + 창문 추락방지 가드
 }
 
 # 카테고리별 예상 점수 기여도 (법령 가중치 합산 → 100 정규화)
@@ -89,22 +86,27 @@ control_col, result_col = st.columns([1, 2], gap="large")
 with control_col:
     section("01", "투자 시나리오 설정")
 
-    # 사전 정의된 현실 시나리오
+    # 한국 학교 안전 정책 실무 단위 — 작은 단위부터 큰 단위까지
+    # 단계: 시군구 시범 → 시도 시범 → 시도 확대 → 전국 시범 → 전국 확대
+    # 학교당 평균 패키지 약 1,500만원 기준 (위험도 우선 종합 개선)
     PRESETS = {
         "맞춤 입력": None,
-        "교부금 0.05% 시범 (약 40억)": 40,
-        "교부금 0.1% 확대 (약 80억)": 80,
-        "교부금 0.5% 전면 (약 400억)": 400,
+        "시군구 시범 (10교 · 약 1.5억)": 2,
+        "시도 시범 (100교 · 약 15억)": 15,
+        "시도 확대 (500교 · 약 75억)": 75,
+        "전국 시범 (1,000교 · 약 150억)": 150,
+        "전국 확대 (2,000교 · 약 300억)": 300,
     }
     preset = st.selectbox(
         "예산 프리셋",
         options=list(PRESETS.keys()),
-        help="2024년 지방교육재정교부금 약 80조 원 기준. "
-             "실제 시설개선 예산은 총 교부금의 0.05~0.5% 범위에서 의사결정.",
+        help="한국 시도교육청 시설안전 특별교부금 사례 기준. "
+             "학교당 종합 개선 패키지 약 1,500만원으로 단위 산정.",
     )
-    default_budget = PRESETS[preset] or 80
-    budget_eok = st.slider("총 투자 예산 (억 원)", 1, 500, default_budget, step=1,
-                             help="지방교육재정교부금 또는 특별교부금(시설개선) 가용분")
+    default_budget = PRESETS[preset] or 15
+    budget_eok = st.slider("총 투자 예산 (억 원)", 1, 1000, default_budget, step=1,
+                             help="시도교육청 시설안전 특별교부금 또는 "
+                                  "교육환경개선 사업 예산 가용분")
 
     target_strategy = st.radio(
         "투자 전략",
@@ -123,7 +125,7 @@ with control_col:
              "점수 기여 (%)": f"{CATEGORY_SCORE_CONTRIB[c]:.1f}"}
             for c in CATEGORIES
         ])
-        st.dataframe(ref_df, use_container_width=True, hide_index=True)
+        st.dataframe(ref_df, width="stretch", hide_index=True)
         st.caption(
             "※ 조달청 나라장터 평균 단가 · 교육시설공제회 시설개선 사례(2023-24) "
             "를 바탕으로 설정한 **표준 추정치**. 지역·시공 조건에 따라 ±30% 변동."
@@ -147,20 +149,24 @@ with control_col:
 budget_won = budget_eok * 100_000_000
 
 # 전략별 타겟 선정 + 학교당 투자액 분배
+# 패키지 비용은 카테고리별 표준 단가 합산 — 한국 조달청·교육시설공제회 평균 기준.
 if target_strategy.startswith("위험도 높은 순"):
-    # 위험도 상위 학교에 집중 투입 (학교당 표준 패키지 = 1500만원 = 모든 카테고리 경량판)
-    pkg_cost_won = 15_000_000  # 학교당 1,500만 원 (비상대응+보관+감지+PPE 경량 패키지)
+    # 위험도 상위 학교에 집중 투입 — 종합 개선 패키지
+    # (비상대응 450 + 보관 280 + 감지 220 + PPE 80 + 안내 15 + 시설전기 350 + 환기 일부)
+    # = 1,500만원 (실험실 1실 종합 개선)
+    pkg_cost_won = 15_000_000
     n = int(budget_won // pkg_cost_won)
     targets = hr.sort_values("위험도_점수", ascending=False).head(n).copy()
     per_school_won = pkg_cost_won
 elif target_strategy.startswith("고른 분산"):
-    pkg_cost_won = 8_000_000  # 학교당 800만 원 (저비용 기본 패키지)
+    # 저비용 기본 패키지 — 안내·표지 + PPE + 감지경보 = 약 320만원 + 시공비 = 약 1000만원
+    pkg_cost_won = 10_000_000  # 학교당 1,000만 원
     n = int(budget_won // pkg_cost_won)
     targets = hr.sample(min(n, len(hr)), random_state=42).copy()
     per_school_won = pkg_cost_won
 else:  # 카테고리 집중
-    # 부재율 × 가중치 우선순위로 상위 3개 카테고리 지원 패키지
-    # 대략 (환기+보관+감지) = 820+280+220 = 약 1,320만 원
+    # 위 카테고리별 우선순위 산식 상위 3개 (환기+보관+감지 또는 시설전기+감지+개인보호구)
+    # = 약 820+280+220 = 1,320만 원
     pkg_cost_won = 13_200_000
     n = int(budget_won // pkg_cost_won)
     targets = hr.sort_values("위험도_점수", ascending=False).head(n).copy()
@@ -229,7 +235,7 @@ with result_col:
                       xaxis_title="안전 점수", yaxis_title="학교 수",
                       margin=dict(l=20, r=20, t=10, b=20),
                       paper_bgcolor="#FFF", plot_bgcolor="#FFF")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ─────────────────────────────────────────
 # 카테고리별 투자 우선순위 추천 (부재율 × 단가당 점수 회복)
@@ -250,6 +256,7 @@ CAT_ABSENT_RATE_ESTIMATED = {
     "감지·경보": 0.28,
     "개인보호구": 0.52,
     "안내·표지": 0.38,
+    "시설·전기": 0.45,     # 절연 콘센트·창문 안전 가드 보급률 낮음
 }
 
 priority_rows = []
@@ -268,14 +275,14 @@ for c in CATEGORIES:
     })
 
 priority = pd.DataFrame(priority_rows).sort_values("우선순위 점수", ascending=False)
-st.dataframe(priority, use_container_width=True, hide_index=True)
+st.dataframe(priority, width="stretch", hide_index=True)
 
 fig2 = px.bar(priority, x="우선순위 점수", y="카테고리", orientation="h",
               color="우선순위 점수", color_continuous_scale=["#9A9A9F", "#D50000"])
 fig2.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20),
                    yaxis={"categoryorder": "total ascending"},
                    coloraxis_showscale=False)
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig2, width="stretch")
 
 st.caption(
     "※ 부재율은 공공데이터 + 시범 점검 결과 추정치입니다. "
