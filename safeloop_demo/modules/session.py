@@ -19,12 +19,11 @@ DEFAULT_STATE = {
     "active_space": None,    # {"space_id": "...", "type": "화학실", "nickname": "3층 A"}
     "registered_spaces": [], # 학교별 공간 목록
 
-    # 촬영 (Step 3)
-    "captured_images": [],   # [{"name": "...", "bytes": b"...", "source": "camera|sample"}]
+    # 촬영 (Step 3) — 실제 사진 저장은 `shots` dict 사용 (페이지 단계에서 초기화).
+    # 이전 captured_images 필드는 사용되지 않아 제거됨 (2026-04-26).
 
     # AI 파이프라인 (Step 4)
     "stage1_result": None,
-    "stage1_cross_check": None,   # Claude × GPT 교차 검증 결과 (optional)
     "stage2_result": None,
     "stage2_confirmed": None,   # 사용자 확정 결과
     "stage3_result": None,
@@ -38,13 +37,15 @@ DEFAULT_STATE = {
 
     # 저장 (Step 7)
     "saved_session_id": None,
-    "eduline": None,           # 결재라인
-    "edu_package_ready": False,
-    "edu_app_sent": False,
-    "edufine_approved": False,
+    "eduline": None,                    # 결재라인 (PDF 표시용 — 학교마다 양식 다르므로 참고용)
+    "edu_package_ready": False,         # 통합 PDF 다운로드 준비 플래그
+    "internal_approval_confirmed": False,  # 학교 내부 결재 완료 확인 (교육청 발송 활성화 조건)
+    "my_email": "",                     # 본인 이메일 (학교 또는 교육청 담당자)
+    "edu_office_email": "",             # 교육청 담당자 이메일 (학교가 등록 — 발송 대상)
 
-    # 모드
-    "demo_mode": True,          # 심사·시연용: 샘플 사진 허용
+    # 모드 — 환경변수 또는 URL 파라미터로 결정 (ensure_state 에서 처리)
+    # 기본 False (실 사용). SAFELOOP_DEMO_MODE=1 또는 ?demo=1 시 True.
+    "demo_mode": False,
     "role": "학교",             # "학교" | "교육청"
 
     # 전국 대시보드
@@ -54,7 +55,6 @@ DEFAULT_STATE = {
     "ai_provider": None,        # None=자동, "anthropic" | "openai" 등
     "api_key_anthropic": "",
     "api_key_openai": "",
-    "cross_check": False,       # 단계 1 교차 검증 (Anthropic + OpenAI)
     "image_quality_check": True,
 
     # UX
@@ -67,6 +67,43 @@ def ensure_state() -> None:
     for k, v in DEFAULT_STATE.items():
         if k not in st.session_state:
             st.session_state[k] = v if not isinstance(v, (list, dict)) else type(v)(v)
+    # demo_mode 결정 — 환경변수 / URL 파라미터로 활성화
+    # 1. SAFELOOP_DEMO_MODE=1 (콘테스트·시연 환경)
+    # 2. URL ?demo=1 (사용자가 의도적으로 시연 진입)
+    # 둘 중 하나면 True 로 강제. 명시적 활성화 외엔 실 사용 모드(False).
+    import os
+    if not st.session_state.get("_demo_mode_resolved"):
+        env_demo = os.environ.get("SAFELOOP_DEMO_MODE") == "1"
+        url_demo = False
+        try:
+            qp = st.query_params
+            url_demo = str(qp.get("demo", "0")) in ("1", "true", "True")
+        except Exception:
+            pass
+        if env_demo or url_demo:
+            st.session_state["demo_mode"] = True
+        st.session_state["_demo_mode_resolved"] = True
+
+
+def has_unsaved_inspection_work() -> bool:
+    """현재 세션에 저장되지 않은 점검 작업이 있는지 검사.
+
+    True 면 다른 공간으로 전환하거나 페이지 떠날 때 사용자에게 경고해야 함.
+    저장 직후엔 saved_session_id 가 채워지므로 False 가 됨.
+    """
+    saved = st.session_state.get("saved_session_id")
+    has_progress = bool(
+        st.session_state.get("stage2_result")
+        or st.session_state.get("stage2_confirmed")
+        or st.session_state.get("stage3_result")
+        or st.session_state.get("score_result")
+        or (st.session_state.get("item_scores") or {})
+    )
+    has_shots = any(
+        len(v) > 0
+        for v in (st.session_state.get("shots") or {}).values()
+    )
+    return (has_progress or has_shots) and not saved
 
 
 def reset_inspection() -> None:
@@ -81,11 +118,11 @@ def reset_inspection() -> None:
             st.session_state["_recent_saved_ids"] = st.session_state["_recent_saved_ids"][:10]
 
     for k in [
-        "active_space", "captured_images",
-        "stage1_result", "stage2_result", "stage1_cross_check",
+        "active_space",
+        "stage1_result", "stage2_result",
         "stage2_confirmed", "stage3_result",
         "item_scores", "score_result", "recommendations",
-        "saved_session_id", "edu_package_ready", "edu_app_sent", "edufine_approved",
+        "saved_session_id", "edu_package_ready", "internal_approval_confirmed",
     ]:
         # DEFAULT_STATE 에 없는 키도 안전하게 처리 (KeyError 방지)
         default_v = DEFAULT_STATE.get(k)

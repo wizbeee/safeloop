@@ -176,38 +176,6 @@ def run_stage1(images: list[bytes], use_cache: bool = True,
     return parsed
 
 
-def run_stage1_cross_check(images: list[bytes], use_cache: bool = True) -> dict:
-    """교차 검증 — Anthropic + OpenAI 모두 호출 후 합의/차이 표시."""
-    from modules.ai_providers import _key_from_session
-    images = _optimize_batch(images)
-    results: dict[str, dict] = {}
-    text = f"{len(images)}장의 사진을 보고 공간 유형을 판정하세요."
-    for pid, cls in _PROVIDER_CLASSES.items():
-        inst = cls(api_key=_key_from_session(pid))
-        if not inst.available():
-            continue
-        try:
-            t0 = time.time()
-            raw = inst.call(STAGE1_SYSTEM, text, images, tier="vision")
-            elapsed = time.time() - t0
-            parsed = _parse_json(raw)
-            parsed["_elapsed_sec"] = round(elapsed, 2)
-            results[pid] = parsed
-        except Exception as e:
-            results[pid] = {"error": str(e)}
-
-    types = [r.get("space_type_primary") for r in results.values() if r.get("space_type_primary")]
-    consensus = max(set(types), key=types.count) if types else None
-    agreement = len(set(types)) <= 1 if types else False
-
-    return {
-        "by_provider": results,
-        "consensus": consensus,
-        "agreement": agreement,
-        "_cross_check": True,
-    }
-
-
 def run_stage2(images: list[bytes], space_type: str, use_cache: bool = True,
                image_labels: Optional[list[str]] = None) -> dict:
     """단계 2 — 안전 설비 탐지."""
@@ -386,3 +354,92 @@ def load_demo_pipeline_for_samples(images: list[bytes],
             except Exception:
                 continue
     return None
+
+
+def ensure_demo_cache_for_shots(shots: dict, space_type: str,
+                                 provider_id: str = "anthropic") -> bool:
+    """시연 시작 시 더미 이미지 7컷에 대한 Stage 2/3 캐시를 자동 보장.
+
+    더미 이미지의 SHA 해시는 sample_images/ 의 실 사진 해시와 다르므로
+    기존 캐시가 적중하지 않는다. 이 함수는 더미 이미지 hash 를 키로 한
+    Stage 2/3 캐시 파일이 없으면 `modules.demo_responses` 의 합성 응답을
+    이용해 자동 생성한다.
+
+    Returns True 면 캐시 보장 완료 (기존 또는 신규 생성), False 면 실패.
+    """
+    try:
+        from .demo_responses import synth_stage2_for_space, synth_stage3_for_space
+    except Exception:
+        return False
+
+    # 7컷 → optimized bytes 추출
+    try:
+        from .image_quality import analyze_and_optimize
+    except Exception:
+        analyze_and_optimize = None  # type: ignore
+
+    # 더미 이미지를 shots dict 에서 추출 — REQUIRED_KEYS 순서대로
+    required_keys = [
+        "entrance_diag", "front_view", "center_window", "center_corridor",
+        "center_front_door", "center_back_door", "ceiling",
+    ]
+    images: list[bytes] = []
+    for k in required_keys:
+        items = shots.get(k, [])
+        if items:
+            b = items[0].get("bytes")
+            if b:
+                if analyze_and_optimize is not None:
+                    try:
+                        images.append(analyze_and_optimize(b).optimized_bytes)
+                    except Exception:
+                        images.append(b)
+                else:
+                    images.append(b)
+    if not images:
+        return False
+
+    img_hash = _hash_images(images)
+    s2_path = CACHE_DIR / f"stage2_{provider_id}_{img_hash}_{space_type}.json"
+
+    # 이미 캐시가 있으면 그대로 사용 (실 AI 결과 우선)
+    s2_existing = s2_path.exists()
+    if not s2_existing:
+        # 합성 응답 생성·저장
+        try:
+            s2 = synth_stage2_for_space(space_type)
+            s2_path.write_text(
+                json.dumps(s2, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            return False
+    else:
+        try:
+            s2 = json.loads(s2_path.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+
+    # Stage 3 캐시 키 = hash(stage1_synth + stage2 정제본)
+    s1_clean = {
+        "space_type_primary": space_type,
+        "confidence": 1.0,
+        "evidence": ["담당자 등록 정보"],
+        "secondary_hypothesis": None,
+        "notes": "사용자 등록 정보 (Stage 1 생략)",
+    }
+    clean2 = {k: v for k, v in s2.items() if not k.startswith("_")}
+    payload = json.dumps({"stage1": s1_clean, "stage2": clean2},
+                          ensure_ascii=False, sort_keys=True)
+    s3_key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    s3_path = CACHE_DIR / f"stage3_{provider_id}_{s3_key}.json"
+    if not s3_path.exists():
+        try:
+            s3 = synth_stage3_for_space(space_type, s2)
+            s3_path.write_text(
+                json.dumps(s3, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            return False
+    return True
