@@ -10,8 +10,9 @@ from pathlib import Path
 import streamlit as st
 from dotenv import load_dotenv
 
-from modules.session import ensure_state, reset_all
-from modules.ui import apply_theme, confirm_button, divider, render_sidebar
+from modules.auth import is_authenticated, render_pin_gate
+from modules.session import ensure_state
+from modules.ui import apply_theme, divider, render_sidebar
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -25,6 +26,20 @@ st.set_page_config(
 apply_theme()
 ensure_state()
 render_sidebar(active_key="home")
+
+# ─────────────────────────────────────────
+# 자동 로그인 — 홈 진입 시 한 번만 쿠키 검사 (다른 페이지에선 호출 X → 깜빡임 방지)
+#
+# 의도적 설계: cookie_manager 가 매 호출 시 IFrame 을 로드하므로 모든 페이지
+# 에서 호출하면 사이드바·콘텐츠가 깜빡인다. 따라서 홈 진입 시 1회만 검사하고
+# 결과를 세션에 저장. 사용자가 보호 페이지(예: /교육청수신함)에 URL 직접 진입
+# 시에는 자동 로그인 안 되고 PIN 입력 요구 — 이는 보안과 UX의 트레이드오프
+# 끝에 선택된 방향. 변경 시 사이드바 깜빡임 회귀 위험 있음.
+# ─────────────────────────────────────────
+if not st.session_state.get("_auto_login_checked"):
+    # 교육청 자동 로그인 시도 (쿠키 → 세션)
+    is_authenticated("edu")
+    st.session_state["_auto_login_checked"] = True
 
 # ─────────────────────────────────────────
 # 히어로
@@ -71,15 +86,17 @@ with role_col_a:
         f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
         f"학교 담당자</div>"
         f"<div style='font-size:13px;color:#6B6B70;line-height:1.6;'>"
-        f"학교 식별·인증 후 AI 점검 → 에듀파인 결재용 패키지 생성 → 교육청 전송"
+        f"학교 식별·인증 후 AI 점검 → 결과 저장 → 교육청 발송 (이메일)"
         f"</div></div>",
         unsafe_allow_html=True,
     )
     if st.button("학교 담당자로 시작", key="enter_school",
                   type=("primary" if is_school else "secondary"),
-                  use_container_width=True):
+                  width="stretch"):
         # 교육청 모드에서 오거나 역할 스위치 시 학교 세션 유지 (학교 담당자 흐름)
         st.session_state["role"] = "학교"
+        # 잔존하던 교육청 PIN 박스 표시 플래그 자동 정리
+        st.session_state["_show_pin_edu"] = False
         st.rerun()
 
 with role_col_b:
@@ -96,23 +113,42 @@ with role_col_b:
         f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
         f"교육청 담당자</div>"
         f"<div style='font-size:13px;color:#6B6B70;line-height:1.6;'>"
-        f"학교 제출본 수신·검증 → KEIIS 이관 → 전국 대시보드·정책 시뮬레이터 활용"
+        f"학교 제출본 수신·검증 → 전국 대시보드·정책 시뮬레이터 활용"
         f"</div></div>",
         unsafe_allow_html=True,
     )
     if st.button("교육청 담당자로 시작", key="enter_edu",
                   type=("primary" if is_edu else "secondary"),
-                  use_container_width=True):
-        # 교육청 진입 시 학교 세션 자동 정리 (교육청 담당자는 특정 학교 소속이 아님)
-        if st.session_state.get("role") != "교육청" \
-                or st.session_state.get("school") or st.session_state.get("active_space"):
+                  width="stretch"):
+        # 교육청 카드 클릭 → 인증된 상태면 즉시 진입, 아니면 PIN 박스 표시
+        # role 을 "교육청" 으로 즉시 설정해야 PIN 박스 표시 조건 통과
+        st.session_state["role"] = "교육청"
+        if is_authenticated("edu"):
             from modules.session import reset_inspection
             reset_inspection()
             st.session_state["school"] = None
             st.session_state["auth_verified"] = False
-        st.session_state["role"] = "교육청"
-        st.toast("교육청 담당자 모드 — 학교 선택 세션이 정리되었습니다.", icon="🏛")
-        st.rerun()
+            st.switch_page("pages/7_교육청수신함.py")
+        else:
+            st.session_state["_show_pin_edu"] = True
+            st.rerun()
+
+# ─────────────────────────────────────────
+# 교육청 PIN 입력 박스 (카드에서 호출 시 표시)
+# - role 이 "학교" 면 PIN 박스 안 띄움 (학교 담당자 모드에서는 교육청 인증 불필요)
+# - 사용자가 학교 카드 클릭 시 role="학교" 로 자동 설정되므로,
+#   다른 페이지 갔다 돌아와도 PIN 박스가 잔존하지 않음
+# ─────────────────────────────────────────
+if (st.session_state.get("_show_pin_edu")
+        and st.session_state.get("role", "학교") != "학교"
+        and not is_authenticated("edu")):
+    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
+    render_pin_gate(
+        "edu",
+        on_success_redirect="pages/7_교육청수신함.py",
+        cancel_label="닫기",
+        cancel_redirect=None,
+    )
 
 # 역할별 빠른 이동
 st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
@@ -120,16 +156,16 @@ col_l, col_c, col_r = st.columns([1, 2, 1])
 with col_c:
     if current_role == "교육청":
         if st.button("교육청 수신함 열기", type="primary",
-                      use_container_width=True, key="go_inbox"):
+                      width="stretch", key="go_inbox"):
             st.switch_page("pages/7_교육청수신함.py")
         st.markdown(
             "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
-            "수신·검증 → KEIIS 이관 · 약 2분 소요"
+            "수신·검증 · 약 2분 소요"
             "</div>",
             unsafe_allow_html=True,
         )
     else:
-        if st.button("점검하러 가기", type="primary", use_container_width=True, key="go_inspect"):
+        if st.button("점검하러 가기", type="primary", width="stretch", key="go_inspect"):
             st.switch_page("pages/1_점검시작.py")
         st.markdown(
             "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
@@ -139,17 +175,15 @@ with col_c:
         )
 
 # ─────────────────────────────────────────
-# 운영 모드
+# 운영 모드 안내 (토글 제거 — 시연은 아래 '🎬 시연 시작' 으로만 진입)
 # ─────────────────────────────────────────
 st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
 divider()
-
-demo = st.toggle(
-    "시연 모드 (샘플 사진·자동 채움 허용)",
-    value=st.session_state.get("demo_mode", True),
-    help="샘플 사진·자동 값 채우기를 허용합니다. 실 운영에선 꺼두세요.",
-)
-st.session_state["demo_mode"] = demo
+if st.session_state.get("demo_mode", True):
+    st.caption(
+        "💡 현재 **시연 모드** 입니다 — 더미 이미지·자동 채움 허용. "
+        "실 사용 시에는 설정 페이지에서 '시연 종료' 를 누르세요."
+    )
 
 # ─────────────────────────────────────────
 # 튜토리얼 다이얼로그 (플로팅 버튼에서 호출)
@@ -169,11 +203,11 @@ def _render_tutorial_content() -> None:
         "맞춤 점검표를 생성합니다. 놓친 항목은 '보완 촬영' 으로 추가하세요.\n\n"
         "**3단계 · 저장 + 발송**  \n"
         "결과는 Human용(읽기 좋은 PDF/Excel) 과 Machine용(구조화 JSON) 으로 이중 저장됩니다. "
-        "에듀파인 결재 후 교육청 수신함으로 즉시 전송할 수 있습니다."
+        "내부 결재 완료 후 교육청 담당자 이메일로 발송할 수 있습니다."
     )
     st.markdown("---")
     st.caption(
-        "💡 **팁** — 홈의 '시연 자동 재생' 버튼을 누르면 데모 학교·공간이 자동 세팅되고 "
+        "💡 **팁** — 홈의 '시연 시작' 버튼을 누르면 데모 학교·공간이 자동 세팅되고 "
         "AI 점검 화면까지 바로 이동합니다. 발표·리뷰 시 유용합니다."
     )
 
@@ -190,40 +224,22 @@ try:
 except Exception:
     _use_dialog = False
 
-# 플로팅 스타일 튜토리얼 트리거 (우상단 고정)
-st.markdown(
-    """
-    <style>
-    .sl-tutorial-floater {
-        position: fixed; top: 70px; right: 24px; z-index: 9998;
-        background: #FFFFFF; border: 1px solid #E5E5E8;
-        border-radius: 999px; padding: 6px 14px 6px 10px;
-        box-shadow: 0 4px 14px rgba(10,10,11,0.08);
-        font-size: 12px; color: #6B6B70; font-weight: 500;
-        letter-spacing: -0.01em;
-    }
-    .sl-tutorial-floater b { color: #D50000; font-size: 14px; margin-right: 4px; }
-    @media (max-width: 768px) {
-        .sl-tutorial-floater { top: 64px; right: 12px; padding: 5px 10px; }
-    }
-    </style>
-    <div class="sl-tutorial-floater">
-        <b>?</b>처음이신가요 ↓ 튜토리얼 보기
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+# 플로팅 튜토리얼 안내 div 는 클릭 처리가 어려워 제거함.
+# 튜토리얼은 아래 oc1 컬럼의 "튜토리얼 열기" 버튼으로 진입.
 
 # ─────────────────────────────────────────
-# 튜토리얼 + 데모 자동 재생 (2컬럼)
+# 튜토리얼 + 시연 시작 (2컬럼)
 # ─────────────────────────────────────────
 divider()
 oc1, oc2 = st.columns(2)
 
 with oc1:
-    st.markdown("**🎓 튜토리얼**")
-    st.caption("3단계 플로우를 30초 안에 이해합니다. 언제든 다시 볼 수 있습니다.")
-    if st.button("튜토리얼 열기", key="open_tutorial", use_container_width=True):
+    st.markdown("**🎓 사용 방법 안내 (글)**")
+    st.caption(
+        "글로 읽는 3단계 흐름 — 학교 검색·인증 → AI 점검 → 결과 저장·발송. "
+        "처음 사용 시 30초 안에 이해 가능."
+    )
+    if st.button("사용 방법 보기", key="open_tutorial", width="stretch"):
         # dialog 호출 실패 시 인라인 expander 로 폴백 (안전망)
         _tut_ok = False
         if _use_dialog:
@@ -244,19 +260,22 @@ with oc1:
                 st.rerun()
 
 with oc2:
-    st.markdown("**🎬 시연 자동 재생**")
-    st.caption("심사·발표용 — 공간 선택 후 학교·공간·샘플 7장 자동 로드")
+    st.markdown("**🎬 시연 시작 (자동 흐름)**")
+    st.caption(
+        "심사·발표용 1클릭 시연 — 공간 선택 후 학교·공간·더미 사진 7장 + AI 분석까지 "
+        "**자동 진행**. 그 다음 단계(점검표 입력·점수 계산·결과 저장)는 사용자가 직접 "
+        "조작하며 발표 설명. 글로 읽기보다 직접 화면을 보면서 이해하고 싶을 때 사용하세요."
+    )
 
-    # 공간 유형 토글 — 화학실 / 일반교실 / 미술실
-    DEMO_SPACES = {
-        "화학실": "chemistry_lab",
-        "일반교실": "classroom",
-        "미술실": "art_lab",
-    }
-    autoplay_space = st.radio(
+    # 시연 가능한 9개 공간 (MVP 전체 — 더미 이미지로 모두 시연 가능)
+    DEMO_SPACES = [
+        "일반교실", "화학실", "물리실", "생명과학실", "지구과학실",
+        "기술실", "가정실", "음악실", "미술실",
+    ]
+    autoplay_space = st.selectbox(
         "데모 공간",
-        options=list(DEMO_SPACES.keys()),
-        horizontal=True,
+        options=DEMO_SPACES,
+        index=1,  # 기본 화학실 (가장 풍부한 점검표)
         key="autoplay_space_choice",
     )
 
@@ -270,8 +289,8 @@ with oc2:
             unsafe_allow_html=True,
         )
     # 원클릭 자동재생 — 2단계 확인 없이 즉시 실행 (발표 시 빠르게)
-    if st.button(f"▶ 자동 재생 시작 ({autoplay_space})", key="autoplay_btn",
-                  type="primary", use_container_width=True):
+    if st.button(f"🎬 시연 시작 ({autoplay_space})", key="autoplay_btn",
+                  type="primary", width="stretch"):
         from modules.data_loader import search_schools_by_name, get_school_by_code
         from modules.session import reset_inspection
         from modules.storage import clear_draft
@@ -332,47 +351,54 @@ with oc2:
                 st.session_state.setdefault("registered_spaces", []).append(demo_space)
             st.session_state["active_space"] = demo_space
 
-            # 🎬 시연 자동 재생 실제화 — 새 7컷 구조에 샘플 분배 + AI 자동실행
-            sample_folder = DEMO_SPACES.get(autoplay_space, "chemistry_lab")
-            sample_root = Path(__file__).resolve().parent / "sample_images" / sample_folder
-            # 7컷 기본 키 (close_supplement·back_door_diag 는 선택)
-            SHOT_KEYS = [
-                "entrance_diag", "front_view", "center_window", "center_corridor",
-                "center_front_door", "center_back_door", "ceiling",
-            ]
-            shots = {k: [] for k in SHOT_KEYS + ["back_door_diag", "close_supplement"]}
+            # 🎬 시연 자동 재생 — PIL 더미 이미지로 7컷 즉석 생성 (실 사진 사용 X)
+            from modules.demo_image import make_all_demo_shots
+            shots = make_all_demo_shots(autoplay_space)
+            st.session_state["shots"] = shots
 
-            # 폴더에 7장 이상 있으면 그대로, 부족하면 화학실 폴백 후 그것도 부족하면 가용한 만큼만 분배
-            available_paths: list[Path] = []
-            if sample_root.exists():
-                available_paths = sorted(sample_root.glob("*.jpg"))
-            if len(available_paths) < 3:
-                # 폴백: chemistry_lab 으로 (현재 가장 많은 샘플 보유)
-                fallback = Path(__file__).resolve().parent / "sample_images" / "chemistry_lab"
-                if fallback.exists():
-                    available_paths = sorted(fallback.glob("*.jpg"))
+            # 이전 AI 결과 클리어
+            for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
+                       "stage3_result", "item_scores", "score_result",
+                       "recommendations"]:
+                st.session_state[_k] = None
 
-            # 7컷에 가용 사진을 균등 분배 (사진이 부족하면 일부 컷은 비어 있음)
-            if available_paths:
-                for i, key in enumerate(SHOT_KEYS):
-                    if i < len(available_paths):
-                        p = available_paths[i]
-                        shots[key].append({
-                            "name": p.name,
-                            "bytes": p.read_bytes(),
-                            "source": "sample",
-                        })
-                st.session_state["shots"] = shots
-                # 이전 AI 결과 클리어 (다시 분석하도록)
-                for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
-                           "stage3_result", "item_scores", "score_result",
-                           "recommendations"]:
-                    st.session_state[_k] = None
+            # 시연용 풍부한 응답을 세션에 직접 주입 — API 호출 우회.
+            # API 키가 있어도 더미 이미지에 실 API 를 호출하면 "부재 N" 결과가
+            # 나오므로, 시연 의도(풍부한 응답 표시)에 맞춰 합성 응답을 미리 세팅.
+            try:
+                from modules.demo_responses import (
+                    synth_stage2_for_space, synth_stage3_for_space,
+                )
+                _s2 = synth_stage2_for_space(autoplay_space)
+                _s3 = synth_stage3_for_space(autoplay_space, _s2)
+                st.session_state["stage1_result"] = {
+                    "space_type_primary": autoplay_space,
+                    "confidence": 1.0,
+                    "evidence": ["담당자 등록 정보"],
+                    "secondary_hypothesis": None,
+                    "notes": "시연 — 사용자 등록 정보 (Stage 1 생략)",
+                    "_provider": "demo-synth",
+                    "_cached": True,
+                    "_skipped": True,
+                }
+                st.session_state["stage2_result"] = _s2
+                st.session_state["stage3_result"] = _s3
+                # 디스크 캐시도 함께 보장 (재진입·반복 시 hash 적중)
+                from modules.ai_vision import ensure_demo_cache_for_shots
+                ensure_demo_cache_for_shots(shots, autoplay_space)
+            except Exception:
+                pass
 
             st.session_state["_autoplay"] = True
-            # 2_AI점검 페이지가 이 플래그를 감지해 캐시 폴백 가능 시 즉시 분석 실행
-            st.session_state["_autoplay_run_ai"] = True
-            st.toast(f"데모: {autoplay_space} 7컷 세팅 완료 → AI 점검 이동", icon="🎬")
+            # 합성 응답을 이미 주입했으므로 AI 페이지에서 추가 호출 안 함.
+            # supplement 스텝으로 직접 점프 — 분석 결과 카드 + 보완 안내 표시.
+            st.session_state["_autoplay_run_ai"] = False
+            st.session_state["wizard_step"] = "supplement"
+            st.session_state["_autoplay_consumed"] = True
+            st.toast(
+                f"🎬 {autoplay_space} 시연 시작 — 더미 이미지로 흐름 진행",
+                icon="🎬",
+            )
             st.switch_page("pages/2_AI점검.py")
 
 # 8-7: 세션 초기화는 설정 페이지에만 두기 (사이드바 중복 제거)

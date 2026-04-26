@@ -356,6 +356,109 @@ LAW_BASIS: dict[str, dict] = {
 
 STANDARD_ITEMS: list[str] = list(LAW_BASIS.keys())
 
+# AI가 표준 설비명과 다른 표현을 써도 매핑되도록 하는 별칭 사전.
+# 자동 매핑 단계에서 별칭 일치 시 표준 설비로 연결됨.
+STANDARD_ALIASES: dict[str, list[str]] = {
+    "비상샤워": ["비상 샤워", "안전샤워", "안전 샤워", "긴급샤워", "응급샤워", "응급 샤워",
+              "emergency shower", "safety shower", "deluge shower", "샤워 부스"],
+    "세안기": ["눈세척기", "세안시설", "세안 시설", "비상 세안기", "응급 세안기",
+              "eye wash", "eyewash", "eye-wash station", "eyewash station",
+              "안구 세척", "눈 세척"],
+    "가스차단밸브": ["가스 차단", "메인 가스 밸브", "가스 메인", "가스 차단기",
+                  "가스차단", "비상 가스 차단", "가스 밸브", "main gas valve",
+                  "gas shutoff", "gas shut-off"],
+    "소화기": ["분말 소화기", "ABC소화기", "ABC 소화기", "분말식 소화기",
+              "소화 장비", "소화 장치", "fire extinguisher", "extinguisher",
+              "이산화탄소 소화기", "CO2 소화기", "할론 소화기"],
+    "소화포": ["소화 담요", "fire blanket", "방화 담요", "소화 매트", "방염포",
+              "fire-fighting blanket"],
+    "응급처치함": ["구급함", "응급함", "응급키트", "응급 키트", "first-aid",
+                "first aid", "구급 상자", "응급 상자", "구급상자", "first aid kit",
+                "응급 처치 키트"],
+    "AED표지": ["AED 안내", "심장충격기 표지", "심장충격기 위치", "AED 위치",
+              "AED 안내 표지", "자동심장충격기", "automated external defibrillator",
+              "AED sign", "심장 제세동기"],
+    "완강기": ["피난기구", "비상탈출 기구", "탈출 기구", "피난 기구", "피난 사다리",
+              "descending lifeline", "escape device"],
+    "흄후드": ["흄 후드", "fume hood", "Fume Hood", "후드 작동",
+              "국소배기 후드", "흄 hood", "fume cupboard", "draft chamber",
+              "유해가스 후드", "실험실 후드"],
+    "국소배기장치": ["국소 배기", "국소배기", "배기 후드", "배기 시스템",
+                  "환기 후드", "배기 장치", "국소 배기 장치", "local exhaust",
+                  "local ventilation", "LEV"],
+    "기계환기구": ["기계 환기구", "환기 시설", "강제 환기", "환기 팬",
+                "mechanical ventilation", "환기 시스템", "전열 교환기", "ERV"],
+    "천장디퓨저": ["천장 디퓨저", "천장 환기구", "디퓨저", "급기구",
+                "ceiling diffuser", "공조 디퓨저", "공조 그릴"],
+    "환기상태(CO2)": ["CO2 농도", "이산화탄소", "환기 상태", "공기질", "실내 공기질",
+                   "indoor air quality", "IAQ", "CO2 측정기", "공기질 모니터"],
+    "시약장(잠금)": ["시약장", "약품 보관함", "약품 캐비닛", "잠금 시약장", "시약 보관함",
+                  "chemical cabinet", "reagent cabinet", "약품장", "독극물 보관함"],
+    "가스용기보관함": ["가스 용기 보관함", "가스통 보관", "가스 보관함", "가스 캐비닛",
+                    "gas cylinder cabinet", "고압가스 보관함"],
+    "폐액용기": ["폐액 용기", "폐액 통", "폐액 보관", "실험 폐기물",
+              "waste container", "chemical waste", "폐화학물질"],
+    "개인보호구함": ["개인 보호구함", "PPE 보관함", "PPE 보관", "보호구 보관함",
+                  "ppe box", "PPE box", "PPE cabinet", "personal protective equipment"],
+    "화재감지기": ["화재 감지기", "감지기", "fire detector",
+                "화재 경보기", "차동식 감지기", "정온식 감지기", "감열식 감지기",
+                "heat detector", "fire alarm sensor"],
+    "가스누출감지기": ["가스 누출 감지기", "가스 누출", "가스 감지기", "gas detector",
+                    "gas leak detector", "LPG 감지기", "도시가스 감지기"],
+    "비상벨": ["비상 벨", "비상 호출", "긴급 호출", "비상 알람",
+              "emergency bell", "panic button", "비상 버튼", "긴급 버튼"],
+    "연기감지기": ["연기 감지기", "smoke detector", "smoke alarm", "광전식 감지기",
+                "이온화식 감지기"],
+    "보안경": ["보호 안경", "안전 안경", "고글", "safety goggles", "safety glasses",
+              "보안 안경", "실험용 안경"],
+    "실험복": ["실험 가운", "lab coat", "실험 복", "보호 의류", "white coat",
+              "방염 가운", "labcoat"],
+    "장갑": ["보호 장갑", "실험 장갑", "내화학 장갑", "lab gloves", "nitrile gloves",
+            "라텍스 장갑", "니트릴 장갑"],
+    "방독면": ["방독 마스크", "마스크", "방진 마스크", "respirator", "gas mask",
+              "방진방독면", "정화통 마스크"],
+    "실험화": ["실험 신발", "안전화", "실험 부츠", "safety shoes", "lab shoes",
+              "절연화", "정전화"],
+    "MSDS비치": ["MSDS", "물질안전보건자료", "물질 안전 보건 자료", "msds",
+                "safety data sheet", "SDS", "GHS"],
+    "안전수칙게시": ["안전 수칙", "안전수칙", "수칙 게시", "실험 수칙",
+                  "safety rules", "safety guide", "수칙 안내", "유의사항"],
+    "비상대응 포스터": ["비상 대응", "비상대응 안내", "대응 포스터", "비상 안내",
+                    "emergency response", "대응 절차", "비상 행동요령"],
+    "가스차단 표지": ["가스 차단 표지", "가스 표지", "가스 안내", "gas shutoff sign"],
+    "비상구 표시등": ["비상구", "EXIT", "비상구 안내", "유도등", "피난 유도",
+                  "exit sign", "emergency exit", "피난 안내", "비상 출구"],
+    "콘센트 안전": ["콘센트", "안전 커버", "콘센트 커버", "GFCI", "누전 차단",
+                "outlet cover", "ELCB"],
+    "멀티탭 안전": ["멀티탭", "멀티 탭", "전원 탭", "콘센트 멀티탭",
+                "power strip", "extension cord"],
+    "조명 안전": ["조명", "전등", "조명 시설", "형광등", "LED 조명",
+                "lighting", "luminaire"],
+    "책걸상 안전": ["책상", "걸상", "의자", "책걸상", "학생 의자",
+                "desk", "chair", "school furniture"],
+    "창문 추락방지": ["창문 안전", "추락 방지", "창문 잠금", "추락방지",
+                  "window guard", "fall prevention", "창문 안전 장치"],
+}
+
+
+def find_std_match(text: str) -> str | None:
+    """텍스트에서 표준 설비명 또는 별칭을 찾아 표준 설비명을 반환.
+
+    매칭 우선순위:
+    1) 표준 설비명 직접 포함
+    2) 별칭 사전의 별칭 포함
+    """
+    haystack = text.lower()
+    for std in STANDARD_ITEMS:
+        if std.lower() in haystack:
+            return std
+    for std, aliases in STANDARD_ALIASES.items():
+        for a in aliases:
+            if a.lower() in haystack:
+                return std
+    return None
+
+
 CATEGORIES: list[str] = [
     "비상 대응",
     "환기·배기",

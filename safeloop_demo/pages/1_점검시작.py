@@ -34,7 +34,37 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="inspect")
 
-hero("STEP 01", "점검 시작", "학교를 찾아 인증한 뒤, 점검할 공간을 선택하세요.")
+hero("단계 1 — 점검 시작", "점검 시작", "학교를 찾아 인증한 뒤, 점검할 공간을 선택하세요.")
+
+# 미저장 점검 작업 알림 — 다른 페이지에서 점검 진행 중에 여기 들어왔다면 사용자 의식 환기
+from modules.session import has_unsaved_inspection_work as _has_unsaved
+if _has_unsaved():
+    st.warning(
+        "⚠ **저장되지 않은 점검 작업이 있습니다** — 새 공간 선택·등록 시 사라집니다. "
+        "현재 작업을 보관하려면 **결과 저장 페이지**에서 먼저 저장한 뒤 이 페이지로 돌아오세요."
+    )
+    if st.button("→ 결과 저장 페이지로 돌아가기", key="goto_save_unsaved",
+                  width="stretch"):
+        st.switch_page("pages/3_결과저장.py")
+
+# 자동 로그인 — 쿠키에 학교 정보가 저장되어 있고 아직 인증 전이면 자동 인증 시도
+if not st.session_state.get("auth_verified") and not st.session_state.get("school"):
+    from modules.auth import get_remembered_school, verify_school_token
+    _remembered_code = get_remembered_school()
+    if _remembered_code:
+        _school = get_school_by_code(_remembered_code)
+        _expected = issue_auth_code(_remembered_code) if _school else None
+        if _school and _expected and verify_school_token(_remembered_code, _expected):
+            st.session_state["school"] = _school
+            st.session_state["auth_verified"] = True
+            try:
+                from modules.storage import load_school_profile
+                profile = load_school_profile(_remembered_code)
+                if profile.get("eduline"):
+                    st.session_state["eduline"] = profile["eduline"]
+            except Exception:
+                pass
+            st.toast(f"자동 로그인 — {_school.get('학교명', '')}", icon="🔑")
 
 # 1-7 수정: 공간이 이미 선택된 경우 상단에 즉시 이동 가능한 바로가기 표시
 _active_sp = st.session_state.get("active_space")
@@ -54,7 +84,7 @@ if _active_sp and st.session_state.get("auth_verified") and st.session_state.get
         )
     with colQ2:
         if st.button("→ AI 점검으로 바로 이동", type="primary",
-                      key="quick_goto_ai", use_container_width=True):
+                      key="quick_goto_ai", width="stretch"):
             st.switch_page("pages/2_AI점검.py")
 
 # ─────────────────────────────────────────
@@ -133,7 +163,7 @@ if not current:
                     with nav_prev:
                         if st.button("← 이전", key=f"pg_prev_{q}",
                                       disabled=(cur_page <= 1),
-                                      use_container_width=True):
+                                      width="stretch"):
                             st.session_state[page_key] = cur_page - 1
                             st.rerun()
                     with nav_info:
@@ -146,7 +176,7 @@ if not current:
                     with nav_next:
                         if st.button("다음 →", key=f"pg_next_{q}",
                                       disabled=(cur_page >= total_pages),
-                                      use_container_width=True):
+                                      width="stretch"):
                             st.session_state[page_key] = cur_page + 1
                             st.rerun()
 
@@ -232,13 +262,27 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
 
     # 1-4: 플래그를 expander 바깥에서 설정 — 한 번이라도 페이지 보면 이후 접힘
     _was_seen = st.session_state.get("_seen_auth_help", False)
-    with st.expander("ⓘ 담당자 인증번호란? (처음이라면 먼저 읽어보세요)", expanded=not _was_seen):
+    with st.expander("❓ 담당자 인증번호가 없으신가요? (발급 절차 안내)", expanded=not _was_seen):
         st.markdown(
-            "**담당자 인증번호**는 점검을 등록할 자격이 있는 **담당 교사·시설관리자**를 증명하는 6자리 숫자 비밀번호입니다.\n\n"
+            "**담당자 인증번호**는 점검을 등록할 자격이 있는 **담당 교사·시설관리자**를 증명하는 "
+            "6자리 숫자 비밀번호입니다.\n\n"
+            "##### 📋 발급 절차 (실 운영 시)\n"
+            "1. **학교 → 교육청 신청** — 학교 측에서 점검 담당 교사·시설관리자를 지정해 "
+            "교육청 시설안전 담당 부서에 인증번호 신청 (공문 또는 SafeLoop 신청 양식)\n"
+            "2. **교육청 발급** — 교육청이 학교 코드 기반으로 6자리 인증번호 자동 생성 → "
+            "공문·이메일·시도교육청 행정망(K-에듀파인 등)으로 학교에 회신\n"
+            "3. **학교 내부 전달** — 학교 행정실 → 담당 교사에게 인증번호 전달\n"
+            "4. **분실·재발급** — 인증번호 분실 시 학교가 교육청에 재발급 요청 (학교 단위 1회 재발급 권장)\n\n"
+            "##### 🔑 운영 시 받는 곳\n"
+            "- **교사 본인** — 학교 행정실 또는 교육청 시설안전 담당자\n"
+            "- **시설관리자** — 학교장 직접 전달 또는 행정실 보관함\n"
+            "- **교감·교장** — 교육청 시설안전 담당 직접 발급\n\n"
+            "##### ⚠ 중요 안내\n"
             "- **학교 코드**(예: `S120002870`)는 위에 자동 표시됩니다 — 공개 정보, 입력 불필요\n"
-            "- **담당자 인증번호**는 학교·교육청이 담당자에게 개별 발급하는 **비공개 번호**입니다\n"
-            "- 실제 운영 시: 교육청에서 교사별로 발급 → 메일·공문으로 전달\n"
-            "- **이 앱은 시연용**이므로 실제 발급 체계가 없어, 우측의 <span style='color:#D50000;font-weight:700'>시연 모드 번호</span>를 그대로 입력하거나 **자동 입력** 버튼을 누르면 됩니다",
+            "- **담당자 인증번호**는 비공개 — 외부 공유 금지\n"
+            "- **이 앱은 현재 시연 모드**이므로 실제 발급 체계가 없어, "
+            "우측의 <span style='color:#D50000;font-weight:700'>시연 모드 번호</span>를 "
+            "그대로 입력하거나 **자동 입력** 버튼을 누르면 됩니다",
             unsafe_allow_html=True,
         )
     st.session_state["_seen_auth_help"] = True
@@ -259,7 +303,13 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
         )
         # 모바일 숫자 키패드 강제 (iOS·Android 모두)
         numeric_input_patch("담당자 인증번호")
-        submit = st.button("인증 확인", type="primary", use_container_width=True)
+        remember_school_login = st.checkbox(
+            "이 기기에서 자동 로그인 (30일)",
+            value=False,
+            key="remember_school_login",
+            help="본인 지급 기기에서만 체크하세요. 공용 PC·외부 기기에서는 해제 권장.",
+        )
+        submit = st.button("인증 확인", type="primary", width="stretch")
 
     with colB:
         if st.session_state.get("demo_mode"):
@@ -272,27 +322,12 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
                 f"</div>",
                 unsafe_allow_html=True,
             )
-            # 1-3 수정: 사용자가 이미 입력한 값이 있으면 자동 입력 시 확인 요구
-            user_has_typed = (
-                auth_input
-                and auth_input != default_val
-                and auth_input != expected
-            )
-            if user_has_typed and not st.session_state.get("_confirm_autofill"):
-                st.caption(
-                    "⚠ 이미 입력된 번호가 있습니다 — 자동 입력 시 덮어씁니다."
-                )
-                if st.button("확인하고 덮어쓰기", key="auto_fill_auth_confirm",
-                              use_container_width=True):
-                    st.session_state["_auth_prefill"] = expected
-                    st.session_state["_confirm_autofill"] = False
-                    st.rerun()
-            else:
-                if st.button("↓ 자동 입력", key="auto_fill_auth",
-                              use_container_width=True):
-                    st.session_state["_auth_prefill"] = expected
-                    st.session_state["_confirm_autofill"] = False
-                    st.rerun()
+            # 시연 모드: 자동 입력 버튼 단일 — 항상 expected 값으로 덮어씀
+            # (이전 버전의 "이미 입력된 값 확인" 분기는 사용자 혼란만 줘서 제거)
+            if st.button("↓ 자동 입력", key="auto_fill_auth",
+                          width="stretch"):
+                st.session_state["_auth_prefill"] = expected
+                st.rerun()
         else:
             st.caption("시연 모드 OFF — 인증번호는 교육청·학교장 발급분을 사용하세요.")
 
@@ -310,6 +345,10 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
                     st.session_state["eduline"] = profile["eduline"]
             except Exception:
                 pass
+            # 자동 로그인 체크 시 30일 쿠키 발급
+            if remember_school_login:
+                from modules.auth import remember_school
+                remember_school(code, auth_input)
             st.success("인증되었습니다.")
             st.rerun()
         else:
@@ -343,14 +382,35 @@ if st.session_state.get("auth_verified"):
                         unsafe_allow_html=True,
                     )
                 with c2:
+                    _confirm_key = f"_confirm_switch_{sp['space_id']}"
                     if st.button("선택", key=f"pick_space_{sp['space_id']}"):
-                        # 1-6: 다른 공간 선택 시 이전 점검 작업 정리
+                        from modules.session import (
+                            has_unsaved_inspection_work, reset_inspection,
+                        )
                         prev = st.session_state.get("active_space") or {}
+                        # 다른 공간으로 전환할 때만 검사
                         if prev.get("space_id") and prev.get("space_id") != sp["space_id"]:
-                            from modules.session import reset_inspection
+                            if has_unsaved_inspection_work() \
+                                    and not st.session_state.get(_confirm_key):
+                                # 첫 클릭 — 경고 표시 후 다음 클릭에서 진행
+                                st.session_state[_confirm_key] = True
+                                st.rerun()
                             reset_inspection()
+                        st.session_state.pop(_confirm_key, None)
                         st.session_state["active_space"] = sp
                         st.rerun()
+                    if st.session_state.get(_confirm_key):
+                        st.warning(
+                            "⚠ 현재 점검 중인 작업이 **저장되지 않았습니다**. "
+                            "다른 공간으로 전환하면 사진·점수·결과가 사라집니다.\n\n"
+                            "**'선택'** 을 한 번 더 누르면 그래도 진행하고, "
+                            "취소하려면 결과 저장 페이지에서 먼저 저장하세요."
+                        )
+                        if st.button("취소 (현재 작업 유지)",
+                                      key=f"cancel_switch_{sp['space_id']}",
+                                      width="stretch"):
+                            st.session_state.pop(_confirm_key, None)
+                            st.rerun()
 
     with tab_new:
         SPACE_TYPES = [
@@ -358,26 +418,51 @@ if st.session_state.get("auth_verified"):
             "기술실", "가정실", "음악실", "미술실",
             "강당", "체육관", "급식실", "일반교실", "특별교실(과목 불명)",
         ]
-        c1, c2 = st.columns([1, 2])
+        c1, c2, c3 = st.columns([1, 2, 1])
         with c1:
             sp_type = st.selectbox("공간 유형", SPACE_TYPES)
         with c2:
             sp_nickname = st.text_input("별칭 (선택)", placeholder="예: 3층 화학실 A", max_chars=40)
+        with c3:
+            sp_floor = st.number_input(
+                "층수", min_value=1, max_value=20, value=1, step=1,
+                help="3층 이상이면 완강기·창문 추락방지 항목이 자동 적용됩니다.",
+            )
+        _confirm_new_key = "_confirm_new_space"
         if st.button("등록·선택", type="primary"):
-            # 1-5: 이미 진행 중 작업이 있으면 정리
+            from modules.session import (
+                has_unsaved_inspection_work, reset_inspection,
+            )
             prev = st.session_state.get("active_space") or {}
+            if prev.get("space_id") and has_unsaved_inspection_work() \
+                    and not st.session_state.get(_confirm_new_key):
+                st.session_state[_confirm_new_key] = True
+                st.rerun()
             if prev.get("space_id"):
-                from modules.session import reset_inspection
                 reset_inspection()
+            st.session_state.pop(_confirm_new_key, None)
             new_sp = {
                 "space_id": uuid.uuid4().hex[:10],
                 "school_code": school_code,
                 "type": sp_type,
                 "nickname": sp_nickname.strip() or None,
+                "floor": int(sp_floor),
             }
             st.session_state.setdefault("registered_spaces", []).append(new_sp)
             st.session_state["active_space"] = new_sp
             st.rerun()
+        if st.session_state.get(_confirm_new_key):
+            st.warning(
+                "⚠ 현재 점검 중인 작업이 **저장되지 않았습니다**. "
+                "새 공간을 등록·선택하면 사진·점수·결과가 사라집니다.\n\n"
+                "**'등록·선택'** 을 한 번 더 누르면 그래도 진행하고, "
+                "취소하려면 결과 저장 페이지에서 먼저 저장하세요."
+            )
+            if st.button("취소 (현재 작업 유지)",
+                          key="cancel_new_space",
+                          width="stretch"):
+                st.session_state.pop(_confirm_new_key, None)
+                st.rerun()
 
     if st.session_state.get("active_space"):
         divider()
@@ -391,5 +476,5 @@ if st.session_state.get("auth_verified"):
             f"</div></div>",
             unsafe_allow_html=True,
         )
-        if st.button("AI 점검으로 이동", type="primary", use_container_width=True):
+        if st.button("AI 점검으로 이동", type="primary", width="stretch"):
             st.switch_page("pages/2_AI점검.py")

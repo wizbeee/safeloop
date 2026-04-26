@@ -1,15 +1,16 @@
 """
-Step 6~7 — 공간별 점검 결과 확인 + AI 추천 + 이중 저장 + 에듀파인/앱 발송.
+Step 6~7 — 공간별 점검 결과 확인 + AI 추천 + 이중 저장 + 교육청 이메일 발송.
 
 [1] 공간별 결과 확인 (당일 세션 내 여러 공간 비교 가능)
 [2] AI 추천 안전 설비 (부재·불량 기준, 법령 근거 + 우선순위)
-[3] 이중 저장 — Human-readable(PDF·Excel·CSV) + Machine-readable(JSON 3종)
-[4] 에듀파인 발송 준비 (결재라인 지정 → 공문 품의서 + 첨부 ZIP 생성)
-[5] 앱 직접 발송 (결재 완료 증빙 후에만 활성화 → 교육청 수신함으로 JSON 전송)
+[3] 이중 저장 — 사람용(PDF) + AI 가 읽는 형태(JSON) — 모바일/PC 모두 다운로드 가능
+[4] 통합 PDF 다운로드 (보고서 단일 파일)
+[5] 내부 결재 확인 + 교육청 담당자 이메일로 발송 (mailto)
 """
 from __future__ import annotations
 
 import datetime
+import urllib.parse
 
 import pandas as pd
 import plotly.express as px
@@ -19,14 +20,12 @@ from modules.recommend import recommend_from_scores
 from modules.session import ensure_state, require_school
 from modules.storage import (
     build_csv,
-    build_edufine_zip,
     build_excel,
     build_master_record,
     build_official_letter_pdf,
     build_pdf_report,
     list_recent_sessions,
     save_inspection,
-    send_to_edu_app,
     clear_draft,
     korean_font_available,
 )
@@ -41,7 +40,7 @@ render_sidebar(active_key="save")
 school = require_school()
 if not school:
     if st.button("← 학교 찾기로", key="save_noschool_back",
-                  use_container_width=True):
+                  width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 
@@ -50,7 +49,7 @@ active_space = st.session_state.get("active_space")
 if not active_space:
     st.warning("점검할 공간이 선택되지 않았습니다. 점검 시작 페이지에서 공간을 선택해 주세요.")
     if st.button("← 공간 선택으로", key="save_nospace_back",
-                  use_container_width=True):
+                  width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 
@@ -58,16 +57,25 @@ sr = st.session_state.get("score_result")
 if not sr:
     st.warning("점검 결과가 아직 없습니다. AI 점검을 먼저 완료하세요.")
     if st.button("← AI 점검으로", key="save_noresult_back",
-                  use_container_width=True):
+                  width="stretch"):
         st.switch_page("pages/2_AI점검.py")
     st.stop()
 
 hero(
-    "STEP 03",
+    "단계 3 — 결과 저장",
     "결과 저장",
     f"{school['학교명']} · {active_space.get('type', '-')} "
-    f"({active_space.get('nickname') or '-'}) · 에듀파인/교육청 발송 포함",
+    f"({active_space.get('nickname') or '-'})",
 )
+
+# 미저장 경고 — 점검 진행 중인데 아직 저장 안 했으면 상단에 명확한 안내
+from modules.session import has_unsaved_inspection_work
+if has_unsaved_inspection_work():
+    st.warning(
+        "⚠ **현재 점검은 아직 저장되지 않았습니다** — 다른 페이지로 이동하기 전 "
+        "아래 **'점검 결과 저장'** 버튼을 먼저 누르세요. "
+        "저장 안 한 상태로 이동하면 사진·점수·결과가 사라질 수 있습니다."
+    )
 
 # ─────────────────────────────────────────
 # (1) 공간별 점검 결과 확인
@@ -93,7 +101,7 @@ if prior:
         "점수": s["score"],
         "등급": s["grade"],
     } for s in prior[:10]])
-    st.dataframe(df_prior, use_container_width=True, hide_index=True)
+    st.dataframe(df_prior, width="stretch", hide_index=True)
 else:
     st.caption("본교의 저장된 점검 이력이 없습니다. (첫 점검)")
 
@@ -109,7 +117,7 @@ if cats:
                  text="점수", range_x=[0, 100],
                  color="점수", color_continuous_scale=["#D50000", "#FFC107", "#4CAF50"])
     fig.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20), coloraxis_showscale=False)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ─────────────────────────────────────────
 # (2) AI 추천
@@ -117,14 +125,22 @@ if cats:
 divider()
 section("02", "AI 추천 안전 설비", "부재·불량 설비에 대한 법령 근거 + 우선순위")
 
-# AI 점검에서 자동 생성됨 — 없으면 즉시 자동 생성
+# AI 점검에서 자동 생성됨 — 없으면 즉시 자동 생성. 공간/층수 필터 함께 전달.
+_active_space = st.session_state.get("active_space") or {}
+_space_type = _active_space.get("type")
+_floor = _active_space.get("floor")
+
 recs = st.session_state.get("recommendations")
 if recs is None:
-    recs = recommend_from_scores(sr.get("raw", {}))
+    recs = recommend_from_scores(
+        sr.get("raw", {}), space_type=_space_type, floor=_floor,
+    )
     st.session_state["recommendations"] = recs
 
 if st.button("추천 재생성", help="점수를 변경했거나 새 분석 후 다시 산출"):
-    st.session_state["recommendations"] = recommend_from_scores(sr.get("raw", {}))
+    st.session_state["recommendations"] = recommend_from_scores(
+        sr.get("raw", {}), space_type=_space_type, floor=_floor,
+    )
     st.rerun()
 recs = st.session_state.get("recommendations") or []
 if recs:
@@ -134,7 +150,7 @@ if recs:
         "priority": "우선순위", "item": "항목", "category": "분류",
         "law": "법령", "article": "조항", "action": "조치", "reason": "사유",
     })
-    st.dataframe(rec_df, use_container_width=True, hide_index=True)
+    st.dataframe(rec_df, width="stretch", hide_index=True)
     st.caption(f"총 {len(recs)}건 · 비용·구매처는 향후 확장 영역")
 else:
     st.info("추천 항목이 없습니다. (전체 양호)")
@@ -143,19 +159,19 @@ else:
 # (3) 이중 저장
 # ─────────────────────────────────────────
 divider()
-section("03", "학교 클라우드 저장", "사람이 읽는 형태와 기계가 읽는 형태 모두 자동 생성됩니다.")
+section("03", "점검 결과 저장", "사람이 읽는 형태와 AI 가 읽는 형태 모두 자동 생성됩니다.")
 
 st.markdown(
     "<div class='sl-card'>"
     "<b>사람이 읽는 형태</b> — PDF 보고서 · Excel · CSV · 공문(품의서) PDF<br>"
-    "<b>기계가 읽는 형태</b> — 원본 JSON · 교육청 발송 패키지 JSON · 공공데이터 환원 패키지 JSON"
+    "<b>AI 가 읽는 형태</b> — 원본 JSON · 교육청 발송 패키지 JSON · 공공데이터 환원 패키지 JSON"
     "</div>",
     unsafe_allow_html=True,
 )
 
 col_save1, col_save2 = st.columns([2, 1])
 with col_save1:
-    if st.button("학교 클라우드에 저장", type="primary", use_container_width=True):
+    if st.button("점검 결과 저장", type="primary", width="stretch"):
         result = save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
         st.session_state["saved_session_id"] = result["session_id"]
         # 본저장 완료 → 드래프트 정리 (공간별)
@@ -167,19 +183,29 @@ with col_save1:
             st.session_state["_draft_restored"] = False
         except Exception:
             pass
-        st.success(f"저장 완료 · 세션 ID `{result['session_id']}`")
-        with st.expander("생성된 파일"):
-            for fn in result["files"]:
-                st.markdown(f"- `{fn}`")
+        # 저장 직후 페이지 재렌더 — 상단 미저장 경고가 즉시 사라지도록.
+        # st.success/expander 는 rerun 후 saved_session_id 분기에서 표시.
+        st.session_state["_just_saved_files"] = result["files"]
+        st.rerun()
+
+# rerun 후 표시 — 저장된 직후 1회만
+if st.session_state.get("_just_saved_files") and st.session_state.get("saved_session_id"):
+    _sid_now = st.session_state["saved_session_id"]
+    st.success(f"저장 완료 · 세션 ID `{_sid_now}`")
+    with st.expander("생성된 파일"):
+        for fn in st.session_state["_just_saved_files"]:
+            st.markdown(f"- `{fn}`")
+    # 한 번 표시 후 소비 — 다음 인터랙션부턴 평범한 상태
+    del st.session_state["_just_saved_files"]
 
 with col_save2:
     if st.session_state.get("saved_session_id"):
         st.success("✅ 저장됨")
         st.caption(st.session_state["saved_session_id"])
 
-# 사용자 추가 다운로드
+# 추가 포맷 다운로드 — 일반 사용자에겐 통합 PDF + .safeloop 두 개로 충분.
+# Excel/CSV/원본 JSON 은 분석·연구·이관용이라 expander 안에 숨겨 잡음 제거.
 if st.session_state.get("saved_session_id"):
-    st.markdown("##### 사용자 다운로드 (원하는 포맷 개별 선택)")
     if not korean_font_available():
         st.warning(
             "⚠ 시스템에 한글 PDF 폰트가 없어 PDF의 한글이 깨질 수 있습니다. "
@@ -190,53 +216,61 @@ if st.session_state.get("saved_session_id"):
     master = build_master_record({**st.session_state,
                                    "session_id": st.session_state.get("saved_session_id")})
 
-    cd1, cd2, cd3, cd4 = st.columns(4)
-    cd1.download_button(
-        "보고서 PDF",
-        build_pdf_report(master),
-        file_name=f"점검결과보고서_{st.session_state['saved_session_id']}.pdf",
-        mime="application/pdf",
-        use_container_width=True,
-    )
-    cd2.download_button(
-        "Excel",
-        build_excel(master),
-        file_name=f"점검결과_{st.session_state['saved_session_id']}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
-    cd3.download_button(
-        "CSV",
-        build_csv(master),
-        file_name=f"점검결과_{st.session_state['saved_session_id']}.csv",
-        mime="text/csv",
-        use_container_width=True,
-    )
-    cd4.download_button(
-        "원본 JSON",
-        bytes(__import__("json").dumps(master, ensure_ascii=False, indent=2), "utf-8"),
-        file_name=f"master_{st.session_state['saved_session_id']}.json",
-        mime="application/json",
-        use_container_width=True,
-    )
+    with st.expander("📊 추가 포맷 다운로드 (Excel · CSV · 원본 JSON)", expanded=False):
+        st.caption(
+            "일반 결재·발송에는 아래 04 섹션의 **통합 PDF + 암호화 데이터** 만으로 충분합니다. "
+            "이 expander 의 포맷들은 데이터 분석·외부 시스템 이관·연구 용도입니다."
+        )
+        cd1, cd2, cd3, cd4 = st.columns(4)
+        cd1.download_button(
+            "보고서 PDF",
+            build_pdf_report(master),
+            file_name=f"점검결과보고서_{st.session_state['saved_session_id']}.pdf",
+            mime="application/pdf",
+            width="stretch",
+        )
+        cd2.download_button(
+            "Excel",
+            build_excel(master),
+            file_name=f"점검결과_{st.session_state['saved_session_id']}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            width="stretch",
+        )
+        cd3.download_button(
+            "CSV",
+            build_csv(master),
+            file_name=f"점검결과_{st.session_state['saved_session_id']}.csv",
+            mime="text/csv",
+            width="stretch",
+        )
+        cd4.download_button(
+            "원본 JSON",
+            bytes(__import__("json").dumps(master, ensure_ascii=False, indent=2), "utf-8"),
+            file_name=f"master_{st.session_state['saved_session_id']}.json",
+            mime="application/json",
+            width="stretch",
+        )
 
 # ─────────────────────────────────────────
-# (4) 에듀파인 업로드용 PDF 생성
-# 결재라인·공식 경로 안내·ZIP·결재 시뮬은 모두 제거 — 실제 결재는 K-에듀파인에서.
-# 본 앱은 결재 첨부용 통합 PDF 만 제공.
+# (4) 통합 PDF 생성 — 사람이 읽기 좋은 단일 보고서
+# 결재 양식은 학교마다 다르므로 PDF 자체에 결재란은 두지 않음.
+# 학교는 별도 결재 양식에 본 PDF 를 첨부해 결재 진행.
 # ─────────────────────────────────────────
 divider()
-section("04", "에듀파인 업로드용 PDF",
-        "공문 + 점검 결과 보고서를 하나의 PDF 로 묶어 다운로드 → 에듀파인에 첨부")
+section("04", "통합 PDF 다운로드",
+        "공문 + 점검 결과 보고서를 하나의 PDF 로 묶어 다운로드 (사람용)")
 
-if st.button("📄 통합 PDF 생성", type="primary",
-              key="build_edufine_pdf", use_container_width=True):
-    if not st.session_state.get("saved_session_id"):
-        save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
-    st.session_state["edu_package_ready"] = True
-    st.session_state["_edufine_letter_cache"] = None
-    st.session_state["_edufine_report_cache"] = None
-    st.success("PDF 가 준비되었습니다. 아래에서 다운로드하세요.")
+if not st.session_state.get("edu_package_ready"):
+    if st.button("📄 통합 PDF 생성", type="primary",
+                  key="build_unified_pdf", width="stretch"):
+        if not st.session_state.get("saved_session_id"):
+            save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
+        st.session_state["edu_package_ready"] = True
+        st.session_state["_edufine_letter_cache"] = None
+        st.session_state["_edufine_report_cache"] = None
+        st.rerun()  # 즉시 다운로드 버튼이 같은 위치에 나타나도록 페이지 재렌더
+else:
+    st.success("✅ PDF 준비 완료 — 아래 다운로드 버튼을 누르세요")
 
 # 첨부파일 — 통합 PDF (공문 + 점검 보고서 단일 PDF) 다운로드
 if st.session_state.get("edu_package_ready"):
@@ -284,16 +318,53 @@ if st.session_state.get("edu_package_ready"):
             return f"{b/1024:.1f} KB"
         return f"{b/1024/1024:.2f} MB"
 
-    if merged_bytes:
+    # 두 형태로 다운로드: 사람용 PDF + AI 가 읽는 데이터(.safeloop, 암호화)
+    # 데이터 파일은 자동 암호화되어 평문 노출 위험 차단.
+    # 같은 SafeLoop 앱끼리만 복호화 가능.
+    from modules.crypto import encrypt_to_file_bytes
+    try:
+        from modules.storage import build_edu_package
+        edu_pkg_dict = build_edu_package(master)
+    except Exception:
+        edu_pkg_dict = master if isinstance(master, dict) else {}
+    encrypted_blob = encrypt_to_file_bytes(edu_pkg_dict)
+
+    dl_col1, dl_col2 = st.columns(2)
+    with dl_col1:
+        if merged_bytes:
+            st.download_button(
+                f"📄 사람용 PDF ({_fmt_size(len(merged_bytes))})",
+                merged_bytes,
+                file_name=f"안전점검_보고서_{sid}.pdf",
+                mime="application/pdf",
+                type="primary",
+                width="stretch",
+                key="dl_unified_pdf",
+                help="결재 첨부·인쇄용. 학교 별도 결재 양식에 첨부하세요.",
+            )
+    with dl_col2:
         st.download_button(
-            f"📄 통합 PDF 다운로드 ({_fmt_size(len(merged_bytes))})",
-            merged_bytes,
-            file_name=f"안전점검_결재첨부_{sid}.pdf",
-            mime="application/pdf",
+            f"🔒 암호화 데이터 ({_fmt_size(len(encrypted_blob))})",
+            encrypted_blob,
+            file_name=f"안전점검_데이터_{sid}.safeloop",
+            mime="application/octet-stream",
             type="primary",
-            use_container_width=True,
-            key="dl_edufine_merged",
+            width="stretch",
+            key="dl_data_encrypted",
+            help="자동 암호화 (AES-256). SafeLoop 앱 안에서만 복호화 가능. "
+                  "모바일↔PC 동기화 + 교육청 발송용.",
         )
+
+    st.caption(
+        "🔒 **데이터 파일(.safeloop)은 자동 암호화**됩니다 — "
+        "이메일·카톡 잘못 발송이나 파일 분실 시 외부인이 텍스트 에디터로 열어도 "
+        "안전합니다. SafeLoop 앱끼리만 자동 복호화 됩니다.\n\n"
+        "💡 **모바일에서 PC로 옮길 때** — 위 파일들을 다운로드한 뒤 "
+        "**카톡 (나에게 보내기 또는 일반 채팅 공유)** · 이메일 · Google Drive · "
+        "OneDrive · AirDrop 등 편한 방법으로 보내세요. PC 앱의 "
+        "**📥 데이터 불러오기** 페이지에 .safeloop 파일을 업로드하면 자동 복호화 후 "
+        "같은 데이터로 이어집니다."
+    )
 
     with st.expander("개별 PDF 로 받기 (선택)", expanded=False):
         col_a, col_b = st.columns(2)
@@ -310,7 +381,7 @@ if st.session_state.get("edu_package_ready"):
                 "다운로드", letter_bytes,
                 file_name=f"공문_품의서_{sid}.pdf",
                 mime="application/pdf",
-                key="dl_letter_only", use_container_width=True,
+                key="dl_letter_only", width="stretch",
             )
         with col_b:
             st.markdown(
@@ -325,126 +396,273 @@ if st.session_state.get("edu_package_ready"):
                 "다운로드", report_bytes,
                 file_name=f"점검결과보고서_{sid}.pdf",
                 mime="application/pdf",
-                key="dl_report_only", use_container_width=True,
+                key="dl_report_only", width="stretch",
             )
 
 # ─────────────────────────────────────────
-# (5) 교육청 수신함 전송 — 본교 점검 이력에서 다중 선택
+# (5) 교육청 담당자 이메일로 발송 — 내부 결재 확인 후 mailto 링크 생성
 # ─────────────────────────────────────────
 divider()
-section("05", "교육청 수신함 전송",
-        "본교에 누적된 점검 이력 중 보낼 항목을 선택해 일괄 전송 (현재 점검만 또는 여러 건 동시)")
+section("05", "교육청 담당자 이메일로 발송",
+        "내부 결재 완료 후 교육청 담당자 이메일에 점검 데이터(JSON·PDF) 첨부해 발송")
 
-# 본교 점검 이력 로드
-from modules.storage import list_recent_sessions
-all_sessions = list_recent_sessions(limit=200)
 school_code = (school or {}).get("정보공시 학교코드")
-school_sessions = [s for s in all_sessions
-                    if s.get("school_code") == school_code]
+school_sido = (school or {}).get("시도교육청", "")
+edu_email_user = (st.session_state.get("edu_office_email") or "").strip()
+my_email = st.session_state.get("my_email", "")
 
-if not school_sessions:
-    st.info(
-        "본교에 저장된 점검 이력이 없습니다. 위에서 '학교 클라우드에 저장' 을 먼저 수행해주세요."
+# 1) 발송 대상 결정 — 사용자 등록 이메일 우선, 없으면 시도교육청 공통 주소로 폴백
+from modules.data_loader import get_sido_edu_email
+edu_email_fallback = get_sido_edu_email(school_sido)
+edu_email = edu_email_user or edu_email_fallback or ""
+edu_email_source = (
+    "사용자 등록" if edu_email_user
+    else (f"{school_sido} 공통 주소 (자동)" if edu_email_fallback else "")
+)
+
+if not edu_email:
+    st.warning(
+        f"⚠ **교육청 담당자 이메일을 찾을 수 없습니다** — "
+        f"학교 시도교육청({school_sido or '미상'})에 등록된 공통 주소가 없습니다. "
+        f"설정 페이지에서 직접 등록해주세요."
     )
+    if st.button("→ 설정 페이지에서 이메일 등록", key="goto_settings_email",
+                  width="stretch"):
+        st.switch_page("pages/8_설정.py")
 else:
-    # 현재 세션을 기본 선택, 나머지는 사용자 선택
-    cur_sid = st.session_state.get("saved_session_id")
-    options = []
-    labels: dict[str, str] = {}
-    for s in school_sessions:
-        sid = s.get("session_id")
-        if not sid:
-            continue
-        ts = (s.get("timestamp") or "")[:16].replace("T", " ")
-        space_label = s.get("space_type") or "-"
-        nick = s.get("space_nickname") or ""
-        score = s.get("score")
-        score_part = f" · {score:.1f}점" if isinstance(score, (int, float)) else ""
-        labels[sid] = f"{ts} · {space_label}{(' (' + nick + ')') if nick else ''}{score_part}"
-        options.append(sid)
-
-    default_selected = [cur_sid] if cur_sid in options else (options[:1] if options else [])
-    selected_sids = st.multiselect(
-        "전송할 점검 세션 (여러 건 선택 가능)",
-        options=options,
-        default=default_selected,
-        format_func=lambda s: labels.get(s, s),
-        key="edu_send_select",
+    _src_color = "#0A0A0B" if edu_email_user else "#D50000"
+    st.markdown(
+        f"<div style='padding:10px 14px;background:#F7F7F8;border:1px solid #E5E5E8;"
+        f"border-radius:6px;font-size:13px;color:#6B6B70;'>"
+        f"📬 발송 대상: <b style='color:#0A0A0B'>{edu_email}</b> "
+        f"<span style='font-size:11px;color:{_src_color};'>· 출처: {edu_email_source}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
     )
+    if not edu_email_user and edu_email_fallback:
+        st.caption(
+            "💡 본교 담당 교육청 담당자의 직접 이메일을 알면 설정 페이지에 등록하세요. "
+            "등록 시 그 주소가 우선 사용됩니다."
+        )
 
-    n_sel = len(selected_sids)
-    sent_label = f"교육청 수신함으로 전송 ({n_sel}건)" if n_sel else "전송 대상을 선택하세요"
-    if st.button(sent_label, type="primary",
-                  disabled=(n_sel == 0),
-                  use_container_width=True,
-                  key="send_to_edu_app_multi"):
-        results = []
-        # 선택한 세션 각각에 대해 master.json 을 다시 로드해 send_to_edu_app 실행
-        from pathlib import Path as _P
-        from modules.storage import STORAGE_DIR as _STO
-        for sid in selected_sids:
-            # storage 폴더에서 해당 세션 master.json 찾기
-            master_path = _P(_STO) / school_code / sid / "master.json"
-            if not master_path.exists():
-                results.append((sid, False, "master.json 없음"))
-                continue
-            try:
-                import json as _json
-                master = _json.loads(master_path.read_text(encoding="utf-8"))
-                # send_to_edu_app 은 session(dict) 받음 — master 구조로 합성
-                synth_session = {
-                    "school": {
-                        "정보공시 학교코드": school_code,
-                        "학교명": (master.get("school") or {}).get("name"),
-                    },
-                    "active_space": {
-                        "type": (master.get("space") or {}).get("type"),
-                        "nickname": (master.get("space") or {}).get("nickname"),
-                    },
-                    "score_result": (master.get("inspection") or {}).get("score_result"),
-                    "stage2_confirmed": (master.get("inspection") or {}).get("stage2_confirmed"),
-                    "edufine_approved": True,  # 사용자가 전송 의사 표명 시 결재 완료 가정
-                    "session_id": sid,
-                    "timestamp": master.get("timestamp"),
-                }
-                r = send_to_edu_app(synth_session)
-                results.append((sid, r.get("ok", False), r.get("reason") or r.get("path", "")))
-            except Exception as e:
-                results.append((sid, False, str(e)[:80]))
-
-        ok_count = sum(1 for _, ok, _ in results if ok)
-        fail_count = n_sel - ok_count
-        if ok_count:
-            st.session_state["edu_app_sent"] = True
-            st.success(f"전송 완료 — 성공 {ok_count}건 / 실패 {fail_count}건")
-            if fail_count == 0:
-                st.balloons()
-        else:
-            st.error("모든 전송이 실패했습니다.")
-
-        with st.expander("전송 상세 보기", expanded=(fail_count > 0)):
-            for sid, ok, info in results:
-                ico = "✅" if ok else "❌"
-                st.markdown(f"- {ico} `{sid}` — {info}")
-
-if st.session_state.get("edu_app_sent"):
-    st.info(
-        "교육청 수신함에서 검증·익명화 후 KEIIS 업로드 → 공공데이터 환원이 이어집니다. "
-        "진행 상황은 **🔁 내 제출 추적** 페이지에서 확인할 수 있습니다."
+    # 2) 내부 결재 확인 체크박스
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    approval_done = st.checkbox(
+        "**학교 내부 결재 완료** — 담당자 → 부장 → 교감 → 교장 결재(또는 등재) 완료를 확인합니다.",
+        value=False,
+        key="internal_approval_confirmed",
+        help="결재 양식은 학교마다 다르므로, 별도 결재 진행 후 이 항목에 체크하세요.",
     )
-    colN1, colN2 = st.columns(2)
-    if colN1.button("내 제출 추적 보기", use_container_width=True):
-        st.switch_page("pages/6_데이터순환.py")
-    if colN2.button("본교 현황 보기", use_container_width=True):
-        st.switch_page("pages/4_본교현황.py")
+    if not approval_done:
+        st.caption("⚠ 결재 미완료 시 발송 버튼이 비활성화됩니다.")
+
+    # 3) 발송 안내 (mailto 링크)
+    saved_sid = st.session_state.get("saved_session_id")
+    can_send = approval_done and bool(saved_sid)
+
+    if not saved_sid:
+        st.info("위에서 먼저 **점검 결과 저장**을 수행해야 발송 가능합니다.")
+
+    school_name = (school or {}).get("학교명", "")
+    space_type = (active_space or {}).get("type", "")
+    space_nick = (active_space or {}).get("nickname", "")
+    subject = f"[{school_name}] {space_type} 안전 점검 결과 제출"
+    body_lines = [
+        "안녕하세요, 교육청 담당자님.",
+        "",
+        f"{school_name}의 {space_type}"
+        + (f" ({space_nick})" if space_nick else "")
+        + " 안전 점검 결과를 제출합니다.",
+        "",
+        "첨부 파일 (2개):",
+        " · 사람용 보고서 (PDF) — 결재·인쇄 용도",
+        " · 암호화 데이터 파일 (.safeloop) — SafeLoop 수신함에서 자동 복호화",
+        "",
+        "※ .safeloop 파일은 SafeLoop 앱 안에서만 열립니다 (자동 암호화).",
+        "",
+        "감사합니다.",
+    ]
+    body = "\n".join(body_lines)
+
+    st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    if can_send:
+        # ────────────────────────────────────────────────
+        # 발송 방법 2가지 — 탭으로 명확히 분리
+        # 방법 1 (권장): SafeLoop 다이렉트 전송 (1클릭, 수신 확인 추적)
+        # 방법 2 (대체): 다운로드 + 본인 채널로 직접 전송
+        # ────────────────────────────────────────────────
+        tab_direct, tab_manual = st.tabs([
+            "🚀 방법 1 (권장) — 앱 다이렉트 발송",
+            "📤 방법 2 — 다운로드 후 직접 발송",
+        ])
+
+        # ── 방법 1: 다이렉트 전송 ──
+        from modules.storage import (
+            build_edu_package, submit_to_edu_inbox_direct, get_school_outbox,
+        )
+        with tab_direct:
+            st.caption(
+                "1번의 클릭으로 교육청 수신함에 직접 전송 — 학교 PC·교육청 PC 가 "
+                "**같은 SafeLoop 데이터 폴더(또는 같은 클라우드 인스턴스)** 를 공유할 때 동작합니다. "
+                "전송 후 교육청이 열람하면 자동으로 **수신 확인** 표시가 학교 측에 반영됩니다."
+            )
+            st.markdown(
+                "<div style='padding:10px 14px;background:#F0F7F0;border:1px solid #C8E6C9;"
+                "border-radius:6px;font-size:12px;color:#2E7D32;line-height:1.6;'>"
+                "✅ 1번의 클릭 · ✅ 수신 확인 자동 추적 · ✅ 첨부 파일 누락 위험 없음<br>"
+                "⚠ 단일 PC 또는 공유 데이터 폴더 환경 한정 — 분산 PC 환경은 정식 출시 시 검토."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+
+            # 본교의 발송함에서 같은 세션·같은 공간에 대한 기존 발송 기록 조회
+            _existing_subs = [
+                r for r in get_school_outbox(school_code or "")
+                if r.get("space_type") == (active_space or {}).get("type")
+            ]
+            already_sent = next(
+                (r for r in _existing_subs
+                 if (r.get("submitted_at", "") or "")[:10] ==
+                    datetime.datetime.now().date().isoformat()),
+                None,
+            )
+
+            if already_sent:
+                read_at = already_sent.get("read_at")
+                if read_at:
+                    st.success(
+                        f"✅ **교육청 수신 확인 완료** — "
+                        f"발송: {already_sent.get('submitted_at','')[:16].replace('T',' ')} · "
+                        f"열람: {(read_at or '')[:16].replace('T',' ')}"
+                    )
+                else:
+                    st.info(
+                        f"⏳ **발송 완료 · 수신 대기 중** — "
+                        f"발송 시각: {already_sent.get('submitted_at','')[:16].replace('T',' ')} · "
+                        f"발송 ID: `{already_sent.get('submit_id','-')}`"
+                    )
+                if st.button("🔄 다시 발송 (수정본)", key="resubmit_direct",
+                              width="stretch"):
+                    pass  # 아래 발송 버튼 흐름으로 떨어짐
+                else:
+                    # 같은 날짜 발송 기록이 있으면 추가 발송 차단 (사용자가 다시 발송 클릭 시 재전송)
+                    pass
+
+            # 발송 버튼
+            if st.button("🚀 SafeLoop 수신함으로 다이렉트 전송",
+                          type="primary", width="stretch",
+                          key="submit_direct_btn"):
+                try:
+                    master = build_master_record({
+                        **st.session_state,
+                        "session_id": st.session_state.get("saved_session_id"),
+                    })
+                    edu_pkg = build_edu_package(master)
+                    res = submit_to_edu_inbox_direct(edu_pkg)
+                    if res.get("ok"):
+                        st.success(
+                            f"✅ 전송 완료 — 발송 ID `{res['submit_id']}` · "
+                            f"수신 시도교육청: {res.get('sido')}\n\n"
+                            f"교육청 담당자가 수신함에서 열람하면 이 화면에 "
+                            f"**수신 확인** 이 자동 반영됩니다."
+                        )
+                        st.rerun()
+                    else:
+                        st.error("전송 실패 — 다시 시도하거나 방법 2를 사용하세요.")
+                except Exception as e:
+                    st.error(f"전송 중 오류: {e.__class__.__name__} — {e}")
+
+        # ── 방법 2: 다운로드 + 직접 전송 ──
+        with tab_manual:
+            st.caption(
+                "위에서 다운로드한 **PDF + .safeloop** 두 파일을 본인의 메일·카톡·드라이브로 "
+                "직접 전송. 분산 환경(학교/교육청 PC 가 SafeLoop 을 공유 안 함)에서는 이 방법만 가능합니다. "
+                "단, 수신 확인은 자동 반영되지 않습니다 (교육청 담당자가 받아 수신함에 업로드해야 추적 시작)."
+            )
+            st.markdown("##### 발송 정보 — 복사해서 사용")
+
+            # ── 발송 정보 텍스트 박스 (복사 친화) ──
+            col_send_a, col_send_b = st.columns([1, 1])
+            with col_send_a:
+                st.text_input("받는사람", value=edu_email, key="send_to_box",
+                               help="클릭 후 Ctrl+A → Ctrl+C 로 복사")
+                st.text_input("제목", value=subject, key="send_subject_box")
+            with col_send_b:
+                st.text_area("본문", value=body, height=170, key="send_body_box",
+                              help="클릭 후 Ctrl+A → Ctrl+C 로 복사. 첨부 파일은 위에서 다운로드한 PDF + .safeloop")
+
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+
+            # ── 한국 주요 웹메일·메신저 직접 열기 버튼 ──
+            gmail_url = (
+                f"https://mail.google.com/mail/?view=cm&fs=1"
+                f"&to={urllib.parse.quote(edu_email)}"
+                f"&su={urllib.parse.quote(subject)}"
+                f"&body={urllib.parse.quote(body)}"
+            )
+            naver_url = (
+                f"https://mail.naver.com/write/popup?to={urllib.parse.quote(edu_email)}"
+                f"&subject={urllib.parse.quote(subject)}"
+                f"&body={urllib.parse.quote(body)}"
+            )
+            daum_url = (
+                f"https://mail.daum.net/?compose=true"
+                f"&to={urllib.parse.quote(edu_email)}"
+                f"&subject={urllib.parse.quote(subject)}"
+            )
+            mailto = (
+                f"mailto:{urllib.parse.quote(edu_email)}"
+                f"?subject={urllib.parse.quote(subject)}"
+                f"&body={urllib.parse.quote(body)}"
+            )
+
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown(
+                    f"<a href='{gmail_url}' target='_blank' style='display:block;"
+                    f"padding:8px 0;background:#EA4335;color:white;text-decoration:none;"
+                    f"border-radius:6px;font-weight:600;text-align:center;font-size:13px;'>"
+                    f"Gmail 웹</a>", unsafe_allow_html=True,
+                )
+            with c2:
+                st.markdown(
+                    f"<a href='{naver_url}' target='_blank' style='display:block;"
+                    f"padding:8px 0;background:#03C75A;color:white;text-decoration:none;"
+                    f"border-radius:6px;font-weight:600;text-align:center;font-size:13px;'>"
+                    f"Naver 메일</a>", unsafe_allow_html=True,
+                )
+            with c3:
+                st.markdown(
+                    f"<a href='{daum_url}' target='_blank' style='display:block;"
+                    f"padding:8px 0;background:#0066FF;color:white;text-decoration:none;"
+                    f"border-radius:6px;font-weight:600;text-align:center;font-size:13px;'>"
+                    f"Daum 메일</a>", unsafe_allow_html=True,
+                )
+            with c4:
+                st.markdown(
+                    f"<a href='{mailto}' target='_blank' style='display:block;"
+                    f"padding:8px 0;background:#6B6B70;color:white;text-decoration:none;"
+                    f"border-radius:6px;font-weight:600;text-align:center;font-size:13px;'>"
+                    f"기본 메일 앱</a>", unsafe_allow_html=True,
+                )
+
+            st.caption(
+                "💡 **카톡 공유** — 위 본문을 복사해 카톡 채팅에 붙여넣고 PDF·.safeloop "
+                "파일을 함께 첨부 전송하세요."
+            )
+    else:
+        st.button(
+            "📤 발송하기 (결재 완료 후 활성화)",
+            disabled=True, width="stretch", key="mailto_disabled",
+        )
 
 divider()
 # 3-6: 저장 이후에만 다음 액션 버튼 노출
 if st.session_state.get("saved_session_id"):
     colX, colY = st.columns(2)
-    if colX.button("다른 공간 이어서 점검", use_container_width=True):
+    if colX.button("다른 공간 이어서 점검", width="stretch"):
         from modules.session import reset_inspection
         reset_inspection()
         st.switch_page("pages/1_점검시작.py")
-    if colY.button("홈으로", use_container_width=True):
+    if colY.button("홈으로", width="stretch"):
         st.switch_page("app.py")
