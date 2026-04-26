@@ -436,18 +436,34 @@ def render_sidebar(active_key: str = "") -> None:
                     ("pages/3_결과저장.py",      "결과 저장"),
                 ]),
                 ("본교 조회", [
-                    ("pages/4_본교현황.py",      "본교 현황"),
-                    ("pages/10_점검이력.py",     "점검 이력"),
-                    ("pages/6_데이터순환.py",    "내 제출 추적"),
+                    ("pages/4_본교현황.py",      "📊 본교 통계"),
+                    ("pages/10_점검이력.py",     "📈 점검 변화 추이"),
+                    ("pages/12_데이터불러오기.py", "📥 받은 파일 열기"),
                 ]),
-                ("참고", [
-                    ("pages/5_전국대시보드.py",   "전국 대시보드"),
-                    ("pages/9_프로젝트소개.py",   "프로젝트 소개"),
+                ("교육청 발송", [
+                    ("pages/6_데이터순환.py",    "📤 데이터 전송"),
+                ]),
+                ("참고·정보", [
+                    ("pages/5_전국대시보드.py",   "🌐 전국 대시보드"),
+                    ("pages/9_프로젝트소개.py",   "ℹ️ 프로젝트 소개"),
                 ]),
                 ("시스템", [
                     ("pages/8_설정.py",          "설정"),
                 ]),
             ]
+
+        # 교육청 모드 — 수신함 미열람 카운트 미리 계산 (사이드바 배지)
+        unread_inbox = 0
+        if is_edu:
+            try:
+                from modules.storage import list_edu_inbox, is_edu_inbox_read
+                _all = list_edu_inbox()
+                unread_inbox = sum(
+                    1 for x in _all
+                    if is_edu_inbox_read(x.get("sido", ""), x.get("file", "")) is None
+                )
+            except Exception:
+                unread_inbox = 0
 
         for group_label, items in groups:
             st.markdown(
@@ -457,14 +473,16 @@ def render_sidebar(active_key: str = "") -> None:
                 unsafe_allow_html=True,
             )
             for target, label in items:
-                # st.page_link — Streamlit이 활성 페이지 자동 감지 (aria-current=page)
+                # 교육청 수신함 옆에 미열람 배지 부착
+                show_label = label
+                if is_edu and target == "pages/7_교육청수신함.py" and unread_inbox > 0:
+                    show_label = f"{label}  ●{unread_inbox}"
                 try:
-                    st.page_link(target, label=label)
+                    st.page_link(target, label=show_label)
                 except Exception:
-                    # page_link 실패 시 fallback — key 는 경로 슬래시·한글 제거된 해시로 안정화
                     import hashlib as _hl_sb
                     _fb_key = _hl_sb.md5(target.encode("utf-8")).hexdigest()[:8]
-                    if st.button(label, key=f"sb_fb_{_fb_key}", use_container_width=True):
+                    if st.button(show_label, key=f"sb_fb_{_fb_key}", width="stretch"):
                         st.switch_page(target)
 
         # ── 푸터 (idle 알림 + 역할) ──
@@ -540,11 +558,11 @@ def confirm_button(label: str, key: str, message: str = "이 작업은 되돌릴
         cc1, cc2 = st.columns(2, gap="small")
         with cc1:
             if st.button(f"진행", key=f"{scoped}_yes", type="primary",
-                          use_container_width=True):
+                          width="stretch"):
                 st.session_state[confirm_key] = False
                 return True
         with cc2:
-            if st.button("취소", key=f"{scoped}_no", use_container_width=True):
+            if st.button("취소", key=f"{scoped}_no", width="stretch"):
                 st.session_state[confirm_key] = False
                 st.rerun()
         return False
@@ -583,7 +601,7 @@ def empty_state(title: str, description: str = "",
     if action_label and action_target:
         c1, c2, c3 = st.columns([1, 2, 1])
         with c2:
-            if st.button(action_label, type="primary", use_container_width=True,
+            if st.button(action_label, type="primary", width="stretch",
                           key=f"empty_action_{action_target}"):
                 st.switch_page(action_target)
 

@@ -14,7 +14,6 @@ from modules.data_loader import (
     load_cluster_summary,
     load_high_risk,
     load_master,
-    load_sensitivity,
     load_sido_summary,
 )
 from modules.session import ensure_state
@@ -30,11 +29,21 @@ hero("DASHBOARD · 공공용",
      "전국 대시보드",
      "공공데이터포털에 환원된 학교 안전 지표 — 집계만 공개, 개별 학교는 비공개.")
 
+# 본교 정보 (있을 때만) — 본교 위치를 차트에 강조 표시하기 위함
+_my_school = st.session_state.get("school") or {}
+_my_school_code = _my_school.get("정보공시 학교코드", "")
+_my_school_name = _my_school.get("학교명", "")
+_my_school_sido = _my_school.get("시도교육청", "")
+if _my_school_code:
+    st.success(
+        f"🏫 **본교 인증됨** — `{_my_school_name}` ({_my_school_sido}) — "
+        "차트와 지도에 본교 시도가 빨간색으로 강조됩니다."
+    )
+
 try:
     master = load_master()
     sido_sum = load_sido_summary()
     cluster = load_cluster_summary()
-    sens = load_sensitivity()
     hr = load_high_risk()
 except FileNotFoundError as e:
     st.error("📁 공공데이터 CSV가 누락되었습니다.")
@@ -156,13 +165,19 @@ by_sido["고위험 비율(%)"] = (
     by_sido["고위험"] / by_sido["전체"].replace(0, 1) * 100
 ).round(1)
 by_sido["선택"] = by_sido["시도교육청"].isin(sel_sidos) if sel_sidos else True
+# 본교 시도 자동 강조 (사용자가 명시 선택 안 했을 때만)
+_highlight_sidos = set(sel_sidos) if sel_sidos else set()
+if _my_school_sido and not sel_sidos:
+    _highlight_sidos = {_my_school_sido}
+    by_sido["선택"] = by_sido["시도교육청"].isin(_highlight_sidos)
 by_sido = by_sido.sort_values("고위험 비율(%)", ascending=True)
 
 fig_bar = px.bar(
     by_sido, x="고위험 비율(%)", y="시도교육청", orientation="h",
     text="고위험 비율(%)",
-    color="선택" if sel_sidos else None,
-    color_discrete_map={True: "#D50000", False: "#D1D1D4"} if sel_sidos else None,
+    color="선택" if _highlight_sidos else None,
+    color_discrete_map=({True: "#D50000", False: "#D1D1D4"}
+                          if _highlight_sidos else None),
     hover_data=["전체", "고위험"],
 )
 fig_bar.update_traces(texttemplate="%{text:.1f}%")
@@ -171,7 +186,7 @@ fig_bar.update_layout(
     yaxis_title=None, showlegend=False,
     paper_bgcolor="#FFF", plot_bgcolor="#FFF",
 )
-st.plotly_chart(fig_bar, use_container_width=True)
+st.plotly_chart(fig_bar, width="stretch")
 
 # ─────────────────────────────────────────
 # 03 지도 시각화 — 17개 시도 버블 지도 (고위험 비율=색, 고위험 수=크기)
@@ -201,7 +216,23 @@ fig_map = px.scatter_mapbox(
     height=520,
 )
 fig_map.update_layout(margin=dict(l=0, r=0, t=0, b=0))
-st.plotly_chart(fig_map, use_container_width=True)
+
+# 본교 시도 위치를 빨간 별 마커로 추가 — "여기가 우리 학교 시도"
+if _my_school_sido and _my_school_sido in SIDO_COORDS:
+    _lat, _lon = SIDO_COORDS[_my_school_sido]
+    fig_map.add_scattermapbox(
+        lat=[_lat], lon=[_lon],
+        mode="markers+text",
+        marker=dict(size=22, color="#D50000", symbol="star"),
+        text=[f"🏫 {_my_school_name}"],
+        textposition="top center",
+        textfont=dict(size=14, color="#D50000"),
+        name="본교",
+        showlegend=False,
+        hovertemplate=f"<b>{_my_school_name}</b><br>{_my_school_sido}<extra></extra>",
+    )
+
+st.plotly_chart(fig_map, width="stretch")
 st.caption(
     "※ 좌표는 각 시도 행정구역 중심 근사값 · 클러스터링이 아닌 시도 단위 요약입니다. "
     "지도 상단의 + / − 또는 드래그로 확대·이동 가능."
@@ -218,7 +249,7 @@ if sel_sidos and len(sel_sidos) >= 2:
     cmp_df = cmp_df[["시도교육청", "전체", "고위험", "고위험 비율(%)"]]
     cmp_df.columns = ["시도교육청", "전체 학교 수", "고위험 학교 수", "고위험 비율(%)"]
     cmp_df = cmp_df.sort_values("고위험 비율(%)", ascending=False).reset_index(drop=True)
-    st.dataframe(cmp_df, use_container_width=True, hide_index=True)
+    st.dataframe(cmp_df, width="stretch", hide_index=True)
 
 # ─────────────────────────────────────────
 # 풀폭: 고위험군 통계 요약 (개별 학교 리스트는 제거 — 공공 대시보드 취지상 부적절)
@@ -243,11 +274,28 @@ if len(hr_filtered):
         labels={"위험도_점수": "위험도 점수 (높을수록 심각)",
                  "count": "학교 수"},
     )
-    fig_hist.update_layout(height=240, margin=dict(l=20, r=20, t=10, b=40),
+    # 본교 위험도 점수 위치를 세로선으로 표시 (있을 때만)
+    _my_risk = None
+    if _my_school_code:
+        _row = hr[hr["정보공시 학교코드"] == _my_school_code]
+        if not _row.empty:
+            _my_risk = float(_row.iloc[0]["위험도_점수"])
+            fig_hist.add_vline(
+                x=_my_risk,
+                line_dash="dash", line_color="#0A0A0B", line_width=2,
+                annotation_text=f"🏫 본교 ({_my_risk:.1f})",
+                annotation_position="top",
+            )
+    fig_hist.update_layout(height=240, margin=dict(l=20, r=20, t=40, b=40),
                             bargap=0.05,
                             paper_bgcolor="#FFF", plot_bgcolor="#FAFAFA",
                             yaxis_title="학교 수")
-    st.plotly_chart(fig_hist, use_container_width=True)
+    st.plotly_chart(fig_hist, width="stretch")
+    if _my_risk is not None:
+        st.caption(
+            f"💡 **본교 위치** — 위험도 점수 **{_my_risk:.1f}** "
+            f"(공공 데이터셋 기준). 분포에서 본교가 어디에 위치하는지 검은 세로선 참고."
+        )
 else:
     st.info("선택한 필터 조건에 해당하는 고위험 학교가 없습니다.")
 
@@ -257,27 +305,8 @@ st.caption(
     "실제 정책 집행은 교육청 내부 권한으로 별도 채널에서 이루어집니다."
 )
 
-# ─────────────────────────────────────────
-# 05 신뢰도 — 민감도 (고급 정보로 접어두기)
-# ─────────────────────────────────────────
-divider()
-_sens_sec = "06" if (sel_sidos and len(sel_sidos) >= 2) else "05"
-section(_sens_sec, "모델 신뢰도 (참고)",
-        "가중치를 ±20% 변경해도 판정이 얼마나 바뀌지 않는지 — '이 결과를 믿어도 되는가'")
-with st.expander("📊 민감도 상세 보기 (고급)", expanded=False):
-    st.caption(
-        "가중치를 각기 다르게 넣어봐도 고위험 학교 판정의 **85% 이상이 유지**되면 분석이 견고하다는 뜻입니다. "
-        "아래 점들이 y=100 에 가까울수록 결과가 안정적입니다."
-    )
-    fig4 = px.scatter(sens, x="dm(%)", y="overlap(%)",
-                      color="dd(%)", size="jaccard",
-                      labels={"dm(%)": "미관리 가중치 변화 폭",
-                               "overlap(%)": "판정 유지율(%)",
-                               "dd(%)": "경과일 가중치 변화",
-                               "jaccard": "자카드 일치도"})
-    fig4.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20),
-                        yaxis_range=[80, 102])
-    st.plotly_chart(fig4, use_container_width=True)
+# 모델 신뢰도(민감도) 섹션은 일반 사용자에게 의미 전달이 어려워 제거 (2026-04-26).
+# 필요 시 modules/data_loader.py 의 load_sensitivity 결과를 보고서·연구용으로 활용.
 
 st.divider()
 st.caption(

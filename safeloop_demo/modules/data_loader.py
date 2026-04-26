@@ -67,6 +67,74 @@ def load_sensitivity() -> pd.DataFrame:
     return _strip_bom(_safe_read_csv("sensitivity_result.csv"))
 
 
+# ─────────────────────────────────────────
+# 시도교육청별 안전점검 담당부서 공통 이메일 (시연용)
+# - 학교 담당자가 교육청 담당자 이메일을 몰라도, 시도교육청만 알면 발송 가능
+# - 정식 출시 시 각 교육청과 협의해 실 주소 등록
+# ─────────────────────────────────────────
+SIDO_EDU_EMAIL: dict[str, str] = {
+    "서울특별시교육청": "safety@sen.go.kr",
+    "부산광역시교육청": "safety@pen.go.kr",
+    "대구광역시교육청": "safety@dge.go.kr",
+    "인천광역시교육청": "safety@ice.go.kr",
+    "광주광역시교육청": "safety@gen.go.kr",
+    "대전광역시교육청": "safety@dje.go.kr",
+    "울산광역시교육청": "safety@use.go.kr",
+    "세종특별자치시교육청": "safety@sje.go.kr",
+    "경기도교육청": "safety@goe.go.kr",
+    "강원특별자치도교육청": "safety@gwe.go.kr",
+    "충청북도교육청": "safety@cbe.go.kr",
+    "충청남도교육청": "safety@cne.go.kr",
+    "전북특별자치도교육청": "safety@jbe.go.kr",
+    "전라남도교육청": "safety@jne.go.kr",
+    "경상북도교육청": "safety@gbe.go.kr",
+    "경상남도교육청": "safety@gne.go.kr",
+    "제주특별자치도교육청": "safety@jje.go.kr",
+}
+
+
+def get_sido_edu_email(sido: str | None) -> str | None:
+    """시도교육청 이름으로 안전점검 담당부서 공통 이메일 조회. 없으면 None."""
+    if not sido:
+        return None
+    return SIDO_EDU_EMAIL.get(sido.strip())
+
+
+@st.cache_data(show_spinner=False)
+def estimated_national_safety_score() -> dict:
+    """전국 평균 안전 점수 추정.
+
+    high_risk 의 위험도_점수를 0~100 안전 점수로 변환 (위험도 ↑ → 안전 ↓).
+    반환:
+      {
+        "mean": 전국 평균 안전 점수(0~100),
+        "sido_means": {시도교육청명: 평균 안전 점수},
+        "school_score": {학교코드: 안전 점수}  # 학교별 빠른 조회용
+      }
+    """
+    df = load_high_risk()
+    if df.empty or "위험도_점수" not in df.columns:
+        return {"mean": 0.0, "sido_means": {}, "school_score": {}}
+    rmax = float(df["위험도_점수"].max())
+    rmin = float(df["위험도_점수"].min())
+    if rmax == rmin:
+        df = df.assign(안전점수_추정=100.0)
+    else:
+        df = df.assign(
+            안전점수_추정=((rmax - df["위험도_점수"]) / (rmax - rmin) * 100).round(1)
+        )
+    sido_means = df.groupby("시도교육청")["안전점수_추정"].mean().round(1).to_dict()
+    school_score = dict(zip(
+        df["정보공시 학교코드"].astype(str),
+        df["안전점수_추정"].astype(float),
+    ))
+    return {
+        "mean": float(round(df["안전점수_추정"].mean(), 1)),
+        "sido_means": {k: float(v) for k, v in sido_means.items()},
+        "school_score": school_score,
+    }
+
+
 @st.cache_data(show_spinner=False)
 def load_sigungu_agg() -> pd.DataFrame:
     return _strip_bom(_safe_read_csv("sigungu_agg.csv"))

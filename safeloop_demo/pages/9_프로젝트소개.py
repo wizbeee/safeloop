@@ -84,7 +84,7 @@ with st.expander("27 표준 항목 × 법령 매핑"):
             "조항": info["article"],
             "비고": info["note"],
         })
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 divider()
 
@@ -140,7 +140,7 @@ _sankey_fig = go.Figure(data=[go.Sankey(
 )])
 _sankey_fig.update_layout(height=420, margin=dict(l=20, r=20, t=10, b=10),
                            font=dict(size=13, color="#0A0A0B"))
-st.plotly_chart(_sankey_fig, use_container_width=True)
+st.plotly_chart(_sankey_fig, width="stretch")
 
 st.caption(
     "※ **순환의 핵심** — 6단계의 AFTER 고도화 결과는 다음 분기에 0단계 BEFORE 에 "

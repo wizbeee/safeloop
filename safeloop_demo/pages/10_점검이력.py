@@ -2,7 +2,7 @@
 점검 이력 — 학교별 영구 저장 + 시계열 추이.
 
 storage.list_recent_sessions() 가 디스크에서 master.json 들을 읽어 누적 표시.
-세션이 끊겨도, 다른 컴퓨터에서 git pull 후 같은 학교 클라우드를 쓰면 이력이 유지된다.
+세션이 끊겨도, 다른 컴퓨터에서 git pull 후 같은 로컬 저장소를 쓰면 이력이 유지된다.
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from modules.session import ensure_state
-from modules.storage import STORAGE_DIR, list_recent_sessions
+from modules.storage import list_recent_sessions
 from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
 st.set_page_config(page_title="점검 이력 · SafeLoop", page_icon="static/icon-192.png",
@@ -32,12 +32,12 @@ if st.session_state.get("role") == "교육청":
         "추적하는 화면입니다. 교육청 관점의 수신 데이터는 '교육청 수신함'을 이용하세요."
     )
     if st.button("→ 교육청 수신함으로 이동", key="history_guard_inbox",
-                  type="primary", use_container_width=True):
+                  type="primary", width="stretch"):
         st.switch_page("pages/7_교육청수신함.py")
     st.stop()
 
 hero("HISTORY", "점검 이력",
-     "학교 클라우드에 누적된 모든 점검 결과를 시계열·공간별로 추적합니다.")
+     "로컬 저장소에 누적된 모든 점검 결과를 시계열·공간별로 추적합니다.")
 
 # ─────────────────────────────────────────
 # 전체 이력 로드
@@ -46,10 +46,18 @@ all_sessions = list_recent_sessions(limit=10000)
 if not all_sessions:
     empty_state(
         title="누적된 점검 이력이 없습니다",
-        description="AI 점검 → 결과 저장을 한 번 이상 수행하면 이 화면에 시계열·비교가 표시됩니다.",
+        description=(
+            "AI 점검 → 결과 저장을 한 번 이상 수행하면 이 화면에 시계열·비교가 표시됩니다.\n\n"
+            "💡 **처음 둘러보시려면** — 홈의 🎬 **시연 시작** 으로 점검 1회를 "
+            "실행한 뒤 결과를 저장해보세요. 같은 공간을 두 번 이상 시연하면 "
+            "**시계열 비교** 까지 활성화됩니다."
+        ),
         action_label="지금 점검 시작",
         action_target="pages/1_점검시작.py",
     )
+    if st.button("← 홈으로 돌아가서 시연 시작", width="stretch",
+                  key="history_empty_demo_home"):
+        st.switch_page("app.py")
     st.stop()
 
 df = pd.DataFrame(all_sessions)
@@ -88,7 +96,7 @@ with left_col:
     st.metric("최근 점검", str(sub["timestamp_dt"].max().date()))
 
 with right_col:
-    section("02", "시계열 추이", "공간별 색상 — 등급 구간 음영")
+    section("02", "점검 시기별 점수 변화", "공간별로 점검 시기에 따라 점수가 어떻게 변했는지 — 등급 구간 음영")
     fig = px.line(
         sub, x="timestamp_dt", y="score",
         color="space_type", markers=True,
@@ -99,18 +107,47 @@ with right_col:
     fig.add_hrect(y0=0, y1=60, fillcolor="#D50000", opacity=0.06, line_width=0)
     fig.update_layout(height=380, margin=dict(l=20, r=20, t=10, b=20),
                       paper_bgcolor="#FFF", plot_bgcolor="#FFF")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 # ─────────────────────────────────────────
 # 공간별 박스플롯 (분포)
 # ─────────────────────────────────────────
 divider()
-section("03", "공간 유형별 점수 분포")
-fig2 = px.box(sub, x="space_type", y="score", points="all",
-              color_discrete_sequence=["#D50000"],
-              labels={"space_type": "공간 유형", "score": "점수"})
-fig2.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20))
-st.plotly_chart(fig2, use_container_width=True)
+section("03", "공간 유형별 평균 점수",
+        "공간 종류별 평균과 점검 횟수 — 어느 공간이 점검 자주 받았는지·평균이 어떤지")
+
+# 평균 + 횟수로 단순 막대 — 박스플롯(IQR/중앙값)은 통계 전공자 용어라 일반 교사에게 혼란
+avg_by_space = (
+    sub.groupby("space_type")["score"]
+    .agg(["mean", "count", "min", "max"])
+    .reset_index()
+    .rename(columns={"mean": "평균 점수", "count": "점검 횟수",
+                      "min": "최저 점수", "max": "최고 점수",
+                      "space_type": "공간 유형"})
+    .sort_values("평균 점수", ascending=True)
+)
+avg_by_space["평균 점수"] = avg_by_space["평균 점수"].round(1)
+fig2 = px.bar(
+    avg_by_space, x="평균 점수", y="공간 유형", orientation="h",
+    text="평균 점수", color="평균 점수",
+    color_continuous_scale=["#D50000", "#FFC107", "#4CAF50"],
+    range_x=[0, 100],
+    hover_data={"점검 횟수": True, "최저 점수": True, "최고 점수": True},
+)
+fig2.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20),
+                   coloraxis_showscale=False)
+st.plotly_chart(fig2, width="stretch")
+
+with st.expander("🔬 고급 — 점수 분포 상자그림 (통계 전공자용)", expanded=False):
+    st.caption(
+        "각 공간의 점수 분포를 박스플롯(boxplot) 으로 봅니다. "
+        "박스 = 25~75 백분위수, 가운데 선 = 중앙값, 점 = 개별 점검."
+    )
+    fig_box = px.box(sub, x="space_type", y="score", points="all",
+                      color_discrete_sequence=["#D50000"],
+                      labels={"space_type": "공간 유형", "score": "점수"})
+    fig_box.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_box, width="stretch")
 
 # ─────────────────────────────────────────
 # 비교 모드 — 두 시점 선택
@@ -170,6 +207,17 @@ else:
 
         old_m = _load(sid_old)
         new_m = _load(sid_new)
+        if not old_m or not new_m:
+            missing = []
+            if not old_m:
+                missing.append("이전 시점")
+            if not new_m:
+                missing.append("최근 시점")
+            st.warning(
+                f"⚠ {' / '.join(missing)} 의 데이터를 불러올 수 없습니다. "
+                "파일이 삭제되었거나 손상되었을 수 있습니다. "
+                "전체 이력 표에서 다른 세션을 선택해보세요."
+            )
         if old_m and new_m:
             old_cat = ((old_m.get("inspection") or {}).get("score_result") or {}).get("category_scores") or {}
             new_cat = ((new_m.get("inspection") or {}).get("score_result") or {}).get("category_scores") or {}
@@ -180,7 +228,7 @@ else:
                 n = (new_cat.get(c, {}) or {}).get("score", 0)
                 rows.append({"카테고리": c, "이전": o, "최근": n, "변화": n - o})
             cmp_df = pd.DataFrame(rows)
-            st.dataframe(cmp_df, use_container_width=True, hide_index=True)
+            st.dataframe(cmp_df, width="stretch", hide_index=True)
 
             fig3 = go.Figure()
             fig3.add_trace(go.Bar(name="이전", x=cmp_df["카테고리"], y=cmp_df["이전"],
@@ -189,7 +237,55 @@ else:
                                   marker_color="#D50000"))
             fig3.update_layout(barmode="group", height=320,
                                margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig3, use_container_width=True)
+            st.plotly_chart(fig3, width="stretch")
+
+# ─────────────────────────────────────────
+# 같은 공간을 N회 점검한 경우 — 카테고리별 시계열 추이
+# (두 시점 비교만으로는 트렌드를 보기 어려운 점을 보완)
+# ─────────────────────────────────────────
+if comparable_spaces:
+    divider()
+    section("04-2", "같은 공간 카테고리별 점수 변화",
+            "비상 대응·환기·보관 등 카테고리별로 점검할 때마다 점수가 어떻게 바뀌었는지")
+    space_pick_ts = st.selectbox(
+        "공간 선택",
+        options=comparable_spaces,
+        key="hist_ts_space_pick",
+    )
+    series_subset = sessions_for_pick[sessions_for_pick["공간키"] == space_pick_ts] \
+        .sort_values("timestamp_dt")
+    # 각 세션에서 category_scores 로드
+    rows_ts = []
+    for _, row in series_subset.iterrows():
+        path = Path(sub[sub["session_id"] == row["session_id"]]["path"].iloc[0]) / "master.json"
+        try:
+            m = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        cat_scores = ((m.get("inspection") or {}).get("score_result") or {}) \
+            .get("category_scores") or {}
+        for cat, info in cat_scores.items():
+            rows_ts.append({
+                "점검 일시": row["timestamp_dt"],
+                "카테고리": cat,
+                "점수": (info or {}).get("score", 0),
+            })
+    if rows_ts:
+        ts_df = pd.DataFrame(rows_ts)
+        fig_ts = px.line(
+            ts_df, x="점검 일시", y="점수", color="카테고리", markers=True,
+            labels={"점검 일시": "점검 일시", "점수": "카테고리 점수"},
+        )
+        fig_ts.add_hrect(y0=80, y1=100, fillcolor="#4CAF50", opacity=0.06, line_width=0)
+        fig_ts.add_hrect(y0=60, y1=80, fillcolor="#FFC107", opacity=0.06, line_width=0)
+        fig_ts.add_hrect(y0=0, y1=60, fillcolor="#D50000", opacity=0.06, line_width=0)
+        fig_ts.update_layout(height=380, margin=dict(l=20, r=20, t=10, b=20),
+                              paper_bgcolor="#FFF", plot_bgcolor="#FFF")
+        st.plotly_chart(fig_ts, width="stretch")
+        st.caption(
+            "💡 카테고리 점수가 일관되게 오르면 개선 효과가 누적됨을 의미합니다. "
+            "특정 카테고리만 떨어지면 그 영역의 점검이 약해진 신호 — 추가 조치 권장."
+        )
 
 # ─────────────────────────────────────────
 # 전체 이력 표
@@ -199,4 +295,4 @@ section("05", "전체 이력")
 table = sub[["timestamp_dt", "space_type", "space_nickname", "score", "grade", "session_id"]].copy()
 table.columns = ["점검 일시", "공간 유형", "별칭", "점수", "등급", "세션 ID"]
 table = table.sort_values("점검 일시", ascending=False)
-st.dataframe(table, use_container_width=True, hide_index=True)
+st.dataframe(table, width="stretch", hide_index=True)

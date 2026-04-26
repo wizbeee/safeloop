@@ -90,7 +90,7 @@ class VisionProvider(ABC):
 # ─────────────────────────────────────────
 class AnthropicProvider(VisionProvider):
     id = "anthropic"
-    label = "Anthropic Claude (Opus 4.5 · Haiku 4.5)"
+    label = "Anthropic Claude"
     MODELS = {
         "vision": "claude-opus-4-5",
         "text": "claude-haiku-4-5-20251001",
@@ -148,7 +148,7 @@ class AnthropicProvider(VisionProvider):
 # ─────────────────────────────────────────
 class OpenAIProvider(VisionProvider):
     id = "openai"
-    label = "OpenAI GPT-4o"
+    label = "OpenAI GPT"
     MODELS = {
         "vision": "gpt-4o",
         "text": "gpt-4o-mini",
@@ -194,7 +194,7 @@ class OpenAIProvider(VisionProvider):
 # ─────────────────────────────────────────
 class GeminiProvider(VisionProvider):
     id = "gemini"
-    label = "Google Gemini 2.5 (Pro · Flash)"
+    label = "Google Gemini"
     MODELS = {
         "vision": "gemini-2.5-pro",
         "text": "gemini-2.5-flash",

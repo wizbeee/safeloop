@@ -27,24 +27,103 @@ render_sidebar(active_key="settings")
 hero("SETTINGS", "설정", "운영 모드 · 공간 사전 등록 · AI 공급자 · 시스템 상태")
 
 # ─────────────────────────────────────────
-# 모드 토글
+# 모드 — 시연 종료 / 시작
 # ─────────────────────────────────────────
 section("01", "운영 모드")
-col_a, col_b = st.columns(2)
-with col_a:
-    demo = st.toggle("시연 모드 (샘플 사진·자동 채움 허용)",
-                     value=st.session_state.get("demo_mode", True))
-    st.session_state["demo_mode"] = demo
-with col_b:
-    role = st.radio(
-        "역할",
+_in_demo = st.session_state.get("demo_mode", True)
+if _in_demo:
+    st.markdown(
+        "<div style='padding:10px 14px;background:#FFF6F6;border:1px solid #F8D0D0;"
+        "border-radius:6px;font-size:13px;color:#0A0A0B;line-height:1.6;'>"
+        "🎬 <b>현재 시연 모드입니다</b> — 더미 이미지·자동 채움이 허용됩니다. "
+        "실 사용으로 전환하려면 아래 버튼을 누르세요."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    if st.button("시연 종료 (실 사용으로 전환)", key="end_demo_mode",
+                  width="stretch"):
+        st.session_state["demo_mode"] = False
+        st.toast("시연 종료 — 이제 실 사용 모드입니다", icon="✅")
+        st.rerun()
+else:
+    st.caption(
+        "현재 실 사용 모드입니다. 시연을 다시 시작하려면 홈의 "
+        "**🎬 시연 시작** 버튼을 누르세요."
+    )
+
+# 역할 변경은 일반 사용자에게는 거의 필요 없으므로 expander 안에 작게 배치
+current_role_display = (
+    "학교 담당자" if st.session_state.get("role", "학교") == "학교"
+    else "교육청 담당자"
+)
+with st.expander(f"역할 변경 (현재: {current_role_display})", expanded=False):
+    st.caption(
+        "역할은 처음 한 번 정하면 일반적으로 바꿀 일이 거의 없습니다. "
+        "다른 역할로 작업할 일이 있을 때만 변경하세요."
+    )
+    new_role = st.radio(
+        "역할 선택",
         ["학교 담당자", "교육청 담당자"],
         horizontal=True,
         index=0 if st.session_state.get("role", "학교") == "학교" else 1,
+        label_visibility="collapsed",
     )
-    st.session_state["role"] = "학교" if role == "학교 담당자" else "교육청"
+    target_role = "학교" if new_role == "학교 담당자" else "교육청"
+    if target_role != st.session_state.get("role", "학교"):
+        if st.button("역할 변경 적용", key="apply_role_change",
+                      width="stretch"):
+            from modules.auth import clear_authentication, forget_school
+            from modules.session import reset_inspection
+            # 다른 역할로 전환 시 모든 인증·자동 로그인·세션 데이터 해제 (보안)
+            clear_authentication()      # 교육청 PIN 인증 해제 + 쿠키 삭제
+            forget_school()             # 학교 자동 로그인 쿠키 삭제
+            reset_inspection()          # 점검 진행 중 데이터 정리
+            # 학교 세션도 명시적으로 초기화
+            for _k in ("school", "auth_verified", "eduline",
+                        "_show_pin_edu", "_auto_login_checked"):
+                st.session_state[_k] = None if _k != "auth_verified" else False
+            st.session_state["role"] = target_role
+            st.toast(f"{new_role} 모드로 전환했습니다 — 다시 로그인이 필요합니다", icon="🔄")
+            st.switch_page("app.py")
 
-# 0-6 수정: 온보딩 다시 보기 버튼
+# ─────────────────────────────────────────
+# 이메일 등록 — 모바일↔PC 동기화 & 교육청 발송용
+# ─────────────────────────────────────────
+st.markdown("---")
+section("01-2", "이메일 등록",
+        "교육청 발송 시 mailto 자동 작성 + 본인 이메일 백업용")
+
+email_col1, email_col2 = st.columns(2)
+with email_col1:
+    my_email = st.text_input(
+        "내 이메일 (학교/교육청 담당자 본인 이메일)",
+        value=st.session_state.get("my_email", ""),
+        placeholder="예: teacher@school.go.kr",
+        key="my_email_input",
+        help="모바일에서 PC로 백업할 때 본인에게 메일 발송용으로 활용 가능.",
+    )
+with email_col2:
+    if st.session_state.get("role", "학교") == "학교":
+        edu_office_email = st.text_input(
+            "교육청 담당자 이메일 (학교가 보내는 대상)",
+            value=st.session_state.get("edu_office_email", ""),
+            placeholder="예: officer@sen.go.kr",
+            key="edu_office_email_input",
+            help="점검 결과를 발송할 관할 교육청 담당자 이메일.",
+        )
+    else:
+        edu_office_email = st.session_state.get("edu_office_email", "")
+        st.caption("교육청 담당자 이메일은 학교 담당자 모드에서 등록합니다.")
+
+if st.button("이메일 저장", key="save_emails", width="stretch"):
+    st.session_state["my_email"] = (my_email or "").strip()
+    if st.session_state.get("role", "학교") == "학교":
+        st.session_state["edu_office_email"] = (edu_office_email or "").strip()
+    st.toast("이메일 저장 완료", icon="✅")
+
+# ─────────────────────────────────────────
+# 온보딩 다시 보기 버튼
+# ─────────────────────────────────────────
 st.markdown("---")
 oc1, oc2 = st.columns([3, 1])
 with oc1:
@@ -53,7 +132,7 @@ with oc1:
     )
 with oc2:
     if st.button("온보딩 다시 보기", key="show_onboarding_again",
-                  use_container_width=True):
+                  width="stretch"):
         st.session_state["_onboarding_done"] = False
         st.toast("홈으로 이동하면 온보딩 안내가 다시 표시됩니다.", icon="ℹ️")
         st.switch_page("app.py")
@@ -88,7 +167,9 @@ else:
             "type": new_type,
             "nickname": new_nick.strip() or None,
         })
-        st.success("등록 완료")
+        # toast 는 rerun 후에도 잠시 표시되어 사용자가 인지 가능
+        st.toast(f"✅ '{new_type}'{' (' + new_nick + ')' if new_nick.strip() else ''} 등록 완료",
+                  icon="✅")
         st.rerun()
 
     # 등록된 공간 목록
@@ -178,19 +259,6 @@ for p in _providers:
     st.markdown(f"- **{p['label']}** — {status}{src}")
 
 st.markdown("##### 추가 옵션")
-# Stage 1 (공간 식별) 호출이 제거되었으므로 cross_check 토글은 더 이상 동작하지 않음
-# 세션 잔존 정리만 수행하고 deprecated 안내 표시
-if st.session_state.get("cross_check"):
-    st.session_state["cross_check"] = False
-st.markdown(
-    "<div style='padding:10px 14px;background:#FAFAFA;border:1px solid #E5E5E8;"
-    "border-radius:6px;font-size:12px;color:#6B6B70;line-height:1.6;margin:4px 0 10px 0;'>"
-    "<b>📦 deprecated</b> — '단계 1 교차 검증' 옵션은 제거되었습니다. "
-    "공간 유형은 점검 시작 페이지에서 담당자가 명시 선택하므로 AI 식별·검증이 "
-    "불필요해졌습니다. 비용·시간 절감 효과."
-    "</div>",
-    unsafe_allow_html=True,
-)
 img_check = st.toggle(
     "이미지 품질 사전 검사 (블러·어두움 · 자동 회전·리사이즈)",
     value=st.session_state.get("image_quality_check", True),
@@ -206,106 +274,83 @@ else:
     st.error("현재 선택된 공급자의 API 키가 없습니다. 위 섹션에서 키를 입력하세요.")
 
 # ─────────────────────────────────────────
-# 데이터 저장·처리 원칙 (보안·컴플라이언스 안내)
+# 운영자 도구 (관리자만)
+# 환경변수 SAFELOOP_ADMIN=1 또는 URL ?admin=1 로 활성화.
+# 일반 학교·교육청 사용자에게는 디스크 사용량·캐시 정리·세션 전용 모드 등의
+# 운영성 옵션이 보이지 않도록 차단 — 데이터 저장 원칙 안내도 운영자 책임으로 분리.
 # ─────────────────────────────────────────
-divider()
-section("05", "데이터 저장 원칙 (시연 vs 운영)",
-        "학교 안전 점검 로우데이터는 학교 내부 결재가 선행되어야 하는 자료입니다.")
-st.markdown(
-    "<div style='border:1px solid #F8D0D0;background:#FFF6F6;"
-    "border-radius:6px;padding:14px 18px;font-size:13px;color:#0A0A0B;line-height:1.75;'>"
-    "<b style='color:#D50000;'>⚠ 중요</b> — 현재 이 앱은 "
-    "<b>Streamlit Community Cloud</b> 데모 컨테이너에서 실행 중일 수 있습니다. "
-    "이 환경의 파일 시스템(`school_storage/`)은 <b>임시 저장소</b>이며, "
-    "컨테이너 재시작 시 초기화됩니다. 외부 인가 없이 영구 저장되지 않습니다.<br><br>"
-    "<b>⚙ 실 운영 시에는 반드시 다음 중 하나로 전환하세요:</b><br>"
-    "① <b>학교 내부망 온프렘 배포</b> — 학교 서버·NAS 에 Streamlit 컨테이너 설치<br>"
-    "② <b>브라우저 세션 전용 모드</b> — 하단 옵션으로 디스크 저장 비활성화<br>"
-    "③ <b>교육청 내부 클라우드</b> — 교육청 인증 게이트웨이 통한 격리된 테넌트<br><br>"
-    "<b>현재 시연 모드</b>에서는 결과 저장 시 파일이 임시로 생성되지만, "
-    "앱 밖으로 반출되려면 반드시 사용자가 <b>다운로드 버튼</b>으로 직접 내려받아야 합니다. "
-    "수동 다운로드 없이는 외부로 전송되지 않습니다."
-    "</div>",
-    unsafe_allow_html=True,
-)
+import os as _os
+_is_admin = _os.environ.get("SAFELOOP_ADMIN") == "1"
+try:
+    _qp_admin = st.query_params
+    _is_admin = _is_admin or str(_qp_admin.get("admin", "0")) in ("1", "true", "True")
+except Exception:
+    pass
 
-_session_only = st.toggle(
-    "📁 **세션 전용 모드** — 디스크에 저장하지 않고 브라우저 메모리에만 유지",
-    value=st.session_state.get("_session_only_mode", False),
-    help="ON: 점검 이력이 디스크에 쓰이지 않음 (새로고침·재시작 시 소멸). "
-         "다운로드로만 이력 보관 가능. 개인정보·보안이 우려될 때 권장."
-)
-st.session_state["_session_only_mode"] = _session_only
-if _session_only:
-    st.info(
-        "세션 전용 모드 ON — 결과 저장 버튼을 눌러도 디스크에 기록되지 않습니다. "
-        "반드시 **다운로드 버튼**으로 결과물을 내려받아 학교 내부 결재에 첨부하세요."
-    )
+if _is_admin:
+    divider()
+    section("05", "운영자 도구 — 디스크 사용량 · 캐시 정리",
+            "로컬/자체 호스팅 환경 전용. Streamlit Cloud는 재시작 시 초기화.")
+    with st.expander("관리자 도구 열기", expanded=False):
+        st.caption(
+            "이 정보는 **현재 Streamlit 서버가 실행 중인 호스트의 로컬 파일 시스템** 기준입니다. "
+            "Streamlit Cloud 환경에선 컨테이너 재시작마다 초기화되므로 관리 의미는 제한적이며, "
+            "주로 **로컬 개발·자체 호스팅 운영** 시 캐시 누적 점검용입니다."
+        )
 
-# ─────────────────────────────────────────
-# 디스크 사용량 (관리자 도구)
-# ─────────────────────────────────────────
-divider()
-section("06", "디스크 사용량 · 캐시 정리",
-        "로컬/자체 호스팅 환경에서만 의미 있음. Streamlit Cloud는 재시작 시 초기화.")
-with st.expander("관리자 도구 열기", expanded=False):
-    st.caption(
-        "이 정보는 **현재 Streamlit 서버가 실행 중인 호스트의 로컬 파일 시스템** 기준입니다. "
-        "Streamlit Cloud 환경에선 컨테이너 재시작마다 초기화되므로 관리 의미는 제한적이며, "
-        "주로 **로컬 개발·자체 호스팅 운영** 시 캐시 누적 점검용입니다."
-    )
+        from modules.storage import storage_usage, cleanup_old_cache
+        usage = storage_usage()
+        def _fmt(b: int) -> str:
+            if b < 1024:
+                return f"{b}B"
+            if b < 1024 * 1024:
+                return f"{b/1024:.1f}KB"
+            return f"{b/1024/1024:.2f}MB"
 
-    from modules.storage import storage_usage, cleanup_old_cache
-    usage = storage_usage()
-    def _fmt(b: int) -> str:
-        if b < 1024:
-            return f"{b}B"
-        if b < 1024 * 1024:
-            return f"{b/1024:.1f}KB"
-        return f"{b/1024/1024:.2f}MB"
+        uc1, uc2, uc3 = st.columns(3)
+        uc1.metric("로컬 저장소", _fmt(usage["school_storage"]))
+        uc2.metric("AI 캐시", _fmt(usage["ai_cache"]))
+        uc3.metric("교육청 수신함", _fmt(usage["edu_receipt"]))
 
-    uc1, uc2, uc3 = st.columns(3)
-    uc1.metric("학교 클라우드", _fmt(usage["school_storage"]))
-    uc2.metric("AI 캐시", _fmt(usage["ai_cache"]))
-    uc3.metric("교육청 수신함", _fmt(usage["edu_receipt"]))
+        cdays = st.slider("캐시 보존 기간(일)", 7, 90, 30, step=1)
+        if st.button(f"{cdays}일 이전 AI 캐시 정리"):
+            n, freed = cleanup_old_cache(days=cdays)
+            if n:
+                st.success(f"{n}개 파일 삭제 · {_fmt(freed)} 회수")
+            else:
+                st.info("정리할 파일이 없습니다.")
+            st.rerun()
 
-    cdays = st.slider("캐시 보존 기간(일)", 7, 90, 30, step=1)
-    if st.button(f"{cdays}일 이전 AI 캐시 정리"):
-        n, freed = cleanup_old_cache(days=cdays)
-        if n:
-            st.success(f"{n}개 파일 삭제 · {_fmt(freed)} 회수")
-        else:
-            st.info("정리할 파일이 없습니다.")
-        st.rerun()
-
-    # 8-6 수정: 학교 클라우드 정리 (위험 경고 + confirm_button)
-    st.markdown("---")
-    st.markdown(
-        "<div style='border:1px solid #F8D0D0;background:#FFF6F6;"
-        "border-radius:6px;padding:10px 14px;font-size:12px;color:#D50000;'>"
-        "⚠ <b>학교 클라우드 정리</b>는 실제 점검 이력 폴더를 통째로 삭제합니다. "
-        "복구 불가 — 신중히 사용하세요. (`_ai_cache`, `_drafts` 등 시스템 폴더는 보호됩니다.)"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-    sdays = st.slider("학교 클라우드 보존 기간(일)", 30, 365, 90, step=10,
-                       key="school_storage_days")
-    from modules.storage import cleanup_school_storage
-    if confirm_button(
-        f"{sdays}일 이전 학교 클라우드 점검 이력 삭제",
-        key="cleanup_school_storage",
-        message=f"⚠ {sdays}일 이상 지난 모든 학교의 점검 세션 폴더를 삭제합니다. "
-                f"이 작업은 되돌릴 수 없습니다.",
-    ):
-        n_s, freed_s = cleanup_school_storage(days=sdays)
-        if n_s:
-            st.success(f"세션 폴더 {n_s}개 삭제 · {_fmt(freed_s)} 회수")
-        else:
-            st.info("정리할 세션 폴더가 없습니다.")
-        st.rerun()
+        # 로컬 저장소 정리 (위험 경고 + confirm_button)
+        st.markdown("---")
+        st.markdown(
+            "<div style='border:1px solid #F8D0D0;background:#FFF6F6;"
+            "border-radius:6px;padding:10px 14px;font-size:12px;color:#D50000;'>"
+            "⚠ <b>로컬 저장소 정리</b>는 실제 점검 이력 폴더를 통째로 삭제합니다. "
+            "복구 불가 — 신중히 사용하세요. (`_ai_cache`, `_drafts` 등 시스템 폴더는 보호됩니다.)"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        sdays = st.slider("로컬 저장소 보존 기간(일)", 30, 365, 90, step=10,
+                           key="school_storage_days")
+        from modules.storage import cleanup_school_storage
+        if confirm_button(
+            f"{sdays}일 이전 로컬 저장소 점검 이력 삭제",
+            key="cleanup_school_storage",
+            message=f"⚠ {sdays}일 이상 지난 모든 학교의 점검 세션 폴더를 삭제합니다. "
+                    f"이 작업은 되돌릴 수 없습니다.",
+        ):
+            n_s, freed_s = cleanup_school_storage(days=sdays)
+            if n_s:
+                st.success(f"세션 폴더 {n_s}개 삭제 · {_fmt(freed_s)} 회수")
+            else:
+                st.info("정리할 세션 폴더가 없습니다.")
+            st.rerun()
 
 divider()
-section("07", "세션 관리", "모든 세션 데이터(학교 선택·공간·촬영·AI 결과 등)를 초기화합니다.")
+_sess_sec = "06" if _is_admin else "05"
+section(_sess_sec, "세션 관리",
+        "모든 세션 데이터(학교 선택·공간·촬영·AI 결과 등)를 초기화합니다.")
 if confirm_button("전체 세션 초기화", key="reset_all_settings",
                    message="학교 선택·공간·촬영본·AI 결과 등 모든 세션 데이터 삭제."):
     reset_all()
