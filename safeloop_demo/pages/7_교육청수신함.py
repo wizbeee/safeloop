@@ -150,8 +150,8 @@ st.markdown(
 )
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("총 수신", f"{len(inbox)}건")
-k2.metric("미열람 ●", f"{unread_count}건",
-          delta=("새 건 있음" if unread_count else "모두 확인"),
+k2.metric("미검토 ●", f"{unread_count}건",
+          delta=("새 건 있음" if unread_count else "모두 검토"),
           delta_color=("inverse" if unread_count else "normal"))
 k3.metric("⭐ 별표", f"{starred_count}건")
 k4.metric("오늘 신규", f"{today_count}건")
@@ -185,9 +185,9 @@ section("01", "검색·필터·정렬", f"총 {len(inbox)}건 중")
 # 빠른 토글 — 메일 클라이언트 패턴 (미열람만 / 별표만)
 quick_col1, quick_col2, quick_col3 = st.columns([1, 1, 4])
 with quick_col1:
-    only_unread = st.toggle("● 미열람만",
+    only_unread = st.toggle("● 미검토만",
                               value=False, key="edu_inbox_only_unread",
-                              help="아직 상세 조회 안 한 새 건만 표시")
+                              help="아직 '검토 완료 처리' 안 한 건만 표시")
 with quick_col2:
     only_starred = st.toggle("⭐ 별표만",
                               value=False, key="edu_inbox_only_starred",
@@ -222,7 +222,7 @@ with f_col3:
 with f_col4:
     sort_by = st.selectbox(
         "정렬",
-        options=["미열람·별표 우선 (메일 기본)",
+        options=["미검토·별표 우선 (기본)",
                  "수신일시 ↓ (최근순)", "수신일시 ↑ (오래된순)",
                  "점수 ↓ (높은순)", "점수 ↑ (낮은순 — 위험 우선)",
                  "학교명 (가나다)"],
@@ -256,7 +256,7 @@ filtered = [x for x in filtered
             if (x.get("score") is None) or (s_lo <= x.get("score") <= s_hi)]
 
 # 정렬
-if sort_by.startswith("미열람·별표 우선"):
+if sort_by.startswith("미검토·별표 우선"):
     # 메일 클라이언트 기본 정렬 — (별표 또는 미열람) 우선 → 그 안에서 최근순
     filtered.sort(
         key=lambda x: (
@@ -350,7 +350,7 @@ df = pd.DataFrame([
     {
         "선택": False,
         "⭐": "⭐" if x.get("starred") else "",
-        "상태": "● 미열람" if x.get("unread") else "✓ 열람",
+        "상태": "● 미검토" if x.get("unread") else "✅ 검토",
         "그룹": _time_bucket(x.get("received_at", "")),
         "수신일시": (x.get("received_at", "") or "")[:16].replace("T", " "),
         "시도": x.get("sido", ""),
@@ -376,7 +376,7 @@ edited = st.data_editor(
         ),
         "상태": st.column_config.TextColumn(
             "상태", width="small",
-            help="● 미열람 = 학교는 발송했지만 아직 상세 조회를 안 한 건",
+            help="● 미검토 = 학교는 발송했지만 아직 '검토 완료 처리' 누르지 않은 건",
         ),
         "그룹": st.column_config.TextColumn("그룹", width="small"),
         "수신일시": st.column_config.TextColumn("수신일시", width="medium"),
@@ -401,13 +401,14 @@ with a1:
     st.metric("선택됨", f"{len(selected_items)}건")
 with a2:
     if st.button(
-        "✓ 일괄 읽음 처리",
+        "✅ 일괄 검토 완료",
         width="stretch",
         disabled=(len(selected_items) == 0),
         key="edu_inbox_bulk_read",
+        help="선택한 건들을 한 번에 '검토 완료 처리' — 학교 측에 수신 확인 자동 반영",
     ):
         n = bulk_mark_edu_inbox_read(selected_items)
-        st.toast(f"{n}건 읽음 처리", icon="✓")
+        st.toast(f"{n}건 검토 완료 처리됨", icon="✅")
         st.rerun()
 with a3:
     n_unstarred = sum(1 for it in selected_items if not it.get("starred"))
@@ -475,11 +476,11 @@ else:
         st.error(f"파일 로드 실패: {e}")
         st.stop()
 
-    # 첫 열람 시점에 자동으로 read marker 저장 — 학교 측 "수신 확인" 트리거
+    # 미리보기와 검토 완료 분리:
+    # - 단순 행 체크박스(상세 표시) = 미리보기 — read marker 저장 X
+    # - 명시적 "✅ 검토 완료 처리" 버튼 클릭 시만 read marker 저장 → 학교 측 "수신 확인"
+    # 이전 동작(첫 열람 = 자동 검토 완료) 은 학교가 "교육청이 정식 검토" 로 오해 야기.
     _was_unread = is_edu_inbox_read(sido_name, fname) is None
-    if _was_unread:
-        mark_edu_inbox_read(sido_name, fname)
-        st.toast("✓ 첫 열람 — 학교 측에 수신 확인 자동 반영", icon="✉️")
 
     school = data.get("school_identified") or {}
     space = data.get("space") or {}
@@ -505,6 +506,31 @@ else:
             unsafe_allow_html=True,
         )
     with col_b:
+        # ─── 검토 완료 처리 — 학교 측 "수신 확인" 트리거 ───
+        # 단순 미리보기와 분리: 명시적 클릭 시만 read marker 저장.
+        # 이미 검토 완료된 건은 비활성화 (재처리 불필요).
+        _read_at = is_edu_inbox_read(sido_name, fname)
+        if _read_at is None:
+            if st.button(
+                "✅ 검토 완료 처리",
+                type="primary",
+                width="stretch",
+                key=f"edu_inbox_confirm_{fname}",
+                help="학교 측에 '수신 확인 완료' 표시가 자동 반영됩니다. 단순 미리보기 시에는 누르지 마세요.",
+            ):
+                mark_edu_inbox_read(sido_name, fname)
+                st.toast("✓ 검토 완료 처리 — 학교 측에 자동 반영됨", icon="✉️")
+                st.rerun()
+        else:
+            st.markdown(
+                f"<div style='padding:6px 10px;background:#F0F7F0;"
+                f"border:1px solid #C8E6C9;border-radius:6px;font-size:12px;"
+                f"color:#2E7D32;text-align:center;'>"
+                f"✅ 검토 완료<br>{(_read_at or '')[:16].replace('T',' ')}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
         # 별표 토글 + 단건 삭제
         if st.button(
             "⭐ 별표 해제" if starred_now else "⭐ 별표 부착",

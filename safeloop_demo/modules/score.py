@@ -40,7 +40,8 @@ def calculate_safety_score(item_scores: dict[str, float],
     """
     Args:
         item_scores: {"비상샤워": 1.0, "세안기": 0.5, ...}
-                     값이 주어지지 않은 항목은 0.0 으로 간주
+                     **점검한 항목만** 키로 포함. 점검 안 한(매핑 안 된) 표준 설비는
+                     분모에서 자동 제외 (점수 산식 정확성 — 사용자 직관과 일치).
         space_type: 공간 유형. 주어지면 해당 공간에 적용되는 항목만 점수 계산
                     대상에 포함 (다른 공간 전용 설비는 점수 분모에서 제외)
         floor: 층수. 완강기·창문 추락방지 등 층수 조건 항목에 사용
@@ -50,7 +51,12 @@ def calculate_safety_score(item_scores: dict[str, float],
           "grade": "A~E",
           "category_scores": {카테고리명: {"score": ..., "weight_sum": ..., "items": [...]}},
           "raw": {항목: 점수},
+          "coverage": {"checked": N, "applicable": M, "ratio": N/M},  # 점검 커버리지
         }
+
+    이전 산식 (값 없는 항목 = 0.0 자동 부재) 은 사용자가 점검표 항목 일부만
+    응답해도 나머지 표준 설비를 0.0 으로 처리해 점수가 비합리적으로 낮아짐.
+    개선: 점검표에 없는 표준 설비는 분모에서 제외 + 커버리지 별도 보고.
     """
     # 공간이 주어지면 해당 공간 항목만; 아니면 전체
     applicable = set(items_for_space(space_type, floor)) if space_type else set(LAW_BASIS.keys())
@@ -59,11 +65,17 @@ def calculate_safety_score(item_scores: dict[str, float],
     total_weight = 0.0
     category_breakdown: dict[str, dict] = {c: {"weighted": 0.0, "weight": 0.0, "items": []} for c in CATEGORIES}
     raw: dict[str, float] = {}
+    checked_count = 0
+    applicable_count = 0
 
     for name, info in LAW_BASIS.items():
         if name not in applicable:
             continue
-        s = float(item_scores.get(name, 0.0))
+        applicable_count += 1
+        # 점검표에 매핑되지 않은 표준 설비는 분모에서 제외 (사용자 직관 부합)
+        if name not in item_scores:
+            continue
+        s = float(item_scores[name])
         w = float(info["weight"])
         raw[name] = s
         cat = info["category"]
@@ -72,6 +84,7 @@ def calculate_safety_score(item_scores: dict[str, float],
         category_breakdown[cat]["weighted"] += w * s
         category_breakdown[cat]["weight"] += w
         category_breakdown[cat]["items"].append({"name": name, "score": s, "weight": w})
+        checked_count += 1
 
     score_pct = (total_weighted / total_weight * 100.0) if total_weight > 0 else 0.0
 
@@ -92,6 +105,11 @@ def calculate_safety_score(item_scores: dict[str, float],
         "grade_description": grade_description(grade),
         "category_scores": category_scores,
         "raw": raw,
+        "coverage": {
+            "checked": checked_count,
+            "applicable": applicable_count,
+            "ratio": round(checked_count / applicable_count, 3) if applicable_count else 0,
+        },
     }
 
 

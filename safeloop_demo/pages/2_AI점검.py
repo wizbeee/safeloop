@@ -279,7 +279,14 @@ if st.session_state["wizard_step"] not in _STEP_KEYS:
     st.session_state["wizard_step"] = "shoot_1"
 
 # 🎬 자동재생 진입 — 필수 컷 중 일정 비율 이상 채워지면 ai_run 스텝으로 점프
-# 샘플 폴더에 7컷 전체가 없는 경우(시연용)도 진행 가능하도록 임계 80%
+# 샘플 폴더에 7컷 전체가 없는 경우(시연용)도 진행 가능하도록 임계 80%.
+#
+# 주의(2026-04-26): 새 시연 흐름에서는 app.py 가 시연 시작 시 stage2/3 합성 응답을
+# 직접 주입하고 _autoplay_consumed=True + wizard_step="supplement" 로 설정하므로
+# 아래 블록은 보통 skip 됩니다. 다음 환경에서만 실행됨:
+#   - 외부에서 _autoplay 만 켜고 _autoplay_consumed 안 켠 경우
+#   - 또는 새 흐름으로 마이그레이션 안 된 진입점에서 호출 시 fallback
+# 죽은 코드 같지만 fallback 안전망으로 유지.
 if st.session_state.get("_autoplay") and not st.session_state.get("_autoplay_consumed"):
     _required_keys_auto = [
         "entrance_diag", "front_view", "center_window", "center_corridor",
@@ -1552,9 +1559,29 @@ if sr and _show_checklist_and_score:
     divider()
     section("04", "안전 점수 결과")
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     c1.metric("종합 점수", f"{sr['score']}점")
     c2.metric("등급", sr["grade"])
+    # 점검 커버리지 — 사용자가 표준 설비 중 몇 %를 점검했는지
+    _cov = sr.get("coverage") or {}
+    _cov_ratio = (_cov.get("ratio") or 0) * 100
+    c3.metric("점검 커버리지", f"{_cov_ratio:.0f}%",
+              delta=f"{_cov.get('checked', 0)}/{_cov.get('applicable', 0)} 표준 설비",
+              delta_color="off")
+
+    # 커버리지가 낮으면 경고 — 점수가 높아도 일부만 점검한 것
+    if _cov_ratio < 70 and _cov.get("applicable", 0) > 0:
+        st.warning(
+            f"⚠ **점검 커버리지가 낮습니다** ({_cov_ratio:.0f}%). "
+            f"이 공간에 적용되는 표준 설비 **{_cov.get('applicable', 0)}개** 중 "
+            f"**{_cov.get('checked', 0)}개만 점검**되었습니다. "
+            f"나머지 **{_cov.get('applicable', 0) - _cov.get('checked', 0)}개**는 "
+            f"점검표에 없어 점수에 반영되지 못했습니다.\n\n"
+            f"**개선 방법** — AI 점검표를 재생성하거나 위의 '수동 매핑' 으로 "
+            f"미매핑 점검 항목을 표준 설비와 직접 연결하세요. "
+            f"커버리지 70% 이상 권장."
+        )
+
     desc = sr.get("grade_description", "") or ""
     if desc:
         # 등급 설명을 truncation 없이 카드로 표시

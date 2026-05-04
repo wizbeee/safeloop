@@ -130,6 +130,8 @@ def build_master_record(session: dict) -> dict:
         "approval": {
             "eduline": session.get("eduline"),
             "internal_approval_confirmed": session.get("internal_approval_confirmed", False),
+            "approver_name": session.get("approver_name", ""),
+            "approval_date": str(session.get("approval_date", "")) if session.get("approval_date") else "",
         },
     }
 

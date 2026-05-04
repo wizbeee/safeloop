@@ -365,6 +365,7 @@ with oc2:
             # 시연용 풍부한 응답을 세션에 직접 주입 — API 호출 우회.
             # API 키가 있어도 더미 이미지에 실 API 를 호출하면 "부재 N" 결과가
             # 나오므로, 시연 의도(풍부한 응답 표시)에 맞춰 합성 응답을 미리 세팅.
+            # 실패 시 silent pass 하면 빈 결과로 supplement 점프해 사용자 혼란 → 명시 에러.
             try:
                 from modules.demo_responses import (
                     synth_stage2_for_space, synth_stage3_for_space,
@@ -386,8 +387,14 @@ with oc2:
                 # 디스크 캐시도 함께 보장 (재진입·반복 시 hash 적중)
                 from modules.ai_vision import ensure_demo_cache_for_shots
                 ensure_demo_cache_for_shots(shots, autoplay_space)
-            except Exception:
-                pass
+            except Exception as e:
+                st.error(
+                    f"⚠ 시연 합성 응답 준비 실패 — {e.__class__.__name__}: {e}\n\n"
+                    f"다시 시도하거나 다른 공간을 선택하세요. 문제가 반복되면 "
+                    f"`modules/demo_responses.py` 또는 `modules/ai_vision.py` "
+                    f"확인 필요."
+                )
+                st.stop()
 
             st.session_state["_autoplay"] = True
             # 합성 응답을 이미 주입했으므로 AI 페이지에서 추가 호출 안 함.

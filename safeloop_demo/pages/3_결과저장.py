@@ -445,14 +445,42 @@ else:
             "등록 시 그 주소가 우선 사용됩니다."
         )
 
-    # 2) 내부 결재 확인 체크박스
+    # 2) 내부 결재 확인 — 체크박스 + 결재자/일자 명시 (책임성 ↑)
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+    st.markdown("##### 학교 내부 결재 확인")
+    st.caption(
+        "⚠ 본 체크는 **자기 선언** 으로, 실제 학교 결재 시스템(K-에듀파인 등)과 "
+        "연동되지 않습니다. 별도 결재 양식으로 결재 진행 후 본 항목을 체크하세요. "
+        "발송 데이터에는 결재자·일자가 함께 기록됩니다."
+    )
+
     approval_done = st.checkbox(
         "**학교 내부 결재 완료** — 담당자 → 부장 → 교감 → 교장 결재(또는 등재) 완료를 확인합니다.",
         value=False,
         key="internal_approval_confirmed",
         help="결재 양식은 학교마다 다르므로, 별도 결재 진행 후 이 항목에 체크하세요.",
     )
+
+    # 결재자·일자 입력 (선택 — 입력 시 발송 데이터에 함께 기록)
+    if approval_done:
+        col_app1, col_app2 = st.columns([2, 1])
+        with col_app1:
+            approver_name = st.text_input(
+                "결재자 (선택) — 최종 결재자 이름",
+                value=st.session_state.get("approver_name", ""),
+                placeholder="예: 홍길동 (교장)",
+                key="approver_name_input",
+            )
+            st.session_state["approver_name"] = approver_name
+        with col_app2:
+            import datetime as _dt_app
+            approval_date = st.date_input(
+                "결재 일자 (선택)",
+                value=st.session_state.get("approval_date") or _dt_app.date.today(),
+                key="approval_date_input",
+            )
+            st.session_state["approval_date"] = approval_date
+
     if not approval_done:
         st.caption("⚠ 결재 미완료 시 발송 버튼이 비활성화됩니다.")
 
