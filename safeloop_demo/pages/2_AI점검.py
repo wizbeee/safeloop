@@ -1508,6 +1508,23 @@ if s3 and _show_checklist_and_score:
                 f"점수 계산에서 제외되었습니다."
             )
 
+        # 매핑 결과 명시 — 사용자가 "전체 양호" 답했는데 점수가 낮아 보일 때
+        # "X/Y 만 점수 반영, 나머지는 미매핑(부재 처리)" 명확히 알림.
+        # 자동 매핑률이 낮을수록 점수가 직관과 어긋날 수 있음.
+        _filled_count = sum(1 for v in scores.values() if v != -1.0)
+        _mapped_count = len(std_scores)
+        _unmapped_user = _filled_count - _mapped_count - excluded_count
+        if _unmapped_user > 0:
+            st.warning(
+                f"⚠ **점수 반영 항목: {_mapped_count}개 / 입력 항목: {_filled_count}개**\n\n"
+                f"입력하신 {_filled_count}개 항목 중 **{_mapped_count}개만** 표준 설비와 "
+                f"매핑되어 점수에 반영되고, 나머지 **{_unmapped_user}개는 미매핑**이라 "
+                f"점수 계산에서 제외됩니다.\n\n"
+                f"**왜 점수가 낮아 보일 수 있나요?** — '전체 양호' 클릭 시 모든 항목을 양호로 답하지만, "
+                f"매핑 안 된 항목은 표준 설비 자체가 '부재' 로 처리되어 점수가 낮아집니다. "
+                f"위의 **'수동 매핑'** 으로 미매핑 항목을 직접 지정하면 점수가 올라갑니다."
+            )
+
         if not std_scores:
             st.error(
                 "매핑된 표준 설비가 하나도 없어 점수 계산이 불가합니다. "

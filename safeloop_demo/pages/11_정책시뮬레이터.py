@@ -24,7 +24,7 @@ from modules.session import ensure_state
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
 st.set_page_config(page_title="정책 시뮬레이터 · SafeLoop", page_icon="static/icon-192.png",
-                   layout="wide", initial_sidebar_state="expanded")
+                   layout="wide", initial_sidebar_state="auto")
 apply_theme()
 ensure_state()
 render_sidebar(active_key="policy")

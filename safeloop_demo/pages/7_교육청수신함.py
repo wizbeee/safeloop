@@ -37,7 +37,7 @@ from modules.storage import (
 from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
 st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="static/icon-192.png",
-                   layout="wide", initial_sidebar_state="expanded")
+                   layout="wide", initial_sidebar_state="auto")
 apply_theme()
 ensure_state()
 render_sidebar(active_key="edu_inbox")
@@ -138,16 +138,32 @@ unique_schools = len({x.get("school_code") for x in inbox if x.get("school_code"
 unread_count = sum(1 for x in inbox if x.get("unread"))
 starred_count = sum(1 for x in inbox if x.get("starred"))
 
-k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
+avg_score = (sum(x.get("score") or 0 for x in inbox) / len(inbox)) if inbox else 0
+
+# KPI 7개 — 2줄 분할 (처리 현황 4 / 전체 통계 3).
+# 모바일 393px 에서 한 줄 7컬럼은 컬럼당 56px 미만이라 텍스트 잘림.
+# 2줄 분할 시 컬럼당 90~100px 확보 — 모바일·PC 모두 가독성 양호.
+st.markdown(
+    "<div style='font-size:11px;letter-spacing:0.18em;color:#6B6B70;"
+    "font-weight:600;margin:6px 0 4px 2px;'>처리 현황</div>",
+    unsafe_allow_html=True,
+)
+k1, k2, k3, k4 = st.columns(4)
 k1.metric("총 수신", f"{len(inbox)}건")
 k2.metric("미열람 ●", f"{unread_count}건",
           delta=("새 건 있음" if unread_count else "모두 확인"),
           delta_color=("inverse" if unread_count else "normal"))
 k3.metric("⭐ 별표", f"{starred_count}건")
 k4.metric("오늘 신규", f"{today_count}건")
+
+st.markdown(
+    "<div style='font-size:11px;letter-spacing:0.18em;color:#6B6B70;"
+    "font-weight:600;margin:14px 0 4px 2px;'>전체 통계</div>",
+    unsafe_allow_html=True,
+)
+k5, k6, k7 = st.columns(3)
 k5.metric("이번주 신규", f"{this_week_count}건")
 k6.metric("학교 수", f"{unique_schools}곳")
-avg_score = (sum(x.get("score") or 0 for x in inbox) / len(inbox)) if inbox else 0
 k7.metric("평균 점수", f"{avg_score:.1f}점")
 
 if not inbox:

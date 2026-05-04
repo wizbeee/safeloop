@@ -32,7 +32,7 @@ from modules.storage import (
 from modules.ui import apply_theme, divider, hero, render_sidebar, section
 
 st.set_page_config(page_title="결과 저장·발송 · SafeLoop", page_icon="static/icon-192.png",
-                   layout="wide", initial_sidebar_state="expanded")
+                   layout="wide", initial_sidebar_state="auto")
 apply_theme()
 ensure_state()
 render_sidebar(active_key="save")
@@ -492,8 +492,8 @@ else:
         # 방법 2 (대체): 다운로드 + 본인 채널로 직접 전송
         # ────────────────────────────────────────────────
         tab_direct, tab_manual = st.tabs([
-            "🚀 방법 1 (권장) — 앱 다이렉트 발송",
-            "📤 방법 2 — 다운로드 후 직접 발송",
+            "🚀 다이렉트 (권장)",
+            "📤 다운로드 후 발송",
         ])
 
         # ── 방법 1: 다이렉트 전송 ──

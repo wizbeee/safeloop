@@ -32,7 +32,7 @@ from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, 
 
 st.set_page_config(page_title="📤 데이터 전송 · SafeLoop",
                    page_icon="static/icon-192.png",
-                   layout="wide", initial_sidebar_state="expanded")
+                   layout="wide", initial_sidebar_state="auto")
 apply_theme()
 ensure_state()
 render_sidebar(active_key="my_submission")
@@ -172,8 +172,8 @@ if not edu_email:
     )
 
 tab_direct, tab_manual = st.tabs([
-    "🚀 방법 1 (권장) — 앱 다이렉트 발송",
-    "📤 방법 2 — 다운로드 후 직접 발송",
+    "🚀 다이렉트 (권장)",
+    "📤 다운로드 후 발송",
 ])
 
 # ── 방법 1: 다이렉트 전송 ──

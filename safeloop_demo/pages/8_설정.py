@@ -19,7 +19,7 @@ from modules.session import ensure_state, reset_all
 from modules.ui import apply_theme, confirm_button, divider, hero, render_sidebar, section
 
 st.set_page_config(page_title="설정 · SafeLoop", page_icon="static/icon-192.png",
-                   layout="centered", initial_sidebar_state="expanded")
+                   layout="centered", initial_sidebar_state="auto")
 apply_theme()
 ensure_state()
 render_sidebar(active_key="settings")
