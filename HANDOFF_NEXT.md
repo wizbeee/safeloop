@@ -1,26 +1,31 @@
-# SafeLoop 다음 세션 인계 — 2026-04-26
+# SafeLoop 다음 세션 인계 — 2026-05-05
 
-이전 세션에서 **사용자 시각 10대 개선 + 자잘한 정리 + 발표 시나리오** 까지 완료. 이 문서를 새 컨텍스트 창 첫 메시지에 붙여넣고 작업 이어가세요.
+이전 세션에서 **기능 적절성 5건 수정 + 모바일 UX 4건 + 발표 키트 + GitHub Private 정리** 까지 완료. 이 문서를 새 컨텍스트 창 첫 메시지에 붙여넣고 작업 이어가세요.
 
 ## 🚀 새 세션 진입 방법
 
+### 같은 PC
 새 Claude 창에 다음을 입력:
-
 ```
 SafeLoop 작업을 이어받습니다.
-SafeLoop_데모앱_이관세트/HANDOFF_NEXT.md 를 먼저 읽고
+safeloop/HANDOFF_NEXT.md 를 먼저 읽고
 현재 상태와 남은 작업을 파악한 뒤 사용자 지시를 기다려주세요.
 ```
+
+### 다른 PC
+1. [`NEW_PC_START.md`](NEW_PC_START.md) 5단계 따라 환경 구축 (~15분)
+2. 위와 동일하게 새 Claude 창에 입력
 
 ---
 
 ## 📍 현재 위치
 
-- **저장소**: 로컬만 (GitHub `origin/feat/safeloop-demo` 보안상 삭제됨)
-- **로컬 브랜치**: `feat/safeloop-demo` (현재 작업 중)
-- **상태**: 변경사항 모두 **unstaged** (의미 단위 커밋 권장)
+- **GitHub**: `wizbeee/safeloop` (Private) — main 브랜치
+- **로컬 폴더**: `Desktop/클로드 코드 관련/safeloop/` (이전 `SafeLoop_데모앱_이관세트/` 는 백업으로 rename)
+- **다른 PC 시작**: [`NEW_PC_START.md`](NEW_PC_START.md) — 5단계 / 약 15분
+- **Claude 메모리**: `_claude_memory/project_safeloop.md` (다른 PC 자동 인식 시드)
 - **스모크 테스트**: 73건 모두 통과 (페이지 런타임 13개 포함)
-- **완성도 평가**: **88점** (콘테스트·베타 95점 / 시연 97점)
+- **완성도 평가**: **93점** (시연·콘테스트 97 / 베타 도입 가능)
 
 ---
 

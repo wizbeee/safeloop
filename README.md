@@ -4,8 +4,8 @@
 >
 > 학교 안전을 한 사이클로 묶는 AI 비전 기반 점검·환원 시스템.
 
-[![Demo](https://img.shields.io/badge/demo-coming%20soon-D50000)](#)
-[![Branch](https://img.shields.io/badge/branch-feat%2Fsafeloop--demo-D50000)](https://github.com/wizbeee/science-lab-application/tree/feat/safeloop-demo)
+[![Repo](https://img.shields.io/badge/repo-wizbeee%2Fsafeloop-D50000)](https://github.com/wizbeee/safeloop)
+[![Branch](https://img.shields.io/badge/branch-main-D50000)](https://github.com/wizbeee/safeloop/tree/main)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
 [![Streamlit](https://img.shields.io/badge/streamlit-1.30%2B-red)]()
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -13,6 +13,8 @@
 > 🚀 **라이브 데모**: 배포 후 이 자리에 URL 추가 — `https://safeloop.streamlit.app`
 >
 > 🎥 **시연 영상**: [DEPLOY_TO_STREAMLIT_CLOUD.md](DEPLOY_TO_STREAMLIT_CLOUD.md) 따라 배포 후 추가
+
+> 🆕 **다른 컴퓨터에서 시작?** [`NEW_PC_START.md`](NEW_PC_START.md) → 5단계 / 약 15분
 
 제8회 교육 공공데이터 AI 활용대회 출품작 — 마감 2026-05-31
 
