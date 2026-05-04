@@ -45,6 +45,7 @@ SPACE_TONE: dict[str, str] = {
     "가정실": "#FFFDE7",
     "음악실": "#E0F7FA",
     "미술실": "#F1F8E9",
+    "디자인실": "#EDE7F6",
     "일반교실": "#F5F5F5",
 }
 
