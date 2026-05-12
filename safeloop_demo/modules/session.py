@@ -46,7 +46,12 @@ DEFAULT_STATE = {
     # 모드 — 환경변수 또는 URL 파라미터로 결정 (ensure_state 에서 처리)
     # 기본 False (실 사용). SAFELOOP_DEMO_MODE=1 또는 ?demo=1 시 True.
     "demo_mode": False,
-    "role": "학교",             # "학교" | "교육청"
+    "role": "학교",             # "실" | "학교" | "교육청"
+
+    # 실 담당자 정보 — role="실" 인증 통과 시 저장
+    # {"manager_id": "M001", "name": "홍길동", "email": ..., "phone": ...,
+    #  "assigned_space_ids": ["sp_chem_3a", ...], "active": True, ...}
+    "space_manager": None,
 
     # 전국 대시보드
     "filter_sido": None,
@@ -195,6 +200,39 @@ def require_active_space() -> dict | None:
         st.warning("점검할 **공간이 선택되지 않았습니다**. 점검 시작 페이지에서 공간을 선택하세요.")
         return None
     return sp
+
+
+def require_space_manager() -> dict | None:
+    """실 담당자 인증 완료 여부 확인. 미완료면 경고 + None 반환.
+
+    role="실" 일 때만 의미가 있음. 호출 측에서 role 확인 후 사용.
+    """
+    ensure_state()
+    mgr = st.session_state.get("space_manager")
+    if not mgr or not isinstance(mgr, dict) or not mgr.get("manager_id"):
+        st.warning("먼저 **실 담당자 인증**을 완료하세요.")
+        return None
+    return mgr
+
+
+def is_space_manager_authenticated() -> bool:
+    """실 담당자가 인증된 상태인지 (gate 없이 단순 검사)."""
+    mgr = st.session_state.get("space_manager")
+    return bool(mgr and isinstance(mgr, dict) and mgr.get("manager_id"))
+
+
+def manager_can_access_space(space_id: str) -> bool:
+    """현재 인증된 실 담당자가 해당 공간을 담당하는지 검사.
+
+    학교/교육청 역할에서는 항상 True (권한 분리는 호출 측 role 분기로).
+    """
+    role = st.session_state.get("role", "학교")
+    if role != "실":
+        return True
+    mgr = st.session_state.get("space_manager")
+    if not mgr or not isinstance(mgr, dict):
+        return False
+    return space_id in (mgr.get("assigned_space_ids") or [])
 
 
 def require_score_result() -> dict | None:

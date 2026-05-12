@@ -81,6 +81,7 @@ ROLE_TO_SESSION_VALUE: dict[str, str] = {
 
 COOKIE_NAME = "safeloop_auth_token"
 SCHOOL_COOKIE_NAME = "safeloop_school_remember"
+MANAGER_COOKIE_NAME = "safeloop_manager_remember"
 COOKIE_MGR_KEY = "safeloop_cookie_manager_v1"
 AUTOLOGIN_DAYS = 30
 
@@ -252,6 +253,86 @@ def forget_school() -> None:
         return
     try:
         cm.delete(SCHOOL_COOKIE_NAME, key=f"clear_school_cookie")
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────
+# 실 담당자(space manager) 자동 로그인 — 학교코드 + manager_id + PIN 조합
+# (매니저 명부·PIN 검증은 modules.managers 가 담당)
+# ─────────────────────────────────────────
+
+def _hash_manager(school_code: str, manager_id: str, pin: str) -> str:
+    """실 담당자 (학교코드 + manager_id + PIN) 해시 — 쿠키 저장용 토큰."""
+    return hashlib.sha256(
+        f"safeloop|manager|{school_code}|{manager_id}|{pin}".encode("utf-8")
+    ).hexdigest()[:32]
+
+
+def remember_manager(school_code: str, manager_id: str, pin: str) -> None:
+    """매니저 인증 통과 후, 30일간 자동 로그인 토큰을 쿠키에 저장.
+
+    본인 지급 기기에서만 호출 (공용 PC 에서는 호출하지 말 것).
+    """
+    cm = get_cookie_manager()
+    if cm is None:
+        return
+    try:
+        token = _hash_manager(school_code, manager_id, pin)
+        cm.set(
+            MANAGER_COOKIE_NAME,
+            f"{school_code}|{manager_id}|{token}",
+            expires_at=datetime.now() + timedelta(days=AUTOLOGIN_DAYS),
+            key=f"set_cookie_manager",
+        )
+    except Exception:
+        pass
+
+
+def get_remembered_manager() -> tuple[str, str] | None:
+    """쿠키에 저장된 자동 로그인 (school_code, manager_id) 반환.
+
+    토큰 검증은 호출 측에서 verify_manager_token 으로 별도 수행.
+    """
+    cm = get_cookie_manager()
+    if cm is None:
+        return None
+    try:
+        raw = cm.get(MANAGER_COOKIE_NAME)
+    except Exception:
+        return None
+    if not raw or raw.count("|") < 2:
+        return None
+    school_code, manager_id, _ = raw.split("|", 2)
+    if not school_code or not manager_id:
+        return None
+    return (school_code, manager_id)
+
+
+def verify_manager_token(school_code: str, manager_id: str, pin: str) -> bool:
+    """저장된 쿠키 토큰이 (학교코드 + manager_id + PIN) 과 일치하는지 검증."""
+    cm = get_cookie_manager()
+    if cm is None:
+        return False
+    try:
+        raw = cm.get(MANAGER_COOKIE_NAME)
+    except Exception:
+        return False
+    if not raw or raw.count("|") < 2:
+        return False
+    saved_school, saved_mid, saved_token = raw.split("|", 2)
+    if saved_school != school_code or saved_mid != manager_id:
+        return False
+    return saved_token == _hash_manager(school_code, manager_id, pin)
+
+
+def forget_manager() -> None:
+    """실 담당자 자동 로그인 해제."""
+    cm = get_cookie_manager()
+    if cm is None:
+        return
+    try:
+        cm.delete(MANAGER_COOKIE_NAME, key=f"clear_manager_cookie")
     except Exception:
         pass
 

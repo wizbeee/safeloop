@@ -228,6 +228,155 @@ except Exception as e:
     print(f"   라운드트립 검증 실패 — {e}")
     fail += 1
 
+
+# 12. 실 담당자(space manager) 인프라 — CRUD + PIN + 인증 (Sprint 1)
+print("\n[12] 실 담당자 인프라 (modules.managers)")
+try:
+    import shutil
+    from modules import managers as mgr_mod
+
+    TEST_SCHOOL = "SMOKE_TEST_SCHOOL_X9Z"
+    # 테스트 시작 전 깨끗한 상태 보장
+    test_path = mgr_mod._managers_path(TEST_SCHOOL).parent
+    if test_path.exists():
+        shutil.rmtree(test_path, ignore_errors=True)
+
+    # 12-1. 빈 명부 로드
+    check("managers/empty_list",
+          lambda: f"빈 명부 {len(mgr_mod.list_managers(TEST_SCHOOL))}건"
+                  if mgr_mod.list_managers(TEST_SCHOOL) == [] else
+                  (_ for _ in ()).throw(AssertionError("빈 명부 아님")))
+
+    # 12-2. 매니저 추가 — manager_id=M001, pin 6자리 숫자
+    mgr1, pin1 = mgr_mod.add_manager(
+        TEST_SCHOOL, "홍길동", email="hong@test.kr",
+        phone="010-0000-0001",
+        assigned_space_ids=["sp_chem_3a", "sp_phys_2b"],
+    )
+    check("managers/add_first",
+          lambda: f"manager_id={mgr1['manager_id']}, pin={pin1}"
+                  if mgr1["manager_id"] == "M001" and len(pin1) == 6 and pin1.isdigit() else
+                  (_ for _ in ()).throw(AssertionError(f"형식 오류: {mgr1}, {pin1}")))
+
+    # 12-3. 공개 사본에 pin_hash 미노출 (보안)
+    check("managers/no_pin_hash_public",
+          lambda: "pin_hash 미노출"
+                  if "pin_hash" not in mgr1 else
+                  (_ for _ in ()).throw(AssertionError("pin_hash 노출됨!")))
+
+    # 12-4. 두 번째 매니저 — manager_id 자동 증가
+    mgr2, pin2 = mgr_mod.add_manager(
+        TEST_SCHOOL, "김철수", assigned_space_ids=["sp_design_4a"],
+    )
+    check("managers/add_second",
+          lambda: f"manager_id={mgr2['manager_id']}"
+                  if mgr2["manager_id"] == "M002" else
+                  (_ for _ in ()).throw(AssertionError(f"자동증가 실패: {mgr2}")))
+
+    # 12-5. 올바른 PIN — 인증 통과
+    check("managers/verify_correct",
+          lambda: "인증 통과"
+                  if mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], pin1) else
+                  (_ for _ in ()).throw(AssertionError("올바른 PIN 인증 실패")))
+
+    # 12-6. 잘못된 PIN — 차단
+    check("managers/verify_wrong",
+          lambda: "잘못된 PIN 차단"
+                  if not mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], "999999") else
+                  (_ for _ in ()).throw(AssertionError("잘못된 PIN 인증 통과!")))
+
+    # 12-7. 다른 매니저 PIN 으로 첫 매니저 인증 시도 — 차단 (PIN 격리)
+    if pin1 != pin2:
+        check("managers/pin_isolation",
+              lambda: "PIN 격리 OK"
+                      if not mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], pin2) else
+                      (_ for _ in ()).throw(AssertionError("다른 매니저 PIN 통과!")))
+
+    # 12-8. authenticate_manager — 통과 시 last_login_at 갱신
+    auth_result = mgr_mod.authenticate_manager(TEST_SCHOOL, mgr1["manager_id"], pin1)
+    check("managers/authenticate_login_stamp",
+          lambda: "last_login_at 갱신"
+                  if auth_result and auth_result.get("last_login_at") else
+                  (_ for _ in ()).throw(AssertionError(f"login_stamp 누락: {auth_result}")))
+
+    # 12-9. 공간 담당자 조회 — sp_chem_3a 담당자는 M001 1명
+    holders = mgr_mod.get_managers_for_space(TEST_SCHOOL, "sp_chem_3a")
+    check("managers/get_for_space",
+          lambda: f"sp_chem_3a 담당 {len(holders)}명"
+                  if len(holders) == 1 and holders[0]["manager_id"] == "M001" else
+                  (_ for _ in ()).throw(AssertionError(f"조회 오류: {holders}")))
+
+    # 12-10. update_manager — 담당 공간 추가
+    updated = mgr_mod.update_manager(
+        TEST_SCHOOL, mgr1["manager_id"],
+        assigned_space_ids=["sp_chem_3a", "sp_phys_2b", "sp_general_1a"],
+    )
+    check("managers/update",
+          lambda: f"공간 {len(updated['assigned_space_ids'])}개"
+                  if updated and len(updated["assigned_space_ids"]) == 3 else
+                  (_ for _ in ()).throw(AssertionError(f"수정 실패: {updated}")))
+
+    # 12-11. PIN 재발급 — 옛 PIN 무효
+    new_pin = mgr_mod.reissue_pin(TEST_SCHOOL, mgr1["manager_id"])
+    check("managers/reissue_old_invalid",
+          lambda: "옛 PIN 무효화"
+                  if not mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], pin1) else
+                  (_ for _ in ()).throw(AssertionError("옛 PIN 여전히 유효!")))
+
+    # 12-12. 재발급 PIN — 새 PIN 유효
+    check("managers/reissue_new_valid",
+          lambda: f"새 PIN({new_pin[:1]}****) 유효"
+                  if mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], new_pin) else
+                  (_ for _ in ()).throw(AssertionError("새 PIN 인증 실패")))
+
+    # 12-13. 비활성화 — 인증 즉시 실패
+    mgr_mod.deactivate_manager(TEST_SCHOOL, mgr1["manager_id"])
+    check("managers/deactivate_blocks_auth",
+          lambda: "비활성 인증 차단"
+                  if not mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], new_pin) else
+                  (_ for _ in ()).throw(AssertionError("비활성 매니저 인증 통과!")))
+
+    # 12-14. 비활성 필터 — 명부에서 빠짐
+    check("managers/deactivate_listing",
+          lambda: f"활성 {len(mgr_mod.list_managers(TEST_SCHOOL))}건 / 전체 {len(mgr_mod.list_managers(TEST_SCHOOL, include_inactive=True))}건"
+                  if len(mgr_mod.list_managers(TEST_SCHOOL)) == 1
+                  and len(mgr_mod.list_managers(TEST_SCHOOL, include_inactive=True)) == 2 else
+                  (_ for _ in ()).throw(AssertionError("필터 오작동")))
+
+    # 12-15. 재활성화
+    mgr_mod.reactivate_manager(TEST_SCHOOL, mgr1["manager_id"])
+    check("managers/reactivate",
+          lambda: "재활성 OK"
+                  if mgr_mod.verify_manager_pin(TEST_SCHOOL, mgr1["manager_id"], new_pin) else
+                  (_ for _ in ()).throw(AssertionError("재활성 후 인증 실패")))
+
+    # 12-16. session.py 헬퍼 임포트 검증
+    from modules.session import manager_can_access_space, is_space_manager_authenticated
+    check("session/manager_helpers",
+          lambda: "헬퍼 임포트 OK"
+                  if callable(manager_can_access_space) and callable(is_space_manager_authenticated) else
+                  (_ for _ in ()).throw(AssertionError("session 헬퍼 임포트 실패")))
+
+    # 12-17. auth.py 매니저 함수 임포트 검증
+    from modules.auth import (
+        _hash_manager, remember_manager, get_remembered_manager,
+        verify_manager_token, forget_manager, MANAGER_COOKIE_NAME,
+    )
+    check("auth/manager_funcs",
+          lambda: f"쿠키명={MANAGER_COOKIE_NAME}"
+                  if MANAGER_COOKIE_NAME == "safeloop_manager_remember"
+                  and len(_hash_manager("S1", "M001", "123456")) == 32 else
+                  (_ for _ in ()).throw(AssertionError("auth 매니저 함수 부적합")))
+
+    # 정리 — 테스트 폴더 삭제
+    if test_path.exists():
+        shutil.rmtree(test_path, ignore_errors=True)
+    print("   실 담당자 인프라 검증 완료 (17건)")
+except Exception as e:
+    print(f"   실 담당자 인프라 검증 실패 — {type(e).__name__}: {e}")
+    fail += 1
+
+
 # 결과
 print("\n" + "=" * 60)
 print(f"  결과: {ok}건 통과 / {fail}건 실패 (총 {ok + fail}건)")
