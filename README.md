@@ -16,6 +16,9 @@
 
 > 🆕 **다른 컴퓨터에서 시작?** [`NEW_PC_START.md`](NEW_PC_START.md) → 5단계 / 약 15분
 
+> ★ **작업 폴더는 [`safeloop_demo/`](safeloop_demo/)** — 운영 코드는 모두 여기에 있습니다.
+> 루트의 [`_archive_v8_contest/`](_archive_v8_contest/) 는 공모전 출품 시점(2026-04) 보관 자료 — 작업 대상 아닙니다.
+
 제8회 교육 공공데이터 AI 활용대회 출품작 — 마감 2026-05-31
 
 ---
@@ -90,47 +93,65 @@ ngrok http 8501
 ## 🗂 디렉토리
 
 ```
-SafeLoop_데모앱_이관세트/
+safeloop/
 ├── README.md                       ← 이 문서
+├── README_먼저읽기.md
+├── NEW_PC_START.md                 ★ 다른 PC 시작 가이드
 ├── SETUP_ON_NEW_MACHINE.md
-├── DEPLOY_TO_STREAMLIT_CLOUD.md
+├── HANDOFF_NEXT.md                 다음 세션 인계
 ├── ARCHITECTURE.md
-├── docs/                            명세서 · 핵심서사 지침
-├── data/                            공공데이터 CSV (11,929개교)
-├── sample_images/                   시연 사진 13장
-├── reference_pdfs/                  참고 점검표
-├── validation/                      검증 엑셀
-└── safeloop_demo/                   🚀 실행 앱
-    ├── app.py                       홈
-    ├── pages/                       11개 페이지
-    │   ├── 1_점검시작.py
-    │   ├── 2_AI점검.py
-    │   ├── 3_결과저장.py
-    │   ├── 4_본교현황.py
-    │   ├── 5_전국대시보드.py
-    │   ├── 6_데이터순환.py
-    │   ├── 7_교육청수신함.py
-    │   ├── 8_설정.py
-    │   ├── 9_프로젝트소개.py
-    │   ├── 10_점검이력.py            ★ 신규
-    │   └── 11_정책시뮬레이터.py        ★ 신규
-    ├── modules/                      11개 공용 모듈
-    │   ├── ai_providers.py          공급자 어댑터
-    │   ├── ai_vision.py             3단계 파이프라인 + 교차검증
-    │   ├── image_quality.py         ★ 신규: 블러/어둠/리사이즈
-    │   ├── data_loader.py
-    │   ├── laws.py                  6개 법령 × 27 표준항목
-    │   ├── score.py                 V-1 v3 가중합산
-    │   ├── recommend.py
-    │   ├── storage.py               이중 저장 + 에듀파인 패키지
-    │   ├── session.py
-    │   ├── ui.py                    Swiss 테마 + PWA 메타
-    │   └── prompts.py
-    ├── data/                        공공데이터 CSV (앱이 직접 사용)
-    ├── sample_images/
-    ├── static/                      ★ 신규: PWA 매니페스트·아이콘
-    ├── setup.py                     AES-256 .env 암·복호화
-    └── requirements.txt
+├── CHANGELOG.md
+├── DEPLOY_TO_STREAMLIT_CLOUD.md
+├── LICENSE
+├── _claude_memory/                  Claude 세션 시드 (자동 인식)
+├── safeloop_demo/                   ★ 🚀 운영 앱 (작업 위치)
+│   ├── app.py                       홈
+│   ├── pages/                       12개 페이지
+│   │   ├── 1_점검시작.py
+│   │   ├── 2_AI점검.py
+│   │   ├── 3_결과저장.py
+│   │   ├── 4_본교현황.py
+│   │   ├── 5_전국대시보드.py
+│   │   ├── 6_데이터순환.py
+│   │   ├── 7_교육청수신함.py
+│   │   ├── 8_설정.py
+│   │   ├── 9_프로젝트소개.py
+│   │   ├── 10_점검이력.py
+│   │   ├── 11_정책시뮬레이터.py
+│   │   └── 12_데이터불러오기.py
+│   ├── modules/                     16개 공용 모듈
+│   │   ├── auth.py                  PIN 인증 + 자동 로그인
+│   │   ├── ai_providers.py          공급자 어댑터
+│   │   ├── ai_vision.py             설비 탐지 + 점검표 생성
+│   │   ├── image_quality.py         블러/어둠/리사이즈
+│   │   ├── data_loader.py
+│   │   ├── laws.py                  6개 법령 × 27 표준항목 + 공간 분기
+│   │   ├── score.py                 V-1 v3 가중합산
+│   │   ├── recommend.py
+│   │   ├── storage.py               이중 저장 + 에듀파인 패키지
+│   │   ├── crypto.py                AES-256-GCM 자동 암호화
+│   │   ├── session.py
+│   │   ├── ui.py                    Swiss 테마 + PWA 메타
+│   │   ├── prompts.py
+│   │   ├── demo_image.py / demo_responses.py / sample_dispatch.py
+│   ├── data/                        공공데이터 CSV (앱이 직접 사용)
+│   ├── sample_images/               5공간 35장 (화학·물리·음악·미술·디자인)
+│   ├── school_storage/              학교별 격리 저장
+│   ├── static/                      PWA 매니페스트·아이콘
+│   ├── tests/smoke_test.py          73건 통합 스모크
+│   ├── setup.py                     AES-256 .env 암·복호화
+│   └── requirements.txt
+└── _archive_v8_contest/             📦 공모전 시점 보관 (작업 대상 아님)
+    ├── README.md                    이 폴더 설명
+    ├── code/poc_run.py              옛 PoC 원본
+    ├── docs/                        출품 시점 명세서·핵심서사
+    ├── data/                        출품 시점 CSV 사본
+    ├── sample_images/               출품 시점 13장 (화학·물리)
+    ├── reference_pdfs/              참고 점검표·법령
+    ├── validation/                  V1 점검표 비교 · V2 예산 시나리오
+    ├── env_config/
+    ├── CONTEST_CHECKLIST.md
+    └── HANDOFF_FIX50.md
 ```
 
 ## 🔐 보안

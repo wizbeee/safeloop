@@ -1,5 +1,7 @@
 # SafeLoop 다음 세션 인계 — 2026-05-05
 
+> ⚠ **작업 폴더는 [`safeloop_demo/`](safeloop_demo/) 입니다.** 루트의 다른 폴더와 [`_archive_v8_contest/`](_archive_v8_contest/) 는 **보관용** — 수정하지 마세요.
+
 이전 세션에서 **기능 적절성 5건 수정 + 모바일 UX 4건 + 발표 키트 + GitHub Private 정리** 까지 완료. 이 문서를 새 컨텍스트 창 첫 메시지에 붙여넣고 작업 이어가세요.
 
 ## 🚀 새 세션 진입 방법

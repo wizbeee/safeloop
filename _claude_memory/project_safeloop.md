@@ -5,17 +5,19 @@ type: project
 originSessionId: 4187d9f7-f1f7-4b01-8060-42f967de9990
 ---
 
-**위치**: `C:/Users/danie/Desktop/클로드 코드 관련/safeloop/` (새 클론, 2026-04-26)
+**위치**: `C:/Users/danie/Desktop/Claude Code/safeloop/` (정리 후 2026-05-12)
 **GitHub**: `https://github.com/wizbeee/safeloop` (Private 레포)
-**브랜치**: `main` (origin/main 추적, 30 커밋, SafeLoop 신규 7개 보존)
-**기존 위치**: `SafeLoop_데모앱_이관세트/` (백업으로 보존 — 새 작업은 `safeloop/` 에서)
+**브랜치**: `main` + 정리 작업용 `chore/repo-cleanup-archive-v8-contest`
+**★ 작업 폴더**: `safeloop_demo/` (운영 앱). 루트 `_archive_v8_contest/` 는 출품 시점 보관용 — 수정 금지.
 **기술 스택**: Streamlit + Plotly + Anthropic/Gemini/GPT API + Python 3.10+ + extra-streamlit-components
 
 **완성도**: 88점 종합 / 콘테스트 97점 / 베타 95점 / 시연 흐름 막힘 없음
 
 **MVP 범위**:
-- 일반교실 + 8개 특별교실 (화학·물리·생명·지구·기술·가정·음악·미술)
-- 9개 공간 모두 시연 가능 (LAW_BASIS 기반 합성 응답 자동 주입)
+- 일반교실 + 9개 특별교실 (화학·물리·생명·지구·기술·가정·음악·미술·디자인)
+- 10개 공간 모두 시연 가능 (LAW_BASIS 기반 합성 응답 자동 주입)
+- 디자인실: LAB_SPACES 포함 (PPE 자동 적용). 국소배기·장갑·MSDS 추가 (스프레이·본드·커터칼 위험)
+- 음악실·미술실·디자인실 사진: 충남삼성고 본교 촬영 (총 5공간 35장)
 
 **핵심 흐름 — 학교 → 교육청 발송 2가지**:
 1. **🚀 앱 다이렉트 발송 (권장)** — 1클릭, 수신 확인 자동 추적. 단일 PC / 공유 NAS / 같은 클라우드 환경.
@@ -64,7 +66,7 @@ originSessionId: 4187d9f7-f1f7-4b01-8060-42f967de9990
 
 **Why**: 콘테스트 + 본교 활용 + 1~3개 베타 도입 가능 수준 완성. 자잘한 정리 + 사용자 손 검증만 남음.
 
-**How to apply**: 다음 세션은 `SafeLoop_데모앱_이관세트/HANDOFF_NEXT.md` + `safeloop_demo/PRESENTATION_SCRIPT.md` 우선 읽기.
+**How to apply**: 다음 세션은 `HANDOFF_NEXT.md` (루트) + `safeloop_demo/PRESENTATION_SCRIPT.md` 우선 읽기. 코드 수정은 무조건 `safeloop_demo/` 안에서.
 
 **자주 쓰는 위치**:
 - `modules/storage.py` — 발송함·수신함·별표·일괄액션·다이렉트 발송
