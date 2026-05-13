@@ -48,7 +48,7 @@ if _has_unsaved():
         st.switch_page("pages/3_결과저장.py")
 
 # 자동 로그인 — 쿠키에 학교 정보가 저장되어 있고 아직 인증 전이면 자동 인증 시도
-if not st.session_state.get("auth_verified") and not st.session_state.get("school"):
+if not st.session_state.get("school_auth_verified") and not st.session_state.get("school"):
     from modules.auth import get_remembered_school, verify_school_token
     _remembered_code = get_remembered_school()
     if _remembered_code:
@@ -56,7 +56,7 @@ if not st.session_state.get("auth_verified") and not st.session_state.get("schoo
         _expected = issue_auth_code(_remembered_code) if _school else None
         if _school and _expected and verify_school_token(_remembered_code, _expected):
             st.session_state["school"] = _school
-            st.session_state["auth_verified"] = True
+            st.session_state["school_auth_verified"] = True
             try:
                 from modules.storage import load_school_profile
                 profile = load_school_profile(_remembered_code)
@@ -66,9 +66,27 @@ if not st.session_state.get("auth_verified") and not st.session_state.get("schoo
                 pass
             st.toast(f"자동 로그인 — {_school.get('학교명', '')}", icon="🔑")
 
+# 실 담당자 자동 로그인 — 쿠키에서 (school_code, manager_id) 읽어 학교 자동 인식.
+# PIN 은 보안상 자동 입력하지 않고, 매니저 명단 selectbox 의 기본값으로만 사용.
+# 사용자는 본인 PIN 만 입력하면 즉시 인증 가능 (본인 학교 재선택 불필요).
+if (st.session_state.get("role") == "실"
+        and not st.session_state.get("school")
+        and not st.session_state.get("space_manager")):
+    from modules.auth import get_remembered_manager
+    _remembered_mgr = get_remembered_manager()
+    if _remembered_mgr:
+        _rem_school_code, _rem_manager_id = _remembered_mgr
+        _rem_school = get_school_by_code(_rem_school_code)
+        if _rem_school:
+            st.session_state["school"] = _rem_school
+            # 매니저 인증 단계 selectbox 기본 선택용
+            st.session_state["_remembered_mgr_id"] = _rem_manager_id
+            st.toast(f"자동 인식 — {_rem_school.get('학교명', '')}", icon="🔑")
+
 # 1-7 수정: 공간이 이미 선택된 경우 상단에 즉시 이동 가능한 바로가기 표시
 _active_sp = st.session_state.get("active_space")
-if _active_sp and st.session_state.get("auth_verified") and st.session_state.get("school"):
+from modules.session import is_authenticated_for_role as _is_auth_role
+if _active_sp and _is_auth_role() and st.session_state.get("school"):
     _nick = _active_sp.get("nickname") or "별칭 없음"
     colQ1, colQ2 = st.columns([3, 2])
     with colQ1:
@@ -105,7 +123,7 @@ if current:
     )
     if st.button("다른 학교 선택", key="change_school"):
         st.session_state["school"] = None
-        st.session_state["auth_verified"] = False
+        st.session_state["school_auth_verified"] = False
         st.rerun()
 
 if not current:
@@ -154,7 +172,7 @@ if not current:
                         if st.button("선택", key=f"pick_name_{i}_{row['정보공시 학교코드']}"):
                             full = get_school_by_code(row["정보공시 학교코드"])
                             st.session_state["school"] = full
-                            st.session_state["auth_verified"] = False
+                            st.session_state["school_auth_verified"] = False
                             st.rerun()
 
                 # 페이지네이션 컨트롤
@@ -214,7 +232,7 @@ if not current:
                         if st.button("선택", key=f"pick_region_{i}_{row['정보공시 학교코드']}"):
                             full = get_school_by_code(row["정보공시 학교코드"])
                             st.session_state["school"] = full
-                            st.session_state["auth_verified"] = False
+                            st.session_state["school_auth_verified"] = False
                             st.rerun()
 
     # -- GPS (참고용 — 학교 선택은 다른 탭으로) --
@@ -249,7 +267,7 @@ _role = st.session_state.get("role", "학교")
 # 2-A) 실 담당자 인증 — manager_id 선택 + PIN 입력
 # ─────────────────────────────────────────
 if (_role == "실" and st.session_state.get("school")
-        and not st.session_state.get("auth_verified")):
+        and not st.session_state.get("space_manager")):
     divider()
     section("02", "실 담당자 인증",
             "본인 매니저 ID 선택 + 학교 담당자가 발급한 6자리 PIN 입력")
@@ -263,14 +281,19 @@ if (_role == "실" and st.session_state.get("school")
     school_code = school.get("정보공시 학교코드")
 
     # 시연 모드 — 매니저가 없으면 데모 매니저 자동 등록 + 안내
-    if st.session_state.get("demo_mode") and not list_managers(school_code):
-        # 시연 편의: 현재 학교에 매니저가 없으면 5개 공간을 담당하는 데모 매니저 1명 자동 생성
-        # (학교 담당자가 실제로 [설정] 페이지에서 등록하는 시나리오를 우회)
+    # 학교에 이미 등록된 공간이 있으면 모두 데모 매니저에게 자동 할당해서
+    # 시연 흐름이 "본인에게 할당된 공간이 없습니다" 안내에서 막히지 않도록 한다.
+    if st.session_state.get("demo_mode"):
         try:
+            registered = st.session_state.get("registered_spaces", []) or []
+            demo_space_ids = [
+                s.get("space_id") for s in registered
+                if s.get("school_code") == school_code and s.get("space_id")
+            ]
             ensure_demo_manager(
                 school_code,
                 name="시연 담당교사",
-                assigned_space_ids=[],  # 공간은 등록 시 추가
+                assigned_space_ids=demo_space_ids,
             )
         except Exception:
             pass
@@ -286,7 +309,7 @@ if (_role == "실" and st.session_state.get("school")
                       key="switch_to_school_for_register",
                       width="stretch"):
             st.session_state["role"] = "학교"
-            st.session_state["auth_verified"] = False
+            st.session_state["school_auth_verified"] = False
             st.rerun()
     else:
         # manager_id 선택 — 매니저 명단을 "이름 (M001)" 형식으로 표시
@@ -294,10 +317,20 @@ if (_role == "실" and st.session_state.get("school")
             f"{m['name']} ({m['manager_id']})": m["manager_id"]
             for m in managers
         }
+        # 쿠키에 기억된 매니저가 있으면 그 위치를 selectbox 기본값으로
+        _options_list = list(mgr_options.keys())
+        _default_idx = 0
+        _remembered_mid = st.session_state.get("_remembered_mgr_id")
+        if _remembered_mid:
+            for _i, _label in enumerate(_options_list):
+                if mgr_options[_label] == _remembered_mid:
+                    _default_idx = _i
+                    break
         colA, colB = st.columns([3, 2])
         with colA:
             picked_label = st.selectbox(
-                "본인 이름 선택", list(mgr_options.keys()),
+                "본인 이름 선택", _options_list,
+                index=_default_idx,
                 key="_space_mgr_picker",
                 help="학교 담당자가 등록한 명부에서 본인을 찾으세요.",
             )
@@ -347,8 +380,9 @@ if (_role == "실" and st.session_state.get("school")
             else:
                 result = authenticate_manager(school_code, picked_mid, pin_input)
                 if result:
+                    # 실 담당자 인증은 space_manager 객체 존재로 표현 — school_auth_verified
+                    # 는 학교 인증번호 통과 전용이므로 set 하지 않는다 (의미 분리).
                     st.session_state["space_manager"] = result
-                    st.session_state["auth_verified"] = True
                     if remember_me:
                         remember_manager(school_code, picked_mid, pin_input)
                     st.success(f"{result.get('name', picked_mid)} 님 인증되었습니다.")
@@ -360,7 +394,7 @@ if (_role == "실" and st.session_state.get("school")
 # 2-B) 학교/일반 담당자 인증 — 기존 6자리 학교 인증번호
 # ─────────────────────────────────────────
 if (_role != "실" and st.session_state.get("school")
-        and not st.session_state.get("auth_verified")):
+        and not st.session_state.get("school_auth_verified")):
     divider()
     section("02", "담당자 인증",
             "학교 식별번호는 공개 정보로 자동 표시됩니다. 담당자 인증번호만 입력하세요.")
@@ -454,7 +488,7 @@ if (_role != "실" and st.session_state.get("school")
         if not auth_input or len(auth_input) != 6 or not auth_input.isdigit():
             st.error("인증번호는 6자리 숫자여야 합니다.")
         elif verify_auth_code(code, auth_input):
-            st.session_state["auth_verified"] = True
+            st.session_state["school_auth_verified"] = True
             st.session_state["_auth_prefill"] = ""
             # 학교 프로필 자동 로드 (결재라인 등)
             try:
@@ -477,8 +511,10 @@ if (_role != "실" and st.session_state.get("school")
 # 3) 공간 선택 / 등록
 #    role="실" : 본인 assigned_space_ids 와 매칭되는 공간만 표시, 새 공간 등록 불가
 #    그 외      : 학교의 모든 등록 공간 + 새 공간 등록 가능
+#
+# 가드 — 역할별 인증 방식이 달라 통합 헬퍼로 검사 (학교 인증번호 또는 매니저 PIN)
 # ─────────────────────────────────────────
-if st.session_state.get("auth_verified"):
+if _is_auth_role():
     divider()
 
     _role = st.session_state.get("role", "학교")
@@ -527,7 +563,7 @@ if st.session_state.get("auth_verified"):
                               width="stretch"):
                     st.session_state["role"] = "학교"
                     st.session_state["space_manager"] = None
-                    st.session_state["auth_verified"] = False
+                    st.session_state["school_auth_verified"] = False
                     st.rerun()
             else:
                 st.info("아직 등록된 공간이 없습니다. 오른쪽 탭에서 새 공간을 등록하세요.")
@@ -614,6 +650,18 @@ if st.session_state.get("auth_verified"):
             }
             st.session_state.setdefault("registered_spaces", []).append(new_sp)
             st.session_state["active_space"] = new_sp
+            # 시연 모드 — 새 공간이 생기면 데모 실 담당자에게도 자동 할당
+            # (ensure_demo_manager 는 멱등 + 공간 합집합 처리 → 안전하게 매번 호출 가능)
+            if st.session_state.get("demo_mode"):
+                try:
+                    from modules.managers import ensure_demo_manager
+                    ensure_demo_manager(
+                        school_code,
+                        name="시연 담당교사",
+                        assigned_space_ids=[new_sp["space_id"]],
+                    )
+                except Exception:
+                    pass
             st.rerun()
         if st.session_state.get(_confirm_new_key):
             st.warning(

@@ -94,13 +94,19 @@ def new_session_id() -> str:
 # ─────────────────────────────────────────
 # Machine-readable: JSON 3종
 # ─────────────────────────────────────────
-def build_master_record(session: dict) -> dict:
+def build_master_record(session: dict, prior_history: list | None = None) -> dict:
     """세션 상태 전체를 원본 JSON으로 직렬화.
 
-    schema_version 1.1 (2026-05): submitter + status 필드 추가
+    schema_version 1.1 (2026-05): submitter + status + status_history 필드 추가
     - submitter: 누가 이 점검을 수행/제출했는지 (실 담당자 vs 학교 담당자)
     - status: 현재 제출·검토 상태 (submitted/approved/returned/consolidated)
       실 담당자 제출 → 학교 담당자 검토 → 교육청 발송의 3단 흐름 추적용
+    - status_history: 상태 변경 이력 누적 (감사·추적)
+
+    Args:
+        session: Streamlit 세션 상태
+        prior_history: 기존 master.json 의 status_history (재저장 시 누적용).
+                       None 이면 빈 리스트로 시작 (새 점검).
     """
     school = session.get("school") or {}
     active_space = session.get("active_space") or {}
@@ -129,6 +135,23 @@ def build_master_record(session: dict) -> dict:
         # 학교 담당자가 직접 점검·저장 → 자체 승인 상태 (스프린트 1 호환)
         status = "approved"
 
+    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+    new_history_entry = {
+        "status": status,
+        "by": submitter.get("manager_id") or submitter.get("name") or "(unknown)",
+        "by_role": submitter.get("role"),
+        "at": now_iso,
+        "note": "재저장 (수정)" if prior_history else "초기 저장",
+    }
+    # 기존 이력에 같은 timestamp 항목 중복 방지 (1초 미만 연쇄 저장 시)
+    base_history = list(prior_history or [])
+    if base_history and base_history[-1].get("at") == now_iso \
+            and base_history[-1].get("status") == status \
+            and base_history[-1].get("by") == new_history_entry["by"]:
+        accumulated_history = base_history  # 중복 — 그대로 사용
+    else:
+        accumulated_history = base_history + [new_history_entry]
+
     return {
         "schema_version": "1.1",
         "record_type": "safeloop_inspection_master",
@@ -149,15 +172,7 @@ def build_master_record(session: dict) -> dict:
         },
         "submitter": submitter,
         "status": status,
-        "status_history": [
-            {
-                "status": status,
-                "by": submitter.get("manager_id") or submitter.get("name") or "(unknown)",
-                "by_role": submitter.get("role"),
-                "at": datetime.datetime.now().isoformat(timespec="seconds"),
-                "note": "초기 저장",
-            }
-        ],
+        "status_history": accumulated_history,
         "ai_pipeline": {
             "stage1": session.get("stage1_result"),
             "stage2_raw": session.get("stage2_result"),
@@ -176,6 +191,24 @@ def build_master_record(session: dict) -> dict:
             "approval_date": str(session.get("approval_date", "")) if session.get("approval_date") else "",
         },
     }
+
+
+def load_prior_history(school_code: str, session_id: str) -> list:
+    """같은 session_id 의 기존 master.json 에서 status_history 추출.
+
+    재저장 시 누적 보존을 위해 사용. 파일 없거나 깨지면 빈 리스트.
+    """
+    if not school_code or not session_id:
+        return []
+    try:
+        master_path = session_dir(school_code, session_id) / "master.json"
+        if not master_path.exists():
+            return []
+        data = json.loads(master_path.read_text(encoding="utf-8"))
+        history = data.get("status_history")
+        return list(history) if isinstance(history, list) else []
+    except Exception:
+        return []
 
 
 def build_edu_package(master: dict) -> dict:
@@ -520,14 +553,19 @@ def build_official_letter_pdf(master: dict) -> bytes:
 # 메인 저장 함수
 # ─────────────────────────────────────────
 def save_inspection(session: dict) -> dict:
-    """세션 데이터를 학교 클라우드(모의)에 저장하고 생성된 파일 경로를 반환."""
+    """세션 데이터를 학교 클라우드(모의)에 저장하고 생성된 파일 경로를 반환.
+
+    같은 session_id 로 재저장 시 status_history 가 누적됨 (감사 이력 보존).
+    """
     session_id = session.get("session_id") or new_session_id()
     session["session_id"] = session_id
     school = session.get("school") or {}
     school_code = school.get("정보공시 학교코드") or "UNKNOWN"
     out_dir = session_dir(school_code, session_id)
 
-    master = build_master_record(session)
+    # 재저장 시 기존 master.json 의 status_history 누적 (감사 이력 보존)
+    prior_history = load_prior_history(school_code, session_id)
+    master = build_master_record(session, prior_history=prior_history)
     edu_pkg = build_edu_package(master)
     open_pkg = build_opendata_package(master)
 

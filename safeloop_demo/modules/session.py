@@ -13,7 +13,10 @@ import streamlit as st
 DEFAULT_STATE = {
     # 학교 식별 (Step 1)
     "school": None,          # {"정보공시 학교코드": ..., "학교명": ..., ...}
-    "auth_verified": False,
+    # 학교 인증번호(6자리) 통과 여부 — 학교 담당자(role="학교") 흐름에서 사용.
+    # 실 담당자(role="실")의 인증 통과는 space_manager 객체 존재로 판단한다
+    # (별도 플래그 없음). is_authenticated_for_role() 헬퍼로 통합 검사 권장.
+    "school_auth_verified": False,
 
     # 공간 (Step 2)
     "active_space": None,    # {"space_id": "...", "type": "화학실", "nickname": "3층 A"}
@@ -182,11 +185,27 @@ def set_(key: str, value: Any) -> None:
     st.session_state[key] = value
 
 
+def is_authenticated_for_role() -> bool:
+    """현재 역할에 맞는 인증이 통과되었는지 통합 검사.
+
+    - role="실"   → space_manager 객체 존재 여부 (매니저 PIN 통과 시 set)
+    - role="학교"/그 외 → school_auth_verified (학교 인증번호 통과 시 True)
+    """
+    role = st.session_state.get("role", "학교")
+    if role == "실":
+        mgr = st.session_state.get("space_manager")
+        return bool(mgr and isinstance(mgr, dict) and mgr.get("manager_id"))
+    return bool(st.session_state.get("school_auth_verified"))
+
+
 def require_school() -> dict | None:
-    """학교 선택·인증 완료 여부 확인. 미완료면 경고 표시 + None 반환."""
+    """학교 선택·인증 완료 여부 확인. 미완료면 경고 표시 + None 반환.
+
+    역할별 인증 방식이 달라 is_authenticated_for_role() 로 통합 검사한다.
+    """
     ensure_state()
     school = st.session_state.get("school")
-    if not school or not st.session_state.get("auth_verified"):
+    if not school or not is_authenticated_for_role():
         st.warning("먼저 **학교 찾기** 페이지에서 학교를 선택하고 인증하세요.")
         return None
     return school

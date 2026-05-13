@@ -470,9 +470,48 @@ try:
           lambda: f"status={rec_school['status']}"
                   if rec_school.get("status") == "approved" else
                   (_ for _ in ()).throw(AssertionError(f"학교 담당자 status 부적합: {rec_school.get('status')}")))
-    print("   master.json schema 1.1 검증 완료 (6건)")
+
+    # 13-3. status_history 누적 — prior_history 전달 시 누적되는지
+    prior = [
+        {"status": "submitted", "by": "M001", "by_role": "실",
+         "at": "2026-05-13T10:00:00", "note": "초기 저장"},
+        {"status": "approved", "by": "학교담당자", "by_role": "학교",
+         "at": "2026-05-13T11:00:00", "note": "검토 후 승인"},
+    ]
+    rec_with_prior = build_master_record(school_session, prior_history=prior)
+    check("master/history_accumulated",
+          lambda: f"history {len(rec_with_prior['status_history'])}건 (기존 2건 + 신규 1건)"
+                  if len(rec_with_prior["status_history"]) == 3 else
+                  (_ for _ in ()).throw(AssertionError(f"누적 실패: {len(rec_with_prior['status_history'])}건")))
+    check("master/history_order",
+          lambda: f"순서 보존: {rec_with_prior['status_history'][0]['status']} → {rec_with_prior['status_history'][1]['status']} → {rec_with_prior['status_history'][2]['status']}"
+                  if rec_with_prior["status_history"][0]["status"] == "submitted"
+                  and rec_with_prior["status_history"][2]["note"] == "재저장 (수정)" else
+                  (_ for _ in ()).throw(AssertionError("history 순서·신규 항목 부적합")))
+    print("   master.json schema 1.1 검증 완료 (8건)")
 except Exception as e:
     print(f"   master.json schema 검증 실패 — {type(e).__name__}: {e}")
+    fail += 1
+
+
+# 14. session.py 인증 통합 헬퍼 — is_authenticated_for_role (Sprint 2.5)
+print("\n[14] session 인증 헬퍼 분리 (school_auth_verified ↔ space_manager)")
+try:
+    from modules.session import is_authenticated_for_role
+    check("session/is_auth_helper_import",
+          lambda: "헬퍼 import OK"
+                  if callable(is_authenticated_for_role) else
+                  (_ for _ in ()).throw(AssertionError("헬퍼 임포트 실패")))
+    # 함수 본문에 school_auth_verified 검사가 있는지 (간접 검증)
+    import inspect
+    src = inspect.getsource(is_authenticated_for_role)
+    check("session/is_auth_helper_logic",
+          lambda: "헬퍼가 두 인증 모두 검사"
+                  if "school_auth_verified" in src and "space_manager" in src else
+                  (_ for _ in ()).throw(AssertionError("헬퍼 로직 부적합")))
+    print("   인증 헬퍼 검증 완료 (2건)")
+except Exception as e:
+    print(f"   인증 헬퍼 검증 실패 — {type(e).__name__}: {e}")
     fail += 1
 
 

@@ -238,7 +238,7 @@ if st.button("✅ 이 데이터로 세션 복원 + 이동",
             "학교급": school_info.get("level", ""),
             "설립구분": school_info.get("establishment", ""),
         }
-        st.session_state["auth_verified"] = True
+        st.session_state["school_auth_verified"] = True
     if space_type != "(불명)":
         st.session_state["active_space"] = {
             "space_id": space_info.get("space_id", "loaded"),

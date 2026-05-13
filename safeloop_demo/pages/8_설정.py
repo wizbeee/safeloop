@@ -79,9 +79,9 @@ with st.expander(f"역할 변경 (현재: {current_role_display})", expanded=Fal
             forget_school()             # 학교 자동 로그인 쿠키 삭제
             reset_inspection()          # 점검 진행 중 데이터 정리
             # 학교 세션도 명시적으로 초기화
-            for _k in ("school", "auth_verified", "eduline",
+            for _k in ("school", "school_auth_verified", "eduline",
                         "_show_pin_edu", "_auto_login_checked"):
-                st.session_state[_k] = None if _k != "auth_verified" else False
+                st.session_state[_k] = None if _k != "school_auth_verified" else False
             st.session_state["role"] = target_role
             st.toast(f"{new_role} 모드로 전환했습니다 — 다시 로그인이 필요합니다", icon="🔄")
             st.switch_page("app.py")

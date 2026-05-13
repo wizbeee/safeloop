@@ -111,8 +111,9 @@ with role_col_a:
                   width="stretch"):
         st.session_state["role"] = "실"
         st.session_state["_show_pin_edu"] = False
-        # 실 담당자 세션 초기화 — 이전 학교 담당자 세션 잔존 정리
-        st.session_state["auth_verified"] = False
+        # 매니저 인증은 별도 PIN 으로 다시 받아야 함 (space_manager 정리).
+        # 학교 인증번호(school_auth_verified)는 보존 — 같은 학교를 역할 토글하며
+        # 사용할 때 매번 학교 인증번호 재입력하는 마찰 제거.
         st.session_state["space_manager"] = None
         st.rerun()
 
@@ -158,7 +159,7 @@ with role_col_c:
             from modules.session import reset_inspection
             reset_inspection()
             st.session_state["school"] = None
-            st.session_state["auth_verified"] = False
+            st.session_state["school_auth_verified"] = False
             st.switch_page("pages/7_교육청수신함.py")
         else:
             st.session_state["_show_pin_edu"] = True
@@ -367,7 +368,7 @@ with oc2:
             st.error("데모 학교 데이터를 찾을 수 없습니다.")
         else:
             st.session_state["school"] = demo_school
-            st.session_state["auth_verified"] = True
+            st.session_state["school_auth_verified"] = True
 
             # 0-2: 동일 데모 공간 재사용 (누적 방지)
             school_code = demo_school.get("정보공시 학교코드")
