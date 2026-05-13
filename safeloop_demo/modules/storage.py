@@ -95,11 +95,42 @@ def new_session_id() -> str:
 # Machine-readable: JSON 3종
 # ─────────────────────────────────────────
 def build_master_record(session: dict) -> dict:
-    """세션 상태 전체를 원본 JSON으로 직렬화."""
+    """세션 상태 전체를 원본 JSON으로 직렬화.
+
+    schema_version 1.1 (2026-05): submitter + status 필드 추가
+    - submitter: 누가 이 점검을 수행/제출했는지 (실 담당자 vs 학교 담당자)
+    - status: 현재 제출·검토 상태 (submitted/approved/returned/consolidated)
+      실 담당자 제출 → 학교 담당자 검토 → 교육청 발송의 3단 흐름 추적용
+    """
     school = session.get("school") or {}
     active_space = session.get("active_space") or {}
+    role = session.get("role") or "학교"
+    space_manager = session.get("space_manager") or {}
+
+    # submitter — 누가 이 점검을 시스템에 등록했나
+    if role == "실" and space_manager:
+        submitter = {
+            "role": "실",
+            "manager_id": space_manager.get("manager_id"),
+            "name": space_manager.get("name"),
+            "email": space_manager.get("email", ""),
+            "phone": space_manager.get("phone", ""),
+        }
+        # 실 담당자 제출 → 학교 담당자 검토 대기
+        status = "submitted"
+    else:
+        submitter = {
+            "role": "학교",
+            "manager_id": None,
+            "name": session.get("approver_name", ""),
+            "email": session.get("my_email", ""),
+            "phone": "",
+        }
+        # 학교 담당자가 직접 점검·저장 → 자체 승인 상태 (스프린트 1 호환)
+        status = "approved"
+
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "record_type": "safeloop_inspection_master",
         "session_id": session.get("session_id"),
         "timestamp": datetime.datetime.now().isoformat(),
@@ -116,6 +147,17 @@ def build_master_record(session: dict) -> dict:
             "type": active_space.get("type"),
             "nickname": active_space.get("nickname"),
         },
+        "submitter": submitter,
+        "status": status,
+        "status_history": [
+            {
+                "status": status,
+                "by": submitter.get("manager_id") or submitter.get("name") or "(unknown)",
+                "by_role": submitter.get("role"),
+                "at": datetime.datetime.now().isoformat(timespec="seconds"),
+                "note": "초기 저장",
+            }
+        ],
         "ai_pipeline": {
             "stage1": session.get("stage1_result"),
             "stage2_raw": session.get("stage2_result"),

@@ -239,9 +239,128 @@ if not current:
             st.warning("GPS 컴포넌트를 사용할 수 없습니다. 학교명/지역 탭을 이용하세요.")
 
 # ─────────────────────────────────────────
-# 2) 인증 — 식별번호 vs 인증번호 분리
+# 2) 인증 — 역할별 분기
+#    role="실"  : 학교 인증번호 대신 매니저 PIN (학교 담당자가 발급)
+#    role="학교"/그 외: 학교 인증번호 (기존 흐름)
 # ─────────────────────────────────────────
-if st.session_state.get("school") and not st.session_state.get("auth_verified"):
+_role = st.session_state.get("role", "학교")
+
+# ─────────────────────────────────────────
+# 2-A) 실 담당자 인증 — manager_id 선택 + PIN 입력
+# ─────────────────────────────────────────
+if (_role == "실" and st.session_state.get("school")
+        and not st.session_state.get("auth_verified")):
+    divider()
+    section("02", "실 담당자 인증",
+            "본인 매니저 ID 선택 + 학교 담당자가 발급한 6자리 PIN 입력")
+
+    from modules.managers import (
+        list_managers, ensure_demo_manager, DEMO_PIN, authenticate_manager,
+    )
+    from modules.auth import remember_manager
+
+    school = st.session_state["school"]
+    school_code = school.get("정보공시 학교코드")
+
+    # 시연 모드 — 매니저가 없으면 데모 매니저 자동 등록 + 안내
+    if st.session_state.get("demo_mode") and not list_managers(school_code):
+        # 시연 편의: 현재 학교에 매니저가 없으면 5개 공간을 담당하는 데모 매니저 1명 자동 생성
+        # (학교 담당자가 실제로 [설정] 페이지에서 등록하는 시나리오를 우회)
+        try:
+            ensure_demo_manager(
+                school_code,
+                name="시연 담당교사",
+                assigned_space_ids=[],  # 공간은 등록 시 추가
+            )
+        except Exception:
+            pass
+
+    managers = list_managers(school_code)
+
+    if not managers:
+        st.warning(
+            "이 학교에 등록된 실 담당자가 없습니다. **학교 담당자**가 먼저 "
+            "[설정] 페이지에서 실 담당자를 등록하고 PIN을 발급해야 합니다."
+        )
+        if st.button("← 학교 담당자로 전환해서 등록하러 가기",
+                      key="switch_to_school_for_register",
+                      width="stretch"):
+            st.session_state["role"] = "학교"
+            st.session_state["auth_verified"] = False
+            st.rerun()
+    else:
+        # manager_id 선택 — 매니저 명단을 "이름 (M001)" 형식으로 표시
+        mgr_options = {
+            f"{m['name']} ({m['manager_id']})": m["manager_id"]
+            for m in managers
+        }
+        colA, colB = st.columns([3, 2])
+        with colA:
+            picked_label = st.selectbox(
+                "본인 이름 선택", list(mgr_options.keys()),
+                key="_space_mgr_picker",
+                help="학교 담당자가 등록한 명부에서 본인을 찾으세요.",
+            )
+            picked_mid = mgr_options.get(picked_label, "")
+            pin_input = st.text_input(
+                "PIN (6자리 숫자)",
+                type="password",
+                max_chars=6, placeholder="예: 000000",
+                key="_space_mgr_pin",
+                help="학교 담당자가 발급한 PIN. 분실 시 학교 담당자에게 재발급 요청.",
+            )
+            numeric_input_patch("PIN (6자리 숫자)")
+            remember_me = st.checkbox(
+                "이 기기에서 자동 로그인 (30일)",
+                value=False,
+                key="_space_mgr_remember",
+                help="본인 지급 기기에서만 체크. 공용 PC·외부 기기에서는 해제.",
+            )
+            submit_mgr = st.button(
+                "실 담당자 인증", type="primary", width="stretch",
+                key="_space_mgr_submit",
+            )
+
+        with colB:
+            if st.session_state.get("demo_mode"):
+                st.markdown(
+                    f"<div class='sl-card' style='background:#FFF2F2; border-color:#F8D0D0;'>"
+                    f"<div class='sl-num' style='margin-bottom:2px;'>시연 모드 전용</div>"
+                    f"<div style='font-size:13px; color:#6B6B70;'>데모 매니저 PIN</div>"
+                    f"<div style='font-family:monospace; font-size:28px; font-weight:800; color:#D50000; letter-spacing:0.08em; margin:4px 0;'>{DEMO_PIN}</div>"
+                    f"<div style='font-size:11px; color:#9A9A9F;'>실 운영 시 학교 담당자가 발급.</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button("↓ 자동 입력", key="_space_mgr_autofill",
+                              width="stretch"):
+                    st.session_state["_space_mgr_pin"] = DEMO_PIN
+                    st.rerun()
+            else:
+                st.caption("실 운영 모드 — PIN은 학교 담당자가 발급합니다.")
+
+        if submit_mgr:
+            if not picked_mid:
+                st.error("본인 이름을 선택하세요.")
+            elif not pin_input or len(pin_input) != 6 or not pin_input.isdigit():
+                st.error("PIN은 6자리 숫자여야 합니다.")
+            else:
+                result = authenticate_manager(school_code, picked_mid, pin_input)
+                if result:
+                    st.session_state["space_manager"] = result
+                    st.session_state["auth_verified"] = True
+                    if remember_me:
+                        remember_manager(school_code, picked_mid, pin_input)
+                    st.success(f"{result.get('name', picked_mid)} 님 인증되었습니다.")
+                    st.rerun()
+                else:
+                    st.error("PIN이 일치하지 않거나 비활성 매니저입니다.")
+
+# ─────────────────────────────────────────
+# 2-B) 학교/일반 담당자 인증 — 기존 6자리 학교 인증번호
+# ─────────────────────────────────────────
+if (_role != "실" and st.session_state.get("school")
+        and not st.session_state.get("auth_verified")):
     divider()
     section("02", "담당자 인증",
             "학교 식별번호는 공개 정보로 자동 표시됩니다. 담당자 인증번호만 입력하세요.")
@@ -356,20 +475,62 @@ if st.session_state.get("school") and not st.session_state.get("auth_verified"):
 
 # ─────────────────────────────────────────
 # 3) 공간 선택 / 등록
+#    role="실" : 본인 assigned_space_ids 와 매칭되는 공간만 표시, 새 공간 등록 불가
+#    그 외      : 학교의 모든 등록 공간 + 새 공간 등록 가능
 # ─────────────────────────────────────────
 if st.session_state.get("auth_verified"):
     divider()
-    section("03", "점검할 공간 선택")
+
+    _role = st.session_state.get("role", "학교")
+    _space_mgr = st.session_state.get("space_manager") or {}
+    _is_space_role = (_role == "실")
+
+    if _is_space_role:
+        section("03", "내 담당 공간 선택",
+                f"{_space_mgr.get('name', '실 담당자')} 님이 담당하는 공간만 표시됩니다.")
+    else:
+        section("03", "점검할 공간 선택")
 
     spaces = st.session_state.get("registered_spaces", [])
     school_code = st.session_state["school"].get("정보공시 학교코드")
     spaces_here = [s for s in spaces if s.get("school_code") == school_code]
 
-    tab_pick, tab_new = st.tabs(["등록된 공간", "새 공간 등록"])
+    # 실 담당자 — 본인 담당 공간만 필터링
+    if _is_space_role:
+        my_space_ids = set(_space_mgr.get("assigned_space_ids") or [])
+        if my_space_ids:
+            spaces_here = [s for s in spaces_here if s.get("space_id") in my_space_ids]
+        else:
+            spaces_here = []  # 담당 공간 0개 → 학교 담당자에게 요청 안내
+        # 실 담당자는 새 공간 등록 권한 없음 → 단일 탭만
+        tab_pick = st.container()
+        tab_new = None
+    else:
+        tab_pick, tab_new = st.tabs(["등록된 공간", "새 공간 등록"])
 
     with tab_pick:
         if not spaces_here:
-            st.info("아직 등록된 공간이 없습니다. 오른쪽 탭에서 새 공간을 등록하세요.")
+            if _is_space_role:
+                # 실 담당자: 본인에게 할당된 공간이 없는 경우
+                if not (_space_mgr.get("assigned_space_ids") or []):
+                    st.warning(
+                        "본인에게 **할당된 공간이 없습니다**. "
+                        "학교 담당자가 [설정] 페이지에서 담당 공간을 할당해야 합니다."
+                    )
+                else:
+                    st.warning(
+                        "할당된 공간이 아직 학교에 **등록되지 않았습니다**. "
+                        "학교 담당자가 [점검 시작 · 새 공간 등록]에서 공간을 먼저 만든 뒤 "
+                        "[설정]에서 본인에게 할당해야 합니다."
+                    )
+                if st.button("← 학교 담당자로 전환", key="space_role_to_school",
+                              width="stretch"):
+                    st.session_state["role"] = "학교"
+                    st.session_state["space_manager"] = None
+                    st.session_state["auth_verified"] = False
+                    st.rerun()
+            else:
+                st.info("아직 등록된 공간이 없습니다. 오른쪽 탭에서 새 공간을 등록하세요.")
         else:
             for sp in spaces_here:
                 c1, c2 = st.columns([5, 1])
@@ -412,7 +573,10 @@ if st.session_state.get("auth_verified"):
                             st.session_state.pop(_confirm_key, None)
                             st.rerun()
 
-    with tab_new:
+    # 실 담당자(_role="실")에겐 새 공간 등록 권한이 없음 → tab_new=None.
+    # 학교 담당자만 아래 블록이 실행됨.
+    if tab_new is not None:
+      with tab_new:
         SPACE_TYPES = [
             "화학실", "물리실", "생명과학실", "지구과학실",
             "기술실", "가정실", "음악실", "미술실",

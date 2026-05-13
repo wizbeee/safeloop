@@ -368,12 +368,111 @@ try:
                   and len(_hash_manager("S1", "M001", "123456")) == 32 else
                   (_ for _ in ()).throw(AssertionError("auth 매니저 함수 부적합")))
 
+    # 12-18. ensure_demo_manager — 시연 헬퍼 (멱등성·DEMO_PIN 검증)
+    from modules.managers import ensure_demo_manager, DEMO_PIN, is_demo_manager
+    TEST_DEMO_SCHOOL = "SMOKE_TEST_DEMO_SCHOOL"
+    demo_test_path = mgr_mod._managers_path(TEST_DEMO_SCHOOL).parent
+    if demo_test_path.exists():
+        shutil.rmtree(demo_test_path, ignore_errors=True)
+
+    demo1 = ensure_demo_manager(TEST_DEMO_SCHOOL, assigned_space_ids=["sp1", "sp2"])
+    check("managers/ensure_demo_first",
+          lambda: f"manager_id={demo1['manager_id']}, _demo={is_demo_manager(demo1)}"
+                  if demo1.get("manager_id") and is_demo_manager(demo1) else
+                  (_ for _ in ()).throw(AssertionError(f"데모 매니저 생성 실패: {demo1}")))
+    check("managers/ensure_demo_pin",
+          lambda: f"DEMO_PIN('{DEMO_PIN}') 인증 OK"
+                  if mgr_mod.verify_manager_pin(TEST_DEMO_SCHOOL, demo1["manager_id"], DEMO_PIN) else
+                  (_ for _ in ()).throw(AssertionError("DEMO_PIN 인증 실패")))
+
+    # 멱등성 — 두 번째 호출은 새로 만들지 않고 기존 매니저 반환
+    demo2 = ensure_demo_manager(TEST_DEMO_SCHOOL, assigned_space_ids=["sp3"])
+    check("managers/ensure_demo_idempotent",
+          lambda: f"기존 매니저 재사용 (M001)"
+                  if demo2["manager_id"] == demo1["manager_id"] else
+                  (_ for _ in ()).throw(AssertionError(f"중복 생성: {demo2}")))
+    check("managers/ensure_demo_spaces_merged",
+          lambda: f"공간 합집합 {demo2['assigned_space_ids']}"
+                  if set(demo2["assigned_space_ids"]) == {"sp1", "sp2", "sp3"} else
+                  (_ for _ in ()).throw(AssertionError(f"공간 합집합 실패: {demo2}")))
+
+    if demo_test_path.exists():
+        shutil.rmtree(demo_test_path, ignore_errors=True)
+
     # 정리 — 테스트 폴더 삭제
     if test_path.exists():
         shutil.rmtree(test_path, ignore_errors=True)
-    print("   실 담당자 인프라 검증 완료 (17건)")
+    print("   실 담당자 인프라 검증 완료 (21건)")
 except Exception as e:
     print(f"   실 담당자 인프라 검증 실패 — {type(e).__name__}: {e}")
+    fail += 1
+
+
+# 13. master.json schema 1.1 — submitter + status 필드 검증 (Sprint 2-A)
+print("\n[13] master.json submitter/status (Sprint 2-A)")
+try:
+    from modules.storage import build_master_record
+
+    # 13-1. role="실" 세션 — submitted 상태로 저장
+    space_mgr_session = {
+        "session_id": "sm-test-1",
+        "school": {"정보공시 학교코드": "S0001", "학교명": "테스트중"},
+        "active_space": {"space_id": "sp1", "type": "화학실"},
+        "role": "실",
+        "space_manager": {
+            "manager_id": "M001", "name": "홍길동",
+            "email": "hong@test.kr", "phone": "010-0000-0001",
+        },
+        "stage1_result": {}, "stage2_result": {}, "stage2_confirmed": {},
+        "stage3_result": {"items": []}, "item_scores": {},
+        "score_result": {"score": 80, "grade": "B", "category_scores": {}},
+        "recommendations": [],
+    }
+    rec_space = build_master_record(space_mgr_session)
+    check("master/schema_v1.1",
+          lambda: f"version={rec_space['schema_version']}"
+                  if rec_space.get("schema_version") == "1.1" else
+                  (_ for _ in ()).throw(AssertionError(f"schema 미갱신: {rec_space.get('schema_version')}")))
+    check("master/submitter_space_role",
+          lambda: f"role={rec_space['submitter']['role']}, manager_id={rec_space['submitter']['manager_id']}"
+                  if rec_space["submitter"]["role"] == "실"
+                  and rec_space["submitter"]["manager_id"] == "M001" else
+                  (_ for _ in ()).throw(AssertionError(f"submitter 부적합: {rec_space.get('submitter')}")))
+    check("master/status_submitted",
+          lambda: f"status={rec_space['status']}"
+                  if rec_space.get("status") == "submitted" else
+                  (_ for _ in ()).throw(AssertionError(f"실 담당자 status 부적합: {rec_space.get('status')}")))
+    check("master/status_history",
+          lambda: f"history 1건 by_role={rec_space['status_history'][0]['by_role']}"
+                  if len(rec_space.get("status_history", [])) == 1
+                  and rec_space["status_history"][0]["by_role"] == "실" else
+                  (_ for _ in ()).throw(AssertionError(f"history 부적합: {rec_space.get('status_history')}")))
+
+    # 13-2. role="학교" 세션 — approved 상태로 저장 (기존 호환)
+    school_session = {
+        "session_id": "sch-test-1",
+        "school": {"정보공시 학교코드": "S0001", "학교명": "테스트중"},
+        "active_space": {"space_id": "sp1", "type": "화학실"},
+        "role": "학교",
+        "approver_name": "학교담당자",
+        "my_email": "school@test.kr",
+        "stage1_result": {}, "stage2_result": {}, "stage2_confirmed": {},
+        "stage3_result": {"items": []}, "item_scores": {},
+        "score_result": {"score": 75, "grade": "B", "category_scores": {}},
+        "recommendations": [],
+    }
+    rec_school = build_master_record(school_session)
+    check("master/submitter_school_role",
+          lambda: f"role={rec_school['submitter']['role']}"
+                  if rec_school["submitter"]["role"] == "학교" else
+                  (_ for _ in ()).throw(AssertionError(f"school submitter 부적합")))
+    check("master/status_approved",
+          lambda: f"status={rec_school['status']}"
+                  if rec_school.get("status") == "approved" else
+                  (_ for _ in ()).throw(AssertionError(f"학교 담당자 status 부적합: {rec_school.get('status')}")))
+    print("   master.json schema 1.1 검증 완료 (6건)")
+except Exception as e:
+    print(f"   master.json schema 검증 실패 — {type(e).__name__}: {e}")
     fail += 1
 
 

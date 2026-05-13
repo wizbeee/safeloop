@@ -309,3 +309,65 @@ def authenticate_manager(
             _save_raw(school_code, data)
             return _public_view(m)
     return None
+
+
+# ─────────────────────────────────────────
+# 시연·테스트 보조 — SAFELOOP_DEMO_MODE 환경에서만 사용 권장
+# ─────────────────────────────────────────
+# 시연 모드 고정 PIN — 사용자가 화면에서 보고 바로 입력 가능
+DEMO_PIN = "000000"
+
+
+def ensure_demo_manager(
+    school_code: str,
+    name: str = "데모 담당교사",
+    assigned_space_ids: list[str] | None = None,
+) -> dict:
+    """시연·테스트용 매니저가 학교에 1명 이상 있도록 보장.
+
+    - 이미 활성 매니저가 있으면 첫 매니저 정보 반환 (assigned_space_ids 만 갱신)
+    - 없으면 새로 추가하되 PIN 을 DEMO_PIN("000000") 으로 고정 (시연 편의)
+      → 사용자가 화면에서 PIN 입력 시 헷갈리지 않도록
+
+    Returns: 공개 사본 dict (pin_hash 미포함)
+    """
+    if not school_code:
+        raise ValueError("school_code 가 필요합니다")
+    spaces = list(assigned_space_ids or [])
+
+    data = _load_raw(school_code)
+    actives = [m for m in data.get("managers", []) if m.get("active", True)]
+    if actives:
+        first = actives[0]
+        # 시연 흐름에서 새 공간이 추가됐다면 합집합으로 갱신
+        cur = set(first.get("assigned_space_ids") or [])
+        merged = sorted(cur | set(spaces))
+        if merged != sorted(cur):
+            first["assigned_space_ids"] = merged
+            first["updated_at"] = _now_iso()
+            _save_raw(school_code, data)
+        return _public_view(first)
+
+    # 새 데모 매니저 — PIN 고정 (시연 화면에서 안내 노출)
+    now = _now_iso()
+    new_record = {
+        "manager_id": _next_manager_id(data.get("managers", [])),
+        "name": str(name).strip() or "데모 담당교사",
+        "email": "demo@safeloop.test",
+        "phone": "",
+        "assigned_space_ids": spaces,
+        "pin_hash": _hash_pin(DEMO_PIN),
+        "active": True,
+        "created_at": now,
+        "updated_at": now,
+        "last_login_at": None,
+        "_demo": True,  # 시연용 매니저임을 표시 (운영 데이터와 구분)
+    }
+    data.setdefault("managers", []).append(new_record)
+    _save_raw(school_code, data)
+    return _public_view(new_record)
+
+
+def is_demo_manager(manager: dict) -> bool:
+    """매니저 공개 사본이 시연용으로 자동 생성된 것인지 검사."""
+    return bool(manager and manager.get("_demo"))

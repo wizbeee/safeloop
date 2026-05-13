@@ -60,7 +60,11 @@ st.markdown(
 )
 
 # ─────────────────────────────────────────
-# 진입점 선택 — 학교 담당자 / 교육청 담당자 (명확한 카드 분기)
+# 진입점 선택 — 실 담당자 / 학교 담당자 / 교육청 담당자 (3 카드 분기)
+#
+# 실 담당자: 화학실·물리실·디자인실 등 공간 담당 교사. 본인 담당 공간만 점검·제출.
+# 학교 담당자: 우리 학교 실 담당자 제출분 수합·검토·발송. 본인이 점검할 수도 있음.
+# 교육청 담당자: 학교 제출본 수신·검증·전국 대시보드.
 # ─────────────────────────────────────────
 current_role = st.session_state.get("role", "학교")
 
@@ -70,59 +74,86 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-role_col_a, role_col_b = st.columns(2, gap="medium")
 
-with role_col_a:
-    is_school = current_role == "학교"
-    border = "3px solid #D50000" if is_school else "1px solid #E5E5E8"
-    bg = "#FFFFFF" if is_school else "#FAFAFA"
-    st.markdown(
+def _role_card_html(label_en: str, label_kr: str, desc: str, active: bool) -> str:
+    border = "3px solid #D50000" if active else "1px solid #E5E5E8"
+    bg = "#FFFFFF" if active else "#FAFAFA"
+    return (
         f"<div style='border-left:{border};border-top:1px solid #E5E5E8;"
         f"border-right:1px solid #E5E5E8;border-bottom:1px solid #E5E5E8;"
-        f"background:{bg};border-radius:6px;padding:22px 22px 14px 22px;"
-        f"min-height:150px;'>"
+        f"background:{bg};border-radius:6px;padding:22px 18px 14px 18px;"
+        f"min-height:170px;'>"
         f"<div style='font-size:11px;letter-spacing:0.28em;color:#D50000;"
-        f"font-weight:700;margin-bottom:8px;'>SCHOOL</div>"
-        f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
-        f"학교 담당자</div>"
-        f"<div style='font-size:13px;color:#6B6B70;line-height:1.6;'>"
-        f"학교 식별·인증 후 AI 점검 → 결과 저장 → 교육청 발송 (이메일)"
-        f"</div></div>",
+        f"font-weight:700;margin-bottom:8px;'>{label_en}</div>"
+        f"<div style='font-size:17px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
+        f"{label_kr}</div>"
+        f"<div style='font-size:12.5px;color:#6B6B70;line-height:1.55;'>{desc}</div>"
+        f"</div>"
+    )
+
+
+role_col_a, role_col_b, role_col_c = st.columns(3, gap="medium")
+
+# 실 담당자 카드 — 흐름의 첫 단계 (가장 많이 사용)
+with role_col_a:
+    is_space = current_role == "실"
+    st.markdown(
+        _role_card_html(
+            "SPACE",
+            "실 담당자",
+            "본인 담당 공간(화학실·물리실·디자인실 등) AI 점검 → 학교 담당자에게 제출",
+            is_space,
+        ),
+        unsafe_allow_html=True,
+    )
+    if st.button("실 담당자로 시작", key="enter_space",
+                  type=("primary" if is_space else "secondary"),
+                  width="stretch"):
+        st.session_state["role"] = "실"
+        st.session_state["_show_pin_edu"] = False
+        # 실 담당자 세션 초기화 — 이전 학교 담당자 세션 잔존 정리
+        st.session_state["auth_verified"] = False
+        st.session_state["space_manager"] = None
+        st.rerun()
+
+# 학교 담당자 카드
+with role_col_b:
+    is_school = current_role == "학교"
+    st.markdown(
+        _role_card_html(
+            "SCHOOL",
+            "학교 담당자",
+            "실 담당자 제출 수합·검토 + 본인 점검 가능 → 교육청 발송 (이메일)",
+            is_school,
+        ),
         unsafe_allow_html=True,
     )
     if st.button("학교 담당자로 시작", key="enter_school",
                   type=("primary" if is_school else "secondary"),
                   width="stretch"):
-        # 교육청 모드에서 오거나 역할 스위치 시 학교 세션 유지 (학교 담당자 흐름)
         st.session_state["role"] = "학교"
-        # 잔존하던 교육청 PIN 박스 표시 플래그 자동 정리
         st.session_state["_show_pin_edu"] = False
+        # 학교 담당자 모드는 실 담당자 세션을 비움
+        st.session_state["space_manager"] = None
         st.rerun()
 
-with role_col_b:
+# 교육청 담당자 카드
+with role_col_c:
     is_edu = current_role == "교육청"
-    border = "3px solid #D50000" if is_edu else "1px solid #E5E5E8"
-    bg = "#FFFFFF" if is_edu else "#FAFAFA"
     st.markdown(
-        f"<div style='border-left:{border};border-top:1px solid #E5E5E8;"
-        f"border-right:1px solid #E5E5E8;border-bottom:1px solid #E5E5E8;"
-        f"background:{bg};border-radius:6px;padding:22px 22px 14px 22px;"
-        f"min-height:150px;'>"
-        f"<div style='font-size:11px;letter-spacing:0.28em;color:#D50000;"
-        f"font-weight:700;margin-bottom:8px;'>EDU OFFICE</div>"
-        f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:6px;'>"
-        f"교육청 담당자</div>"
-        f"<div style='font-size:13px;color:#6B6B70;line-height:1.6;'>"
-        f"학교 제출본 수신·검증 → 전국 대시보드·정책 시뮬레이터 활용"
-        f"</div></div>",
+        _role_card_html(
+            "EDU OFFICE",
+            "교육청 담당자",
+            "학교 제출본 수신·검증 → 전국 대시보드·정책 시뮬레이터",
+            is_edu,
+        ),
         unsafe_allow_html=True,
     )
     if st.button("교육청 담당자로 시작", key="enter_edu",
                   type=("primary" if is_edu else "secondary"),
                   width="stretch"):
-        # 교육청 카드 클릭 → 인증된 상태면 즉시 진입, 아니면 PIN 박스 표시
-        # role 을 "교육청" 으로 즉시 설정해야 PIN 박스 표시 조건 통과
         st.session_state["role"] = "교육청"
+        st.session_state["space_manager"] = None
         if is_authenticated("edu"):
             from modules.session import reset_inspection
             reset_inspection()
@@ -150,7 +181,7 @@ if (st.session_state.get("_show_pin_edu")
         cancel_redirect=None,
     )
 
-# 역할별 빠른 이동
+# 역할별 빠른 이동 — 시작 카드를 클릭하지 않은 사용자도 한 번에 이동 가능
 st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 col_l, col_c, col_r = st.columns([1, 2, 1])
 with col_c:
@@ -161,6 +192,16 @@ with col_c:
         st.markdown(
             "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
             "수신·검증 · 약 2분 소요"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    elif current_role == "실":
+        if st.button("내 담당 공간 점검 시작", type="primary",
+                      width="stretch", key="go_inspect_space"):
+            st.switch_page("pages/1_점검시작.py")
+        st.markdown(
+            "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
+            "학교 + 본인 PIN 인증 → 본인 담당 공간만 표시"
             "</div>",
             unsafe_allow_html=True,
         )
