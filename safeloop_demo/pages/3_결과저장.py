@@ -303,18 +303,24 @@ else:
 if st.session_state.get("edu_package_ready"):
     sid = st.session_state.get("saved_session_id", "")
 
-    # 공문 PDF
-    letter_cache = st.session_state.get("_edufine_letter_cache") or {}
-    if letter_cache.get("sid") != sid or letter_cache.get("bytes") is None:
-        master = build_master_record({**st.session_state, "session_id": sid})
-        letter_bytes = build_official_letter_pdf(master)
-        st.session_state["_edufine_letter_cache"] = {"sid": sid, "bytes": letter_bytes,
-                                                       "master": master}
-    else:
-        letter_bytes = letter_cache["bytes"]
-        master = letter_cache.get("master") or build_master_record({**st.session_state, "session_id": sid})
+    # 결재 정보 입력 여부에 따라 공문 PDF 포함 결정 — 강제 아님
+    master = build_master_record({**st.session_state, "session_id": sid})
+    _approval_info = master.get("approval") or {}
+    _has_approval = bool((_approval_info.get("approver_name") or "").strip())
 
-    # 점검 결과 보고서 PDF
+    # 공문 PDF — 결재자 이름이 입력된 경우에만 생성
+    letter_bytes = None
+    if _has_approval:
+        letter_cache = st.session_state.get("_edufine_letter_cache") or {}
+        if letter_cache.get("sid") != sid or letter_cache.get("bytes") is None:
+            letter_bytes = build_official_letter_pdf(master)
+            st.session_state["_edufine_letter_cache"] = {
+                "sid": sid, "bytes": letter_bytes, "master": master,
+            }
+        else:
+            letter_bytes = letter_cache["bytes"]
+
+    # 점검 결과 보고서 PDF — 항상 생성
     report_cache = st.session_state.get("_edufine_report_cache") or {}
     if report_cache.get("sid") != sid or report_cache.get("bytes") is None:
         from modules.storage import build_pdf_report
@@ -323,20 +329,21 @@ if st.session_state.get("edu_package_ready"):
     else:
         report_bytes = report_cache["bytes"]
 
-    # 두 PDF 를 결합한 통합 PDF
+    # 통합 PDF — 결재 정보 있으면 공문 + 보고서, 없으면 보고서만
     try:
         from pypdf import PdfWriter, PdfReader
         import io as _io
         merger = PdfWriter()
-        merger.append(PdfReader(_io.BytesIO(letter_bytes)))
+        if letter_bytes:
+            merger.append(PdfReader(_io.BytesIO(letter_bytes)))
         merger.append(PdfReader(_io.BytesIO(report_bytes)))
         merged_buf = _io.BytesIO()
         merger.write(merged_buf)
         merger.close()
         merged_bytes = merged_buf.getvalue()
     except Exception:
-        # pypdf 없거나 실패 시 — 두 PDF 를 별도 다운로드로만 제공
-        merged_bytes = None
+        # pypdf 없거나 실패 시 — 보고서만 단일 PDF 로 제공
+        merged_bytes = report_bytes if not letter_bytes else None
 
     def _fmt_size(b: int) -> str:
         if b < 1024:
@@ -359,15 +366,24 @@ if st.session_state.get("edu_package_ready"):
     dl_col1, dl_col2 = st.columns(2)
     with dl_col1:
         if merged_bytes:
+            _pdf_label = (
+                "📄 사람용 PDF (공문 + 보고서)"
+                if letter_bytes else "📄 사람용 PDF (보고서)"
+            )
             st.download_button(
-                f"📄 사람용 PDF ({_fmt_size(len(merged_bytes))})",
+                f"{_pdf_label} ({_fmt_size(len(merged_bytes))})",
                 merged_bytes,
                 file_name=f"안전점검_보고서_{sid}.pdf",
                 mime="application/pdf",
                 type="primary",
                 width="stretch",
                 key="dl_unified_pdf",
-                help="결재 첨부·인쇄용. 학교 별도 결재 양식에 첨부하세요.",
+                help=(
+                    "결재 첨부·인쇄용. 결재는 에듀파인 등 외부 시스템에서 진행."
+                    if letter_bytes else
+                    "인쇄·결재 첨부용. 결재 정보를 함께 기록하려면 위 "
+                    "[📋 결재 정보 기록 (선택)]을 사용하세요."
+                ),
             )
     with dl_col2:
         st.download_button(
@@ -394,23 +410,40 @@ if st.session_state.get("edu_package_ready"):
     )
 
     with st.expander("개별 PDF 로 받기 (선택)", expanded=False):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown(
-                f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
-                f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
-                f"<b>📄 공문 (품의서)</b><br>"
-                f"<span style='font-size:11px;color:#6B6B70;'>결재 상신용 본문 · "
-                f"{_fmt_size(len(letter_bytes))}</span></div>",
-                unsafe_allow_html=True,
-            )
-            st.download_button(
-                "다운로드", letter_bytes,
-                file_name=f"공문_품의서_{sid}.pdf",
-                mime="application/pdf",
-                key="dl_letter_only", width="stretch",
-            )
-        with col_b:
+        # 결재 정보 없으면 공문 PDF 자체가 없으므로 보고서만 단독 노출
+        if letter_bytes:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown(
+                    f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
+                    f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
+                    f"<b>📄 공문 (품의서)</b><br>"
+                    f"<span style='font-size:11px;color:#6B6B70;'>결재 정보 입력분 포함 · "
+                    f"{_fmt_size(len(letter_bytes))}</span></div>",
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "다운로드", letter_bytes,
+                    file_name=f"공문_품의서_{sid}.pdf",
+                    mime="application/pdf",
+                    key="dl_letter_only", width="stretch",
+                )
+            with col_b:
+                st.markdown(
+                    f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
+                    f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
+                    f"<b>📊 점검 결과 보고서</b><br>"
+                    f"<span style='font-size:11px;color:#6B6B70;'>안전점수·카테고리·법령 근거 · "
+                    f"{_fmt_size(len(report_bytes))}</span></div>",
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "다운로드", report_bytes,
+                    file_name=f"점검결과보고서_{sid}.pdf",
+                    mime="application/pdf",
+                    key="dl_report_only", width="stretch",
+                )
+        else:
             st.markdown(
                 f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
                 f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
@@ -424,6 +457,10 @@ if st.session_state.get("edu_package_ready"):
                 file_name=f"점검결과보고서_{sid}.pdf",
                 mime="application/pdf",
                 key="dl_report_only", width="stretch",
+            )
+            st.caption(
+                "💡 공문(품의서) PDF 를 함께 받으려면 위 [📋 결재 정보 기록 (선택)] "
+                "에 결재자 이름을 입력하세요."
             )
 
 # ─────────────────────────────────────────
@@ -452,8 +489,11 @@ if _is_space_role:
     st.stop()  # 실 담당자는 여기서 페이지 종료 — 아래 발송 흐름 미노출
 
 divider()
-section("05", "교육청 담당자 이메일로 발송",
-        "내부 결재 완료 후 교육청 담당자 이메일에 점검 데이터(JSON·PDF) 첨부해 발송")
+section(
+    "05",
+    "교육청 담당자 이메일로 발송",
+    "교육청 담당자 이메일에 점검 데이터(JSON·PDF) 첨부해 발송합니다.",
+)
 
 school_code = (school or {}).get("정보공시 학교코드")
 school_sido = (school or {}).get("시도교육청", "")
@@ -494,28 +534,21 @@ else:
             "등록 시 그 주소가 우선 사용됩니다."
         )
 
-    # 2) 내부 결재 확인 — 체크박스 + 결재자/일자 명시 (책임성 ↑)
+    # 2) 결재 정보 기록 (선택) — 강제 아님. 학교가 자체 기록을 원할 때만.
+    #    실제 결재는 K-에듀파인 등 외부 시스템에서 진행되므로, SafeLoop 은
+    #    결재를 강제하지 않고 단지 메타 정보로 기록만 지원한다.
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-    st.markdown("##### 학교 내부 결재 확인")
-    st.caption(
-        "⚠ 본 체크는 **자기 선언** 으로, 실제 학교 결재 시스템(K-에듀파인 등)과 "
-        "연동되지 않습니다. 별도 결재 양식으로 결재 진행 후 본 항목을 체크하세요. "
-        "발송 데이터에는 결재자·일자가 함께 기록됩니다."
-    )
-
-    approval_done = st.checkbox(
-        "**학교 내부 결재 완료** — 담당자 → 부장 → 교감 → 교장 결재(또는 등재) 완료를 확인합니다.",
-        value=False,
-        key="internal_approval_confirmed",
-        help="결재 양식은 학교마다 다르므로, 별도 결재 진행 후 이 항목에 체크하세요.",
-    )
-
-    # 결재자·일자 입력 (선택 — 입력 시 발송 데이터에 함께 기록)
-    if approval_done:
+    with st.expander("📋 결재 정보 기록 (선택)", expanded=False):
+        st.caption(
+            "💡 결재는 **에듀파인(K-에듀파인) 등 외부 시스템**에서 진행하세요. "
+            "SafeLoop 은 결재를 강제하지 않습니다. "
+            "다만 발송 데이터에 결재자·일자를 함께 기록하고 싶다면 아래에 "
+            "입력하세요. **비워두어도 정상 발송됩니다.**"
+        )
         col_app1, col_app2 = st.columns([2, 1])
         with col_app1:
             approver_name = st.text_input(
-                "결재자 (선택) — 최종 결재자 이름",
+                "결재자 이름 (선택)",
                 value=st.session_state.get("approver_name", ""),
                 placeholder="예: 홍길동 (교장)",
                 key="approver_name_input",
@@ -529,13 +562,14 @@ else:
                 key="approval_date_input",
             )
             st.session_state["approval_date"] = approval_date
+        # 메타 플래그 — 결재 정보 입력 시 자동 True (호환성 유지용, 강제 아님)
+        st.session_state["internal_approval_confirmed"] = bool(
+            (approver_name or "").strip()
+        )
 
-    if not approval_done:
-        st.caption("⚠ 결재 미완료 시 발송 버튼이 비활성화됩니다.")
-
-    # 3) 발송 안내 (mailto 링크)
+    # 3) 발송 가능 조건 — 저장만 완료되면 발송 가능 (결재 강제 X)
     saved_sid = st.session_state.get("saved_session_id")
-    can_send = approval_done and bool(saved_sid)
+    can_send = bool(saved_sid)
 
     if not saved_sid:
         st.info("위에서 먼저 **점검 결과 저장**을 수행해야 발송 가능합니다.")
@@ -729,7 +763,7 @@ else:
             )
     else:
         st.button(
-            "📤 발송하기 (결재 완료 후 활성화)",
+            "📤 발송하기 (먼저 점검 결과 저장 필요)",
             disabled=True, width="stretch", key="mailto_disabled",
         )
 

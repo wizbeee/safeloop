@@ -42,7 +42,7 @@ DEFAULT_STATE = {
     "saved_session_id": None,
     "eduline": None,                    # 결재라인 (PDF 표시용 — 학교마다 양식 다르므로 참고용)
     "edu_package_ready": False,         # 통합 PDF 다운로드 준비 플래그
-    "internal_approval_confirmed": False,  # 학교 내부 결재 완료 확인 (교육청 발송 활성화 조건)
+    "internal_approval_confirmed": False,  # 학교 내부 결재 메타 (선택 — 강제 아님)
     "my_email": "",                     # 본인 이메일 (학교 또는 교육청 담당자)
     "edu_office_email": "",             # 교육청 담당자 이메일 (학교가 등록 — 발송 대상)
 

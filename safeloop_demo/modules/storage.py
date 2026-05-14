@@ -541,7 +541,8 @@ def build_official_letter_pdf(master: dict) -> bytes:
     flow.append(Spacer(1, 4 * mm))
     flow.append(Paragraph(
         "※ 본 문서는 SafeLoop AI 점검 시스템이 생성한 초안이며, "
-        "학교 자체 결재 양식에 첨부 후 결재 진행. 결재 완료 시 교육청 담당자에게 이메일 발송.",
+        "공식 결재는 K-에듀파인 등 외부 결재 시스템에서 진행합니다. "
+        "본 PDF 는 학교 자체 결재 양식 첨부 또는 교육청 발송 시 참고용으로 사용하세요.",
         small,
     ))
     doc.build(flow)
@@ -584,7 +585,12 @@ def save_inspection(session: dict) -> dict:
     (out_dir / "점검결과.csv").write_bytes(build_csv(master))
     (out_dir / "점검결과.xlsx").write_bytes(build_excel(master))
     (out_dir / "점검결과보고서.pdf").write_bytes(build_pdf_report(master))
-    (out_dir / "결재첨부_공문.pdf").write_bytes(build_official_letter_pdf(master))
+    # 결재첨부_공문.pdf — 결재자 이름이 입력된 경우에만 자동 생성.
+    # 결재는 에듀파인 등 외부 시스템에서 진행되므로 SafeLoop 은 강제하지 않음.
+    # 학교가 SafeLoop 에도 기록을 남기고자 결재자 이름을 입력한 경우만 첨부 공문 PDF 생성.
+    _approval = (master.get("approval") or {})
+    if (_approval.get("approver_name") or "").strip():
+        (out_dir / "결재첨부_공문.pdf").write_bytes(build_official_letter_pdf(master))
 
     return {
         "session_id": session_id,
