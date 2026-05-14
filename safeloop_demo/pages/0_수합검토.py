@@ -79,6 +79,24 @@ hero(
     f"{school_name} — 실 담당자 제출본을 검토하고 승인·반려·수정합니다.",
 )
 
+# 모바일 사용자 안내 — 본 페이지는 표·다중 컬럼이 많아 PC 권장
+st.markdown(
+    """
+    <div class='sl-mobile-hint' style='display:none;padding:8px 12px;
+    background:#FFF6F6;border:1px solid #F8D0D0;border-radius:6px;
+    font-size:12.5px;color:#0A0A0B;margin-bottom:10px;line-height:1.55;'>
+    📱 <b>모바일에서 보고 계시네요.</b> 이 화면은 표가 많아 PC·태블릿 가로 화면에서
+    더 보기 편합니다. 모바일에선 가로 스크롤이나 화면 회전을 활용하세요.
+    </div>
+    <style>
+    @media (max-width: 768px) {
+        .sl-mobile-hint { display: block !important; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ─────────────────────────────────────────
 # 데이터 로드 + KPI
 # ─────────────────────────────────────────

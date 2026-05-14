@@ -399,16 +399,42 @@ def render_sidebar(active_key: str = "") -> None:
             st.markdown(ctx_html, unsafe_allow_html=True)
 
         # ── 메뉴 그룹 (역할별 조건부 표시) ──
-        # 학교 담당자: 점검 중심 워크플로우 (1→2→3) + 본교 조회
-        # 교육청 담당자: 수신·검증 중심 + 정책 도구 (개별 학교 관리 기능 제외)
-        # 공통 원칙:
-        #   - 한 역할에 불필요한 페이지는 아예 노출하지 않음 (사이드바에서 숨김)
-        #   - 역할 전환 시 세션이 정리되므로 상대 역할 메뉴 접근 필요 없음
+        # 실 담당자(role="실"): 본인 점검 흐름만 (등록·발송·전국통계 X)
+        # 학교 담당자(role="학교"): 점검 + 수합·검토 + 본교조회 + 교육청 발송
+        # 교육청 담당자(role="교육청"): 수신·전국대시보드·정책 시뮬레이터
+        #
+        # 한 역할에 불필요·권한밖 페이지는 사이드바에서 완전 숨김.
         is_edu = role == "교육청"
+        is_space_mgr = role == "실"
+
+        # 학교 담당자 미검토 배지 — [수합·검토] 옆에 표시
+        pending_review = 0
+        if not is_edu and not is_space_mgr and school:
+            try:
+                from modules.storage import list_school_submissions
+                _subs = list_school_submissions(
+                    school.get("정보공시 학교코드", ""),
+                    status_filter="submitted",
+                )
+                pending_review = len(_subs)
+            except Exception:
+                pending_review = 0
+
+        # 교육청 미열람 배지
+        unread_inbox = 0
+        if is_edu:
+            try:
+                from modules.storage import list_edu_inbox, is_edu_inbox_read
+                _all = list_edu_inbox()
+                unread_inbox = sum(
+                    1 for x in _all
+                    if is_edu_inbox_read(x.get("sido", ""), x.get("file", "")) is None
+                )
+            except Exception:
+                unread_inbox = 0
 
         if is_edu:
-            # 교육청 담당자 — 수신/대시보드/정책 3가지로 명확히 구분
-            # 학교 전용 페이지(1,2,3,4,6,10)는 완전 숨김
+            # 교육청 담당자 — 수신·전국대시보드·정책시뮬
             groups = [
                 ("업무", [
                     ("app.py",                    "홈"),
@@ -425,15 +451,30 @@ def render_sidebar(active_key: str = "") -> None:
                     ("pages/8_설정.py",            "설정"),
                 ]),
             ]
+        elif is_space_mgr:
+            # 실 담당자 — 본인 점검 흐름만 (학교 단위 통계·발송·매니저 등록 차단)
+            groups = [
+                ("내 점검", [
+                    ("app.py",                  "홈"),
+                    ("pages/1_점검시작.py",      "점검 시작"),
+                    ("pages/2_AI점검.py",        "AI 점검"),
+                    ("pages/3_결과저장.py",      "결과 제출"),
+                ]),
+                ("참고·정보", [
+                    ("pages/9_프로젝트소개.py",   "ℹ️ 프로젝트 소개"),
+                ]),
+            ]
         else:
-            # 학교 담당자 — 점검 워크플로우 + 본교 조회
-            # 교육청 전용 페이지(7, 11)는 완전 숨김
+            # 학교 담당자 — 점검 + 수합검토 + 본교조회 + 발송
             groups = [
                 ("점검", [
                     ("app.py",                  "홈"),
                     ("pages/1_점검시작.py",      "점검 시작"),
                     ("pages/2_AI점검.py",        "AI 점검"),
                     ("pages/3_결과저장.py",      "결과 저장"),
+                ]),
+                ("수합·검토", [
+                    ("pages/0_수합검토.py",      "✅ 수합·검토"),
                 ]),
                 ("본교 조회", [
                     ("pages/4_본교현황.py",      "📊 본교 통계"),
@@ -452,19 +493,6 @@ def render_sidebar(active_key: str = "") -> None:
                 ]),
             ]
 
-        # 교육청 모드 — 수신함 미열람 카운트 미리 계산 (사이드바 배지)
-        unread_inbox = 0
-        if is_edu:
-            try:
-                from modules.storage import list_edu_inbox, is_edu_inbox_read
-                _all = list_edu_inbox()
-                unread_inbox = sum(
-                    1 for x in _all
-                    if is_edu_inbox_read(x.get("sido", ""), x.get("file", "")) is None
-                )
-            except Exception:
-                unread_inbox = 0
-
         for group_label, items in groups:
             st.markdown(
                 f"<div style='font-size:10px; letter-spacing:0.2em; color:#9A9A9F; "
@@ -473,10 +501,13 @@ def render_sidebar(active_key: str = "") -> None:
                 unsafe_allow_html=True,
             )
             for target, label in items:
-                # 교육청 수신함 옆에 미열람 배지 부착
+                # 배지 부착 (수신함·수합검토)
                 show_label = label
                 if is_edu and target == "pages/7_교육청수신함.py" and unread_inbox > 0:
                     show_label = f"{label}  ●{unread_inbox}"
+                elif (not is_edu and not is_space_mgr
+                      and target == "pages/0_수합검토.py" and pending_review > 0):
+                    show_label = f"{label}  ●{pending_review}"
                 try:
                     st.page_link(target, label=show_label)
                 except Exception:

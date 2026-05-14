@@ -51,39 +51,53 @@ else:
         "**🎬 시연 시작** 버튼을 누르세요."
     )
 
-# 역할 변경은 일반 사용자에게는 거의 필요 없으므로 expander 안에 작게 배치
-current_role_display = (
-    "학교 담당자" if st.session_state.get("role", "학교") == "학교"
-    else "교육청 담당자"
-)
+# 역할 변경 — 3택 (실 / 학교 / 교육청)
+_ROLE_LABELS = {
+    "실": "실 담당자",
+    "학교": "학교 담당자",
+    "교육청": "교육청 담당자",
+}
+_current_role = st.session_state.get("role", "학교")
+current_role_display = _ROLE_LABELS.get(_current_role, "학교 담당자")
 with st.expander(f"역할 변경 (현재: {current_role_display})", expanded=False):
     st.caption(
         "역할은 처음 한 번 정하면 일반적으로 바꿀 일이 거의 없습니다. "
-        "다른 역할로 작업할 일이 있을 때만 변경하세요."
+        "다른 역할로 작업할 일이 있을 때만 변경하세요. "
+        "전환 시 인증·세션 데이터가 초기화됩니다."
     )
+    _options = ["실 담당자", "학교 담당자", "교육청 담당자"]
+    _options_key = {"실 담당자": "실", "학교 담당자": "학교",
+                     "교육청 담당자": "교육청"}
+    _idx = _options.index(current_role_display) if current_role_display in _options else 1
     new_role = st.radio(
         "역할 선택",
-        ["학교 담당자", "교육청 담당자"],
+        _options,
         horizontal=True,
-        index=0 if st.session_state.get("role", "학교") == "학교" else 1,
+        index=_idx,
         label_visibility="collapsed",
     )
-    target_role = "학교" if new_role == "학교 담당자" else "교육청"
-    if target_role != st.session_state.get("role", "학교"):
+    target_role = _options_key[new_role]
+    if target_role != _current_role:
         if st.button("역할 변경 적용", key="apply_role_change",
                       width="stretch"):
-            from modules.auth import clear_authentication, forget_school
+            from modules.auth import (
+                clear_authentication, forget_manager, forget_school,
+            )
             from modules.session import reset_inspection
             # 다른 역할로 전환 시 모든 인증·자동 로그인·세션 데이터 해제 (보안)
             clear_authentication()      # 교육청 PIN 인증 해제 + 쿠키 삭제
             forget_school()             # 학교 자동 로그인 쿠키 삭제
+            forget_manager()            # 실 담당자 자동 로그인 쿠키 삭제
             reset_inspection()          # 점검 진행 중 데이터 정리
-            # 학교 세션도 명시적으로 초기화
-            for _k in ("school", "school_auth_verified", "eduline",
-                        "_show_pin_edu", "_auto_login_checked"):
-                st.session_state[_k] = None if _k != "school_auth_verified" else False
+            # 학교·매니저 세션 명시적 초기화
+            for _k in ("school", "eduline", "space_manager",
+                        "_show_pin_edu", "_auto_login_checked",
+                        "_remembered_mgr_id"):
+                st.session_state[_k] = None
+            st.session_state["school_auth_verified"] = False
             st.session_state["role"] = target_role
-            st.toast(f"{new_role} 모드로 전환했습니다 — 다시 로그인이 필요합니다", icon="🔄")
+            st.toast(f"{new_role} 모드로 전환했습니다 — 다시 로그인이 필요합니다",
+                      icon="🔄")
             st.switch_page("app.py")
 
 # ─────────────────────────────────────────
@@ -146,7 +160,13 @@ section("02", "공간 사전 등록")
 st.caption("첫 점검 전에 학교 내 공간 목록을 미리 등록할 수 있습니다.")
 
 school = st.session_state.get("school")
-if not school:
+_role_here = st.session_state.get("role", "학교")
+if _role_here == "실":
+    st.info(
+        "👤 **실 담당자 모드** — 공간 등록은 학교 담당자의 권한입니다. "
+        "본인 담당 공간이 보이지 않으면 학교 담당자에게 공간 등록 + 본인 할당을 요청하세요."
+    )
+elif not school:
     st.warning("먼저 학교를 선택하세요. (점검 시작 페이지)")
 else:
     SPACE_TYPES = [
@@ -208,6 +228,11 @@ if st.session_state.get("role") == "교육청":
     st.caption(
         "🏛 교육청 담당자 모드 — 본 섹션은 학교 담당자가 우리 학교의 "
         "공간별 담당 교사를 관리하는 화면입니다."
+    )
+elif st.session_state.get("role") == "실":
+    st.info(
+        "👤 **실 담당자 모드** — 본인을 포함한 실 담당자 명부 등록·관리는 "
+        "학교 담당자의 권한입니다. PIN 분실 시 학교 담당자에게 재발급을 요청하세요."
     )
 elif not school:
     st.caption("먼저 학교를 선택하세요. (점검 시작 페이지)")
