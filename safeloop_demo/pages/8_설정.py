@@ -470,6 +470,90 @@ else:
                             st.error(f"등록 실패: {_e}")
 
 # ─────────────────────────────────────────
+# 02-3 결재 정책 — 단일/이중 결재 선택 (학교 담당자 전용)
+#
+# 학교마다 결재 흐름이 다름:
+#  - 단일 결재 (기본): 에듀파인 결재 완료된 파일을 SafeLoop 으로 그대로 발송.
+#    SafeLoop 안에 결재 입력 화면 없음. 가장 단순.
+#  - 이중 결재: 에듀파인 결재 + SafeLoop 안에서도 결재자 정보 기록.
+#    자체 감사·추적 이력을 추가로 남기고 싶은 학교용.
+# ─────────────────────────────────────────
+divider()
+section(
+    "02-3",
+    "결재 정책",
+    "결재는 K-에듀파인 등 외부 시스템에서 진행됩니다. "
+    "SafeLoop 안에서도 결재 정보를 한 번 더 기록할지 학교가 선택할 수 있습니다.",
+)
+
+if st.session_state.get("role") == "교육청":
+    st.caption(
+        "🏛 교육청 담당자 모드 — 결재 정책은 학교 담당자가 설정합니다."
+    )
+elif st.session_state.get("role") == "실":
+    st.info(
+        "👤 **실 담당자 모드** — 결재 정책은 학교 담당자의 권한입니다. "
+        "본인 점검 제출 시에는 결재 입력 화면이 없습니다 (학교 담당자가 검토·발송)."
+    )
+elif not school:
+    st.caption("먼저 학교를 선택하세요. (점검 시작 페이지)")
+else:
+    from modules.storage import get_school_dual_approval, set_school_dual_approval
+    _approval_school_code = school.get("정보공시 학교코드") or ""
+    _cur_dual = get_school_dual_approval(_approval_school_code)
+
+    _mode_label = (
+        "🔐 이중 결재 (에듀파인 + SafeLoop 자체 기록)"
+        if _cur_dual else
+        "📋 단일 결재 (에듀파인만 — 권장)"
+    )
+    st.markdown(
+        f"<div style='padding:10px 14px;border:1px solid #E5E5E8;"
+        f"border-left:3px solid #D50000;border-radius:6px;background:#FAFAFA;'>"
+        f"<div style='font-size:11px;letter-spacing:0.2em;color:#6B6B70;"
+        f"font-weight:600;margin-bottom:4px;'>현재 정책</div>"
+        f"<b>{_mode_label}</b>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    _new_dual = st.toggle(
+        "SafeLoop 안에서도 결재 정보 기록 (이중 결재)",
+        value=_cur_dual,
+        key="_school_dual_approval_toggle",
+        help=(
+            "ON: 결과 저장 페이지에 결재자·일자 입력 칸이 나타나고, 입력 시 공문 "
+            "PDF 가 함께 만들어집니다. OFF: 에듀파인 결재 완료된 파일만 발송 — "
+            "더 단순한 흐름."
+        ),
+    )
+
+    if _new_dual != _cur_dual:
+        if st.button("정책 변경 적용", key="_apply_dual_approval",
+                      type="primary", width="stretch"):
+            set_school_dual_approval(_approval_school_code, _new_dual)
+            st.toast(
+                ("이중 결재로 전환" if _new_dual else "단일 결재(에듀파인만)로 전환")
+                + " — 결과 저장 페이지에서 확인 가능",
+                icon="🔄",
+            )
+            st.rerun()
+
+    # 정책 설명 카드
+    if _cur_dual:
+        st.caption(
+            "🔐 **이중 결재**: 학교 담당자가 결과 저장 페이지에서 결재자 이름을 "
+            "입력하면 SafeLoop 안에도 결재 기록이 남고, `결재첨부_공문.pdf` 가 "
+            "함께 생성됩니다. 에듀파인 결재는 외부에서 별도 진행."
+        )
+    else:
+        st.caption(
+            "📋 **단일 결재 (기본)**: SafeLoop 안에서는 결재 입력을 받지 않습니다. "
+            "에듀파인에서 결재 완료된 파일을 첨부해 교육청에 발송하세요. "
+            "가장 단순하고 빠른 흐름 — 대부분 학교 권장."
+        )
+
+# ─────────────────────────────────────────
 # AI 공급자 (이전 04 → 03 으로 번호 재정렬)
 # ─────────────────────────────────────────
 divider()
