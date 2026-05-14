@@ -22,7 +22,7 @@ ensure_state()
 render_sidebar(active_key="school_dash")
 
 # 역할 가드 — '본교 현황' 은 학교 담당자 전용
-# (교육청 담당자는 '본교' 개념이 없으므로 전국 대시보드로 유도)
+# (교육청·실 담당자는 별도 안내 + 적절 페이지로 유도)
 if st.session_state.get("role") == "교육청":
     st.warning(
         "🏛 **교육청 담당자 모드** — '본교 현황' 은 학교 담당자가 자신의 학교 데이터를 "
@@ -31,6 +31,16 @@ if st.session_state.get("role") == "교육청":
     if st.button("→ 전국 대시보드로 이동", key="dash_guard_national",
                   type="primary", width="stretch"):
         st.switch_page("pages/5_전국대시보드.py")
+    st.stop()
+
+if st.session_state.get("role") == "실":
+    st.warning(
+        "👤 **실 담당자 모드** — '본교 현황' 은 학교 단위 통계·이력 화면으로 "
+        "학교 담당자 전용입니다. 실 담당자는 본인 점검 흐름(점검 시작 → AI 점검 → 결과 제출)을 사용하세요."
+    )
+    if st.button("→ 내 점검 시작", key="dash_guard_space",
+                  type="primary", width="stretch"):
+        st.switch_page("pages/1_점검시작.py")
     st.stop()
 
 school = st.session_state.get("school")
