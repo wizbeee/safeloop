@@ -192,6 +192,259 @@ else:
                     st.rerun()
 
 # ─────────────────────────────────────────
+# 02-2 실 담당자 명부 관리 — 학교 담당자 전용
+#
+# 학교 담당자가 공간별 담당 교사를 등록·PIN 발급·관리.
+# 실 담당자는 본인이 등록한 PIN 으로 1_점검시작 페이지에서 인증해 점검·제출.
+# ─────────────────────────────────────────
+divider()
+section(
+    "02-2", "실 담당자 명부 관리",
+    "공간별 담당 교사를 등록·PIN 발급·관리합니다. "
+    "실 담당자는 본인 PIN 으로 점검·제출할 수 있습니다.",
+)
+
+if st.session_state.get("role") == "교육청":
+    st.caption(
+        "🏛 교육청 담당자 모드 — 본 섹션은 학교 담당자가 우리 학교의 "
+        "공간별 담당 교사를 관리하는 화면입니다."
+    )
+elif not school:
+    st.caption("먼저 학교를 선택하세요. (점검 시작 페이지)")
+else:
+    from modules.managers import (
+        add_manager, deactivate_manager, is_demo_manager, list_managers,
+        reactivate_manager, reissue_pin, update_manager,
+    )
+
+    _mgr_school_code = school.get("정보공시 학교코드")
+
+    # 학교 등록 공간 → 담당 공간 선택 옵션
+    _spaces_for_mgr = [
+        s for s in st.session_state.get("registered_spaces", [])
+        if s.get("school_code") == _mgr_school_code
+    ]
+    _space_options = {
+        (
+            f"{s['type']}"
+            + (f" · {s['nickname']}" if s.get("nickname") else "")
+            + f"  ({s['space_id'][:6]})"
+        ): s["space_id"]
+        for s in _spaces_for_mgr
+    }
+
+    # ── 발급 직후 PIN 1회 표시 (보안: 평문은 화면에서만, 저장 안 됨) ──
+    _newly_issued = st.session_state.pop("_newly_issued_manager_pin", None)
+    if _newly_issued:
+        st.success(
+            f"✅ **{_newly_issued['name']}** 등록 완료 · "
+            f"매니저 ID `{_newly_issued['manager_id']}` · "
+            f"**PIN: `{_newly_issued['pin']}`**"
+        )
+        st.warning(
+            "⚠ **PIN 은 지금 한 번만 표시됩니다.** "
+            "메모해서 본인에게 전달하세요. 분실 시 [PIN 재발급] 으로 "
+            "새로 발급 가능하지만 이전 PIN 은 즉시 무효화됩니다."
+        )
+
+    # ── 현재 명부 ──
+    _all_managers = list_managers(_mgr_school_code, include_inactive=True)
+    _actives = [m for m in _all_managers if m.get("active", True)]
+    _inactives = [m for m in _all_managers if not m.get("active", True)]
+
+    _summary_txt = f"등록된 실 담당자 ({len(_actives)}명 활성"
+    if _inactives:
+        _summary_txt += f", {len(_inactives)}명 비활성"
+    _summary_txt += ")"
+    st.markdown(f"##### {_summary_txt}")
+
+    if not _all_managers:
+        st.info("아직 등록된 실 담당자가 없습니다. 아래에서 추가하세요.")
+    else:
+        for _m in _all_managers:
+            _mid = _m["manager_id"]
+            _is_active = _m.get("active", True)
+            _is_demo = is_demo_manager(_m)
+            _border = "1px solid #E5E5E8" if _is_active else "1px solid #D5D5D5"
+            _bg = "#FFFFFF" if _is_active else "#F5F5F5"
+            _opacity = "1.0" if _is_active else "0.6"
+
+            _badges_html = ""
+            if not _is_active:
+                _badges_html += "<span style='color:#999;margin-left:8px;'>(비활성)</span>"
+            if _is_demo:
+                _badges_html += (
+                    "<span style='font-size:10px;color:#D50000;"
+                    "background:#FFF2F2;border:1px solid #F8D0D0;"
+                    "padding:1px 6px;border-radius:4px;margin-left:8px;'>"
+                    "시연용</span>"
+                )
+
+            _email_disp = _m.get("email") or "이메일 없음"
+            _spaces_count = len(_m.get("assigned_space_ids") or [])
+
+            st.markdown(
+                f"<div style='border:{_border};background:{_bg};border-radius:6px;"
+                f"padding:10px 14px;margin-bottom:6px;opacity:{_opacity};'>"
+                f"<b>{_m['name']}</b> "
+                f"<code style='font-size:11px;color:#6B6B70;'>{_mid}</code>"
+                f"{_badges_html}"
+                f"<div style='font-size:12px;color:#6B6B70;margin-top:2px;'>"
+                f"📧 {_email_disp} · 📍 담당 공간 {_spaces_count}개"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+
+            # 액션 4개
+            _ac1, _ac2, _ac3, _ac4 = st.columns(4)
+            with _ac1:
+                if st.button("담당 공간 변경", key=f"mgr_edit_{_mid}",
+                              width="stretch"):
+                    st.session_state["_edit_mgr_id"] = _mid
+                    st.rerun()
+            with _ac2:
+                if st.button(
+                    "PIN 재발급", key=f"mgr_reissue_{_mid}",
+                    width="stretch", disabled=not _is_active,
+                    help="이전 PIN 즉시 무효화됨" if _is_active else "비활성 매니저는 PIN 발급 불가",
+                ):
+                    _new_pin = reissue_pin(_mgr_school_code, _mid)
+                    if _new_pin:
+                        st.session_state["_newly_issued_manager_pin"] = {
+                            "manager_id": _mid,
+                            "name": _m["name"],
+                            "pin": _new_pin,
+                        }
+                        st.rerun()
+                    else:
+                        st.error("PIN 재발급 실패")
+            with _ac3:
+                if _is_active:
+                    if st.button("비활성화", key=f"mgr_off_{_mid}",
+                                  width="stretch"):
+                        deactivate_manager(_mgr_school_code, _mid)
+                        st.toast(f"{_m['name']} 비활성화", icon="🔒")
+                        st.rerun()
+                else:
+                    if st.button("재활성화", key=f"mgr_on_{_mid}",
+                                  width="stretch"):
+                        reactivate_manager(_mgr_school_code, _mid)
+                        st.toast(f"{_m['name']} 재활성화", icon="✅")
+                        st.rerun()
+            with _ac4:
+                _last = _m.get("last_login_at")
+                st.caption(
+                    f"마지막 로그인: {_last[:16] if _last else '없음'}",
+                )
+
+            # 담당 공간 편집 패널 (선택된 매니저만 펼침)
+            if st.session_state.get("_edit_mgr_id") == _mid:
+                with st.container(border=True):
+                    st.markdown(f"**{_m['name']} 의 담당 공간 변경**")
+                    if not _space_options:
+                        st.warning(
+                            "할당 가능한 공간이 없습니다. "
+                            "먼저 위 02 섹션에서 공간을 등록하세요."
+                        )
+                        if st.button("닫기", key=f"_close_edit_{_mid}"):
+                            st.session_state.pop("_edit_mgr_id", None)
+                            st.rerun()
+                    else:
+                        _current_ids = set(_m.get("assigned_space_ids") or [])
+                        _new_labels = st.multiselect(
+                            "담당할 공간 선택 (복수 가능)",
+                            options=list(_space_options.keys()),
+                            default=[
+                                label for label, sid in _space_options.items()
+                                if sid in _current_ids
+                            ],
+                            key=f"_edit_spaces_{_mid}",
+                        )
+                        _new_ids = [_space_options[lbl] for lbl in _new_labels]
+                        _b1, _b2 = st.columns(2)
+                        if _b1.button(
+                            "저장", key=f"_save_edit_{_mid}",
+                            type="primary", width="stretch",
+                        ):
+                            update_manager(
+                                _mgr_school_code, _mid,
+                                assigned_space_ids=_new_ids,
+                            )
+                            st.session_state.pop("_edit_mgr_id", None)
+                            st.toast(f"{_m['name']} 담당 공간 변경 완료", icon="✅")
+                            st.rerun()
+                        if _b2.button(
+                            "취소", key=f"_cancel_edit_{_mid}",
+                            width="stretch",
+                        ):
+                            st.session_state.pop("_edit_mgr_id", None)
+                            st.rerun()
+
+    # ── 신규 등록 폼 ──
+    st.markdown("---")
+    with st.expander(
+        "➕ 새 실 담당자 등록",
+        expanded=not bool(_actives),
+    ):
+        if not _spaces_for_mgr:
+            st.warning(
+                "먼저 위 02 섹션에서 **공간을 등록**하세요. "
+                "공간이 있어야 담당 교사를 할당할 수 있습니다."
+            )
+        else:
+            with st.form("_add_manager_form", clear_on_submit=True):
+                _new_name = st.text_input(
+                    "이름 *",
+                    placeholder="예: 김선생님",
+                    help="실 담당자 본인 이름. 명부에 표시되며 인증 화면 selectbox 에 노출됨.",
+                )
+                _col_email, _col_phone = st.columns(2)
+                with _col_email:
+                    _new_email = st.text_input(
+                        "이메일 (선택)",
+                        placeholder="예: kim@school.kr",
+                    )
+                with _col_phone:
+                    _new_phone = st.text_input(
+                        "전화 (선택)",
+                        placeholder="예: 010-0000-0000",
+                    )
+                _new_space_labels = st.multiselect(
+                    "담당 공간 선택 (복수 가능)",
+                    options=list(_space_options.keys()),
+                    help="이 실 담당자가 점검·제출할 수 있는 공간들. "
+                          "나중에 [담당 공간 변경] 으로 수정 가능.",
+                )
+                _submitted = st.form_submit_button(
+                    "등록 + PIN 발급",
+                    type="primary",
+                    width="stretch",
+                )
+                if _submitted:
+                    if not _new_name or not _new_name.strip():
+                        st.error("이름을 입력하세요.")
+                    else:
+                        try:
+                            _new_ids = [
+                                _space_options[lbl] for lbl in _new_space_labels
+                            ]
+                            _pub, _plain_pin = add_manager(
+                                _mgr_school_code,
+                                name=_new_name.strip(),
+                                email=_new_email.strip(),
+                                phone=_new_phone.strip(),
+                                assigned_space_ids=_new_ids,
+                            )
+                            st.session_state["_newly_issued_manager_pin"] = {
+                                "manager_id": _pub["manager_id"],
+                                "name": _pub["name"],
+                                "pin": _plain_pin,
+                            }
+                            st.rerun()
+                        except Exception as _e:
+                            st.error(f"등록 실패: {_e}")
+
+# ─────────────────────────────────────────
 # AI 공급자 (이전 04 → 03 으로 번호 재정렬)
 # ─────────────────────────────────────────
 divider()

@@ -515,6 +515,104 @@ except Exception as e:
     fail += 1
 
 
+# 15. consolidate 모듈 — 학교 단위 통합 보고서 (Sprint 3 마무리)
+print("\n[15] consolidate 모듈 (학교 단위 통합 보고서)")
+try:
+    from modules import consolidate as _consol
+    from modules.storage import (
+        list_school_submissions, save_inspection, STORAGE_DIR,
+        update_submission_status,
+    )
+    import shutil as _sh
+
+    # 테스트 학교 준비
+    _TS = "SMOKE_CONSOL"
+    _tdir = STORAGE_DIR / _TS
+    if _tdir.exists():
+        _sh.rmtree(_tdir, ignore_errors=True)
+
+    # 가짜 점검 2건 저장 (학교 담당자 자체 점검 → approved)
+    for i, sp in enumerate(["화학실", "물리실"]):
+        _sess = {
+            "session_id": f"consol-{i+1:03d}",
+            "school": {"정보공시 학교코드": _TS, "학교명": "통합테스트중",
+                        "시도교육청": "테스트교육청"},
+            "active_space": {"space_id": f"sp{i+1}", "type": sp,
+                              "nickname": f"3층 {chr(65+i)}"},
+            "role": "학교",
+            "approver_name": "테스트교장",
+            "stage1_result": {}, "stage2_result": {}, "stage2_confirmed": {},
+            "stage3_result": {"items": [{"no": 1, "title": "비상샤워",
+                                          "category": "비상", "priority": "상"}]},
+            "item_scores": {"1": 1.0},
+            "score_result": {"score": 80 + i*5, "grade": "B",
+                              "category_scores": {}},
+            "recommendations": [],
+        }
+        save_inspection(_sess)
+        # status_history 에 approved 추가
+        update_submission_status(_TS, f"consol-{i+1:03d}", "approved",
+                                  by="테스트교장", by_role="학교",
+                                  note="시연 승인")
+
+    # 15-1. list_consolidatable
+    consolidatable = _consol.list_consolidatable(_TS)
+    check("consolidate/list",
+          lambda: f"{len(consolidatable)}건 통합 가능"
+                  if len(consolidatable) == 2 else
+                  (_ for _ in ()).throw(AssertionError(f"통합 가능 개수 부적합: {len(consolidatable)}")))
+
+    # 15-2. build_consolidated_record
+    _sids = [c["session_id"] for c in consolidatable]
+    record = _consol.build_consolidated_record(_TS, _sids, "테스트교장")
+    check("consolidate/record_schema",
+          lambda: f"type={record['record_type']}, spaces={record['spaces_count']}"
+                  if record.get("record_type") == "safeloop_consolidated_submission"
+                  and record.get("spaces_count") == 2 else
+                  (_ for _ in ()).throw(AssertionError(f"record 스키마 부적합: {record}")))
+    check("consolidate/record_avg",
+          lambda: f"평균 점수={record['average_score']}"
+                  if record.get("average_score") == 82.5 else
+                  (_ for _ in ()).throw(AssertionError(f"평균 부적합: {record.get('average_score')}")))
+
+    # 15-3. PDF 생성
+    pdf_bytes = _consol.build_consolidated_pdf(record)
+    check("consolidate/pdf",
+          lambda: f"{len(pdf_bytes)}B PDF"
+                  if len(pdf_bytes) > 500 else
+                  (_ for _ in ()).throw(AssertionError(f"PDF 크기 부적합: {len(pdf_bytes)}")))
+
+    # 15-4. Excel 생성
+    xlsx_bytes = _consol.build_consolidated_excel(record)
+    check("consolidate/excel",
+          lambda: f"{len(xlsx_bytes)}B XLSX"
+                  if len(xlsx_bytes) > 500 else
+                  (_ for _ in ()).throw(AssertionError(f"XLSX 크기 부적합: {len(xlsx_bytes)}")))
+
+    # 15-5. mark_consolidated 일괄 처리
+    n_marked = _consol.mark_consolidated(_TS, _sids, by="테스트교장",
+                                          note="스모크 통합 발송")
+    check("consolidate/mark",
+          lambda: f"{n_marked}건 통합 완료 처리"
+                  if n_marked == 2 else
+                  (_ for _ in ()).throw(AssertionError(f"mark 개수 부적합: {n_marked}")))
+
+    # 15-6. 처리 후 approved 목록 비어 있어야
+    after = _consol.list_consolidatable(_TS)
+    check("consolidate/after_dispatch",
+          lambda: f"통합 후 approved 목록 비어 있음 ({len(after)})"
+                  if len(after) == 0 else
+                  (_ for _ in ()).throw(AssertionError(f"통합 후 잔존: {len(after)}")))
+
+    # 정리
+    if _tdir.exists():
+        _sh.rmtree(_tdir, ignore_errors=True)
+    print("   consolidate 모듈 검증 완료 (6건)")
+except Exception as e:
+    print(f"   consolidate 모듈 검증 실패 — {type(e).__name__}: {e}")
+    fail += 1
+
+
 # 결과
 print("\n" + "=" * 60)
 print(f"  결과: {ok}건 통과 / {fail}건 실패 (총 {ok + fail}건)")
