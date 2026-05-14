@@ -94,12 +94,66 @@ def new_session_id() -> str:
 # ─────────────────────────────────────────
 # Machine-readable: JSON 3종
 # ─────────────────────────────────────────
-def build_master_record(session: dict) -> dict:
-    """세션 상태 전체를 원본 JSON으로 직렬화."""
+def build_master_record(session: dict, prior_history: list | None = None) -> dict:
+    """세션 상태 전체를 원본 JSON으로 직렬화.
+
+    schema_version 1.1 (2026-05): submitter + status + status_history 필드 추가
+    - submitter: 누가 이 점검을 수행/제출했는지 (실 담당자 vs 학교 담당자)
+    - status: 현재 제출·검토 상태 (submitted/approved/returned/consolidated)
+      실 담당자 제출 → 학교 담당자 검토 → 교육청 발송의 3단 흐름 추적용
+    - status_history: 상태 변경 이력 누적 (감사·추적)
+
+    Args:
+        session: Streamlit 세션 상태
+        prior_history: 기존 master.json 의 status_history (재저장 시 누적용).
+                       None 이면 빈 리스트로 시작 (새 점검).
+    """
     school = session.get("school") or {}
     active_space = session.get("active_space") or {}
+    role = session.get("role") or "학교"
+    space_manager = session.get("space_manager") or {}
+
+    # submitter — 누가 이 점검을 시스템에 등록했나
+    if role == "실" and space_manager:
+        submitter = {
+            "role": "실",
+            "manager_id": space_manager.get("manager_id"),
+            "name": space_manager.get("name"),
+            "email": space_manager.get("email", ""),
+            "phone": space_manager.get("phone", ""),
+        }
+        # 실 담당자 제출 → 학교 담당자 검토 대기
+        status = "submitted"
+    else:
+        submitter = {
+            "role": "학교",
+            "manager_id": None,
+            "name": session.get("approver_name", ""),
+            "email": session.get("my_email", ""),
+            "phone": "",
+        }
+        # 학교 담당자가 직접 점검·저장 → 자체 승인 상태 (스프린트 1 호환)
+        status = "approved"
+
+    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+    new_history_entry = {
+        "status": status,
+        "by": submitter.get("manager_id") or submitter.get("name") or "(unknown)",
+        "by_role": submitter.get("role"),
+        "at": now_iso,
+        "note": "재저장 (수정)" if prior_history else "초기 저장",
+    }
+    # 기존 이력에 같은 timestamp 항목 중복 방지 (1초 미만 연쇄 저장 시)
+    base_history = list(prior_history or [])
+    if base_history and base_history[-1].get("at") == now_iso \
+            and base_history[-1].get("status") == status \
+            and base_history[-1].get("by") == new_history_entry["by"]:
+        accumulated_history = base_history  # 중복 — 그대로 사용
+    else:
+        accumulated_history = base_history + [new_history_entry]
+
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "record_type": "safeloop_inspection_master",
         "session_id": session.get("session_id"),
         "timestamp": datetime.datetime.now().isoformat(),
@@ -116,6 +170,9 @@ def build_master_record(session: dict) -> dict:
             "type": active_space.get("type"),
             "nickname": active_space.get("nickname"),
         },
+        "submitter": submitter,
+        "status": status,
+        "status_history": accumulated_history,
         "ai_pipeline": {
             "stage1": session.get("stage1_result"),
             "stage2_raw": session.get("stage2_result"),
@@ -134,6 +191,24 @@ def build_master_record(session: dict) -> dict:
             "approval_date": str(session.get("approval_date", "")) if session.get("approval_date") else "",
         },
     }
+
+
+def load_prior_history(school_code: str, session_id: str) -> list:
+    """같은 session_id 의 기존 master.json 에서 status_history 추출.
+
+    재저장 시 누적 보존을 위해 사용. 파일 없거나 깨지면 빈 리스트.
+    """
+    if not school_code or not session_id:
+        return []
+    try:
+        master_path = session_dir(school_code, session_id) / "master.json"
+        if not master_path.exists():
+            return []
+        data = json.loads(master_path.read_text(encoding="utf-8"))
+        history = data.get("status_history")
+        return list(history) if isinstance(history, list) else []
+    except Exception:
+        return []
 
 
 def build_edu_package(master: dict) -> dict:
@@ -478,14 +553,19 @@ def build_official_letter_pdf(master: dict) -> bytes:
 # 메인 저장 함수
 # ─────────────────────────────────────────
 def save_inspection(session: dict) -> dict:
-    """세션 데이터를 학교 클라우드(모의)에 저장하고 생성된 파일 경로를 반환."""
+    """세션 데이터를 학교 클라우드(모의)에 저장하고 생성된 파일 경로를 반환.
+
+    같은 session_id 로 재저장 시 status_history 가 누적됨 (감사 이력 보존).
+    """
     session_id = session.get("session_id") or new_session_id()
     session["session_id"] = session_id
     school = session.get("school") or {}
     school_code = school.get("정보공시 학교코드") or "UNKNOWN"
     out_dir = session_dir(school_code, session_id)
 
-    master = build_master_record(session)
+    # 재저장 시 기존 master.json 의 status_history 누적 (감사 이력 보존)
+    prior_history = load_prior_history(school_code, session_id)
+    master = build_master_record(session, prior_history=prior_history)
     edu_pkg = build_edu_package(master)
     open_pkg = build_opendata_package(master)
 
@@ -1036,3 +1116,168 @@ def list_recent_sessions(limit: int = 20) -> list[dict]:
             })
     items.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
     return items[:limit]
+
+
+# ─────────────────────────────────────────
+# 수합·검토 (학교 담당자 전용) — Sprint 3
+# ─────────────────────────────────────────
+def list_school_submissions(
+    school_code: str,
+    status_filter: str | None = None,
+) -> list[dict]:
+    """한 학교의 모든 점검 세션 목록. 검토용 정보(status, submitter) 포함.
+
+    Args:
+        school_code: 학교 코드
+        status_filter: 특정 상태만 (submitted/approved/returned/consolidated).
+                       None 이면 전체.
+
+    Returns: timestamp 역순 정렬 리스트. 옛 데이터(status 필드 없음)는
+             "approved" 로 기본 처리 (스프린트 1 이전 호환).
+    """
+    items: list[dict] = []
+    if not school_code:
+        return items
+    school_dir = STORAGE_DIR / school_code
+    if not school_dir.exists() or not school_dir.is_dir():
+        return items
+
+    for sess in school_dir.iterdir():
+        if not sess.is_dir() or sess.name.startswith("_"):
+            continue
+        master_path = sess / "master.json"
+        if not master_path.exists():
+            continue
+        try:
+            data = json.loads(master_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        status = data.get("status") or "approved"  # 옛 호환
+        if status_filter and status != status_filter:
+            continue
+
+        submitter = data.get("submitter") or {}
+        items.append({
+            "session_id": sess.name,
+            "school_code": school_code,
+            "school_name": (data.get("school") or {}).get("name"),
+            "space_id": (data.get("space") or {}).get("id"),
+            "space_type": (data.get("space") or {}).get("type"),
+            "space_nickname": (data.get("space") or {}).get("nickname"),
+            "score": ((data.get("inspection") or {}).get("score_result") or {}).get("score"),
+            "grade": ((data.get("inspection") or {}).get("score_result") or {}).get("grade"),
+            "timestamp": data.get("timestamp"),
+            "status": status,
+            "submitter_name": submitter.get("name") or "(미상)",
+            "submitter_role": submitter.get("role", ""),
+            "submitter_manager_id": submitter.get("manager_id"),
+            "history_count": len(data.get("status_history") or []),
+            "path": str(sess),
+        })
+    items.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
+    return items
+
+
+def load_master_record(school_code: str, session_id: str) -> dict | None:
+    """특정 점검 세션의 master.json 로드. 파일 없거나 깨지면 None."""
+    if not school_code or not session_id:
+        return None
+    master_path = session_dir(school_code, session_id) / "master.json"
+    if not master_path.exists():
+        return None
+    try:
+        return json.loads(master_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def update_submission_status(
+    school_code: str,
+    session_id: str,
+    new_status: str,
+    by: str,
+    by_role: str = "학교",
+    note: str = "",
+) -> bool:
+    """제출본 상태 변경 + status_history 항목 추가.
+
+    Args:
+        school_code: 학교 코드
+        session_id: 점검 세션 ID
+        new_status: 새 상태 ("approved"/"returned"/"submitted"/"consolidated")
+        by: 처리자 식별자 (이름 또는 매니저 ID)
+        by_role: 처리자 역할 (기본 "학교")
+        note: 변경 사유 (반려 사유 등). 빈 문자열 허용.
+
+    Returns: 성공 시 True. 파일 없거나 쓰기 실패 시 False.
+    """
+    if not school_code or not session_id or not new_status:
+        return False
+    data = load_master_record(school_code, session_id)
+    if not data:
+        return False
+
+    history = list(data.get("status_history") or [])
+    history.append({
+        "status": new_status,
+        "by": by or "(unknown)",
+        "by_role": by_role,
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "note": note or "",
+    })
+    data["status_history"] = history
+    data["status"] = new_status
+
+    try:
+        master_path = session_dir(school_code, session_id) / "master.json"
+        master_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return True
+    except Exception:
+        return False
+
+
+def update_submission_scores(
+    school_code: str,
+    session_id: str,
+    new_item_scores: dict,
+    new_score_result: dict,
+    by: str,
+    note: str = "학교 담당자 직접 수정",
+) -> bool:
+    """학교 담당자가 제출본 점수를 직접 수정.
+
+    item_scores + score_result 갱신 + status_history 에 수정 기록 추가.
+    상태는 변경하지 않음 (호출 측에서 별도 update_submission_status 권장).
+    """
+    if not school_code or not session_id:
+        return False
+    data = load_master_record(school_code, session_id)
+    if not data:
+        return False
+    data.setdefault("inspection", {})
+    data["inspection"]["item_scores"] = new_item_scores
+    data["inspection"]["score_result"] = new_score_result
+
+    history = list(data.get("status_history") or [])
+    history.append({
+        "status": data.get("status"),
+        "by": by or "(unknown)",
+        "by_role": "학교",
+        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "note": note or "학교 담당자 직접 수정",
+    })
+    data["status_history"] = history
+
+    try:
+        master_path = session_dir(school_code, session_id) / "master.json"
+        master_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return True
+    except Exception:
+        return False

@@ -13,7 +13,10 @@ import streamlit as st
 DEFAULT_STATE = {
     # 학교 식별 (Step 1)
     "school": None,          # {"정보공시 학교코드": ..., "학교명": ..., ...}
-    "auth_verified": False,
+    # 학교 인증번호(6자리) 통과 여부 — 학교 담당자(role="학교") 흐름에서 사용.
+    # 실 담당자(role="실")의 인증 통과는 space_manager 객체 존재로 판단한다
+    # (별도 플래그 없음). is_authenticated_for_role() 헬퍼로 통합 검사 권장.
+    "school_auth_verified": False,
 
     # 공간 (Step 2)
     "active_space": None,    # {"space_id": "...", "type": "화학실", "nickname": "3층 A"}
@@ -46,7 +49,12 @@ DEFAULT_STATE = {
     # 모드 — 환경변수 또는 URL 파라미터로 결정 (ensure_state 에서 처리)
     # 기본 False (실 사용). SAFELOOP_DEMO_MODE=1 또는 ?demo=1 시 True.
     "demo_mode": False,
-    "role": "학교",             # "학교" | "교육청"
+    "role": "학교",             # "실" | "학교" | "교육청"
+
+    # 실 담당자 정보 — role="실" 인증 통과 시 저장
+    # {"manager_id": "M001", "name": "홍길동", "email": ..., "phone": ...,
+    #  "assigned_space_ids": ["sp_chem_3a", ...], "active": True, ...}
+    "space_manager": None,
 
     # 전국 대시보드
     "filter_sido": None,
@@ -177,11 +185,27 @@ def set_(key: str, value: Any) -> None:
     st.session_state[key] = value
 
 
+def is_authenticated_for_role() -> bool:
+    """현재 역할에 맞는 인증이 통과되었는지 통합 검사.
+
+    - role="실"   → space_manager 객체 존재 여부 (매니저 PIN 통과 시 set)
+    - role="학교"/그 외 → school_auth_verified (학교 인증번호 통과 시 True)
+    """
+    role = st.session_state.get("role", "학교")
+    if role == "실":
+        mgr = st.session_state.get("space_manager")
+        return bool(mgr and isinstance(mgr, dict) and mgr.get("manager_id"))
+    return bool(st.session_state.get("school_auth_verified"))
+
+
 def require_school() -> dict | None:
-    """학교 선택·인증 완료 여부 확인. 미완료면 경고 표시 + None 반환."""
+    """학교 선택·인증 완료 여부 확인. 미완료면 경고 표시 + None 반환.
+
+    역할별 인증 방식이 달라 is_authenticated_for_role() 로 통합 검사한다.
+    """
     ensure_state()
     school = st.session_state.get("school")
-    if not school or not st.session_state.get("auth_verified"):
+    if not school or not is_authenticated_for_role():
         st.warning("먼저 **학교 찾기** 페이지에서 학교를 선택하고 인증하세요.")
         return None
     return school
@@ -195,6 +219,39 @@ def require_active_space() -> dict | None:
         st.warning("점검할 **공간이 선택되지 않았습니다**. 점검 시작 페이지에서 공간을 선택하세요.")
         return None
     return sp
+
+
+def require_space_manager() -> dict | None:
+    """실 담당자 인증 완료 여부 확인. 미완료면 경고 + None 반환.
+
+    role="실" 일 때만 의미가 있음. 호출 측에서 role 확인 후 사용.
+    """
+    ensure_state()
+    mgr = st.session_state.get("space_manager")
+    if not mgr or not isinstance(mgr, dict) or not mgr.get("manager_id"):
+        st.warning("먼저 **실 담당자 인증**을 완료하세요.")
+        return None
+    return mgr
+
+
+def is_space_manager_authenticated() -> bool:
+    """실 담당자가 인증된 상태인지 (gate 없이 단순 검사)."""
+    mgr = st.session_state.get("space_manager")
+    return bool(mgr and isinstance(mgr, dict) and mgr.get("manager_id"))
+
+
+def manager_can_access_space(space_id: str) -> bool:
+    """현재 인증된 실 담당자가 해당 공간을 담당하는지 검사.
+
+    학교/교육청 역할에서는 항상 True (권한 분리는 호출 측 role 분기로).
+    """
+    role = st.session_state.get("role", "학교")
+    if role != "실":
+        return True
+    mgr = st.session_state.get("space_manager")
+    if not mgr or not isinstance(mgr, dict):
+        return False
+    return space_id in (mgr.get("assigned_space_ids") or [])
 
 
 def require_score_result() -> dict | None:

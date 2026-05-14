@@ -61,12 +61,30 @@ if not sr:
         st.switch_page("pages/2_AI점검.py")
     st.stop()
 
-hero(
-    "단계 3 — 결과 저장",
-    "결과 저장",
-    f"{school['학교명']} · {active_space.get('type', '-')} "
-    f"({active_space.get('nickname') or '-'})",
-)
+# 역할별 헤더 라벨 (실 담당자는 "제출" 흐름)
+_role = st.session_state.get("role", "학교")
+_is_space_role = (_role == "실")
+_space_mgr = st.session_state.get("space_manager") or {}
+
+if _is_space_role:
+    hero(
+        "단계 3 — 학교 담당자에게 제출",
+        "결과 제출",
+        f"{school['학교명']} · {active_space.get('type', '-')} "
+        f"({active_space.get('nickname') or '-'}) "
+        f"· 제출자: {_space_mgr.get('name', '실 담당자')}",
+    )
+    st.info(
+        "👤 **실 담당자 모드** — 본 점검 결과는 **학교 담당자에게 제출**되어 검토 후 "
+        "교육청에 통합 보고됩니다. 교육청 직접 발송은 학교 담당자만 가능합니다."
+    )
+else:
+    hero(
+        "단계 3 — 결과 저장",
+        "결과 저장",
+        f"{school['학교명']} · {active_space.get('type', '-')} "
+        f"({active_space.get('nickname') or '-'})",
+    )
 
 # 미저장 경고 — 점검 진행 중인데 아직 저장 안 했으면 상단에 명확한 안내
 from modules.session import has_unsaved_inspection_work
@@ -159,7 +177,15 @@ else:
 # (3) 이중 저장
 # ─────────────────────────────────────────
 divider()
-section("03", "점검 결과 저장", "사람이 읽는 형태와 AI 가 읽는 형태 모두 자동 생성됩니다.")
+if _is_space_role:
+    section(
+        "03",
+        "학교 담당자에게 제출",
+        "제출 시 학교 담당자에게 검토 대기 상태로 전달됩니다. "
+        "(제출 후에는 학교 담당자가 승인·반려·수정할 수 있습니다.)",
+    )
+else:
+    section("03", "점검 결과 저장", "사람이 읽는 형태와 AI 가 읽는 형태 모두 자동 생성됩니다.")
 
 st.markdown(
     "<div class='sl-card'>"
@@ -171,7 +197,8 @@ st.markdown(
 
 col_save1, col_save2 = st.columns([2, 1])
 with col_save1:
-    if st.button("점검 결과 저장", type="primary", width="stretch"):
+    _save_btn_label = "학교 담당자에게 제출" if _is_space_role else "점검 결과 저장"
+    if st.button(_save_btn_label, type="primary", width="stretch"):
         result = save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
         st.session_state["saved_session_id"] = result["session_id"]
         # 본저장 완료 → 드래프트 정리 (공간별)
@@ -400,8 +427,30 @@ if st.session_state.get("edu_package_ready"):
             )
 
 # ─────────────────────────────────────────
-# (5) 교육청 담당자 이메일로 발송 — 내부 결재 확인 후 mailto 링크 생성
+# (5) 교육청 담당자 이메일로 발송 — 학교 담당자 전용
+#
+# 실 담당자는 본인 점검을 학교 담당자에게 제출하는 것까지만 가능.
+# 교육청 발송은 학교 담당자가 우리 학교 실 담당자 제출본을 모두 검토·승인한 후
+# 통합해서 한 번에 발송 (스프린트 4 통합 보고서).
 # ─────────────────────────────────────────
+if _is_space_role:
+    divider()
+    st.markdown(
+        "<div style='padding:16px 18px;border:1px solid #C8E6C9;background:#F0F7F0;"
+        "border-radius:6px;color:#2E7D32;font-size:13.5px;line-height:1.65;'>"
+        "<b>✅ 학교 담당자 검토 대기 중</b><br>"
+        "제출이 완료되면 학교 담당자가 결과를 검토합니다. "
+        "수정 요청(반려)이 있으면 알림이 표시되며, 승인되면 교육청 통합 보고에 포함됩니다."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "💡 교육청 직접 발송은 **학교 담당자**만 가능합니다. "
+        "본 점검 외에도 다른 공간(다른 실 담당자) 제출이 있을 수 있으므로, "
+        "학교 단위로 통합해서 한 번에 발송하는 흐름입니다."
+    )
+    st.stop()  # 실 담당자는 여기서 페이지 종료 — 아래 발송 흐름 미노출
+
 divider()
 section("05", "교육청 담당자 이메일로 발송",
         "내부 결재 완료 후 교육청 담당자 이메일에 점검 데이터(JSON·PDF) 첨부해 발송")
