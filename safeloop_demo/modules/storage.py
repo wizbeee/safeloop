@@ -1008,6 +1008,34 @@ def load_school_profile(school_code: str) -> dict:
 
 
 # ─────────────────────────────────────────
+# 학교별 결재 정책 — 단일 결재(에듀파인만) vs 이중 결재(에듀파인 + SafeLoop)
+#
+# 단일 결재 (기본, dual_approval_enabled=False):
+#   에듀파인에서 결재 완료된 파일을 그대로 첨부해 발송. SafeLoop 안에서 추가
+#   결재 입력 화면 자체가 나타나지 않음. 단순·빠른 흐름.
+#
+# 이중 결재 (학교 선택, dual_approval_enabled=True):
+#   에듀파인 결재 + SafeLoop 안에서도 결재자 정보 기록. 학교가 자체 감사·
+#   추적 이력을 추가로 남기고 싶을 때.
+#
+# 학교 담당자가 [설정] 페이지에서 한 번 정하면 그 학교는 일관되게 적용됨.
+# ─────────────────────────────────────────
+def get_school_dual_approval(school_code: str) -> bool:
+    """학교의 이중 결재 정책 조회. 기본 False (단일 결재 — 에듀파인만)."""
+    if not school_code:
+        return False
+    profile = load_school_profile(school_code)
+    return bool(profile.get("dual_approval_enabled", False))
+
+
+def set_school_dual_approval(school_code: str, enabled: bool) -> None:
+    """학교의 이중 결재 정책 저장."""
+    if not school_code:
+        return
+    save_school_profile(school_code, {"dual_approval_enabled": bool(enabled)})
+
+
+# ─────────────────────────────────────────
 # 디스크 사용량 + 캐시 정리
 # ─────────────────────────────────────────
 def _dir_size(path: Path) -> int:

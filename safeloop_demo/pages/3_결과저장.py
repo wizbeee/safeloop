@@ -534,38 +534,61 @@ else:
             "등록 시 그 주소가 우선 사용됩니다."
         )
 
-    # 2) 결재 정보 기록 (선택) — 강제 아님. 학교가 자체 기록을 원할 때만.
-    #    실제 결재는 K-에듀파인 등 외부 시스템에서 진행되므로, SafeLoop 은
-    #    결재를 강제하지 않고 단지 메타 정보로 기록만 지원한다.
+    # 2) 결재 정보 기록 — 학교별 결재 정책에 따라 노출
+    #    학교 정책이 "이중 결재"인 경우만 결재 입력 expander 표시.
+    #    "단일 결재"(기본)인 학교는 에듀파인 결재된 파일을 그대로 발송 — 입력 화면 없음.
+    #    정책 변경은 [설정] → [02-3 결재 정책] 에서.
+    from modules.storage import get_school_dual_approval
+    _dual_approval_enabled = get_school_dual_approval(
+        (school or {}).get("정보공시 학교코드") or ""
+    )
+
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-    with st.expander("📋 결재 정보 기록 (선택)", expanded=False):
-        st.caption(
-            "💡 결재는 **에듀파인(K-에듀파인) 등 외부 시스템**에서 진행하세요. "
-            "SafeLoop 은 결재를 강제하지 않습니다. "
-            "다만 발송 데이터에 결재자·일자를 함께 기록하고 싶다면 아래에 "
-            "입력하세요. **비워두어도 정상 발송됩니다.**"
-        )
-        col_app1, col_app2 = st.columns([2, 1])
-        with col_app1:
-            approver_name = st.text_input(
-                "결재자 이름 (선택)",
-                value=st.session_state.get("approver_name", ""),
-                placeholder="예: 홍길동 (교장)",
-                key="approver_name_input",
+
+    if _dual_approval_enabled:
+        with st.expander("📋 결재 정보 기록 (이중 결재 — 선택 입력)",
+                          expanded=False):
+            st.caption(
+                "🔐 본교는 **이중 결재 정책**입니다. 에듀파인 결재 외에 "
+                "SafeLoop 안에도 결재자·일자를 기록할 수 있습니다. "
+                "**비워두어도 정상 발송됩니다.** 정책 변경은 [설정] → [02-3] 에서."
             )
-            st.session_state["approver_name"] = approver_name
-        with col_app2:
-            import datetime as _dt_app
-            approval_date = st.date_input(
-                "결재 일자 (선택)",
-                value=st.session_state.get("approval_date") or _dt_app.date.today(),
-                key="approval_date_input",
+            col_app1, col_app2 = st.columns([2, 1])
+            with col_app1:
+                approver_name = st.text_input(
+                    "결재자 이름 (선택)",
+                    value=st.session_state.get("approver_name", ""),
+                    placeholder="예: 홍길동 (교장)",
+                    key="approver_name_input",
+                )
+                st.session_state["approver_name"] = approver_name
+            with col_app2:
+                import datetime as _dt_app
+                approval_date = st.date_input(
+                    "결재 일자 (선택)",
+                    value=st.session_state.get("approval_date") or _dt_app.date.today(),
+                    key="approval_date_input",
+                )
+                st.session_state["approval_date"] = approval_date
+            st.session_state["internal_approval_confirmed"] = bool(
+                (approver_name or "").strip()
             )
-            st.session_state["approval_date"] = approval_date
-        # 메타 플래그 — 결재 정보 입력 시 자동 True (호환성 유지용, 강제 아님)
-        st.session_state["internal_approval_confirmed"] = bool(
-            (approver_name or "").strip()
+    else:
+        # 단일 결재 정책 — 안내 박스만 (입력 화면 없음)
+        st.markdown(
+            "<div style='padding:10px 14px;background:#F0F7F0;"
+            "border:1px solid #C8E6C9;border-radius:6px;color:#2E7D32;"
+            "font-size:12.5px;line-height:1.6;'>"
+            "📋 <b>단일 결재 정책</b> — 결재는 K-에듀파인 등 외부 시스템에서 "
+            "진행하세요. 결재 완료된 파일을 아래에서 다운받아 교육청에 "
+            "발송하면 됩니다. <i>이중 결재가 필요하면 [설정] → [02-3] 에서 "
+            "정책을 변경할 수 있습니다.</i>"
+            "</div>",
+            unsafe_allow_html=True,
         )
+        # 단일 결재 모드에서는 결재 정보 비움 (이전 세션 잔존 정리)
+        st.session_state["approver_name"] = ""
+        st.session_state["internal_approval_confirmed"] = False
 
     # 3) 발송 가능 조건 — 저장만 완료되면 발송 가능 (결재 강제 X)
     saved_sid = st.session_state.get("saved_session_id")
