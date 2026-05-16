@@ -28,14 +28,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 팀 / 대회
+# 프로젝트 정보
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.metric("팀명", "세이프루프 SafeLoop")
+    st.metric("프로젝트", "세이프루프 SafeLoop")
 with c2:
-    st.metric("대회", "제8회 교육 공공데이터 AI 활용대회")
+    st.metric("적용 분야", "학교 시설 안전 점검")
 with c3:
-    st.metric("마감", "2026-05-31")
+    st.metric("기술 스택", "Streamlit + Python + Claude API")
 
 divider()
 
@@ -224,4 +224,4 @@ with c_c:
     st.markdown("**Backend · 데이터**\n- Python 3.10+\n- pandas · ReportLab · openpyxl")
 
 divider()
-st.caption("2026 세이프루프 · 제8회 교육 공공데이터 AI 활용대회")
+st.caption("세이프루프 SafeLoop · 학교 시설 안전 점검 시스템")

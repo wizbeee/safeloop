@@ -1012,7 +1012,7 @@ if s2 and _show_stage2_confirm:
                 "체크해도 항목은 사라지지 않으며, 반영 전까지 자유롭게 수정 가능합니다.</div>",
                 unsafe_allow_html=True)
 
-    # 시연 합성 응답 명시 — 심사위원·사용자에게 "이게 진짜 AI 결과냐" 의문 차단
+    # 시연 합성 응답 명시 — 사용자에게 "이게 진짜 AI 결과냐" 의문 차단
     if s2.get("_synth_demo"):
         st.markdown(
             "<div style='padding:10px 14px;background:#FFF8E1;border:1px solid #FFE082;"
