@@ -293,16 +293,26 @@ if (_role == "실" and st.session_state.get("school")
     school = st.session_state["school"]
     school_code = school.get("정보공시 학교코드")
 
-    # 시연 모드 — 매니저가 없으면 데모 매니저 자동 등록 + 안내
-    # 학교에 이미 등록된 공간이 있으면 모두 데모 매니저에게 자동 할당해서
-    # 시연 흐름이 "본인에게 할당된 공간이 없습니다" 안내에서 막히지 않도록 한다.
+    # 시연 모드 — 매니저가 없으면 데모 매니저 자동 등록 + 안내.
+    # 학교에 이미 등록된 공간이 있으면 모두 데모 매니저에게 자동 할당.
+    # 학교에 공간이 0개라면 (사용자가 [실 담당자]로 처음 진입) 데모 공간
+    # 1개를 자동 등록해 흐름이 막히지 않도록 한다.
     if st.session_state.get("demo_mode"):
         try:
-            registered = st.session_state.get("registered_spaces", []) or []
-            demo_space_ids = [
-                s.get("space_id") for s in registered
-                if s.get("school_code") == school_code and s.get("space_id")
-            ]
+            registered = st.session_state.setdefault("registered_spaces", [])
+            here = [s for s in registered if s.get("school_code") == school_code]
+            # 학교에 공간 0개 데모 화학실 1개 자동 등록 (시연 흐름 보장)
+            if not here:
+                _demo_space = {
+                    "space_id": uuid.uuid4().hex[:10],
+                    "school_code": school_code,
+                    "type": "화학실",
+                    "nickname": "시연용",
+                    "floor": 3,
+                }
+                registered.append(_demo_space)
+                here = [_demo_space]
+            demo_space_ids = [s.get("space_id") for s in here if s.get("space_id")]
             ensure_demo_manager(
                 school_code,
                 name="시연 담당교사",
