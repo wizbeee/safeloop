@@ -48,6 +48,18 @@ if st.session_state.get("role") == "교육청":
         st.switch_page("pages/7_교육청수신함.py")
     st.stop()
 
+if st.session_state.get("role") == "실":
+    st.warning(
+        "**실 담당자 모드** — '데이터 전송' 은 학교 단위 발송 화면으로 "
+        "학교 담당자 전용입니다. 실 담당자는 본인 점검 흐름(점검 시작 → "
+        "AI 점검 → 결과 제출)을 사용하세요. 제출된 결과는 학교 담당자가 "
+        "수합·검토 후 교육청에 발송합니다."
+    )
+    if st.button("내 점검 시작", key="track_guard_space",
+                  type="primary", width="stretch"):
+        st.switch_page("pages/1_점검시작.py")
+    st.stop()
+
 hero("SUBMISSION", "데이터 전송",
      "본교 점검 결과를 교육청 담당자에게 발송 + 발송 기록·수신 확인 추적")
 
