@@ -39,36 +39,18 @@ with c3:
 
 divider()
 
-# 4단계 + 순환
-section("01", "4단계 + 순환 구조")
-st.markdown(
-    """
-    | Stage | 내용 | 역할 |
-    |:---:|---|---|
-    | **Stage 1** | 전국 위험도 분석 (11,841개교 526개교 식별) | 진단 |
-    | **Stage 2** | AI 맞춤 점검표 자동 생성 (3단계 AI 비전) | 정밀 점검 도구 |
-    | **Stage 3** | 실질 점검 + 안전 점수 + 데이터 수집 | 데이터 축적 |
-    | **Stage 4** | 에듀파인 결재 KEIIS 공공데이터 환원 정책 활용 | 의사결정 지원 |
-    | **순환** | Stage 4 환원 Stage 1 정교화 (자가 개선) | 시스템 진화 |
-    """
-)
-
-divider()
-
 # 차별점
-section("02", "차별점 3가지")
-cc1, cc2, cc3 = st.columns(3)
+section("01", "차별점")
+cc1, cc2 = st.columns(2)
 with cc1:
-    st.markdown("### 1. 공간 맞춤 점검표\n일률 점검표 **공간별 법령에 부합하는 맞춤표**를 AI가 자동 설계. 담당자의 다중 법령 매핑 부담 제거.")
+    st.markdown("### 공간 맞춤 점검표\n일률 점검표 **공간별 법령에 부합하는 맞춤표**를 AI가 자동 설계. 담당자의 다중 법령 매핑 부담 제거.")
 with cc2:
-    st.markdown("### 2. 데이터 순환\n단발 분석 **환원 피드백 루프**. 점검 결과가 KEIIS·공공데이터포털로 흐르며 대시보드 자체가 진화.")
-with cc3:
-    st.markdown("### 3. 기존 제도 존중\n에듀파인·KEIIS·공공데이터포털을 **대체하지 않고 가교**. 결재라인·법적 효력 유지, 품질만 AI로 혁신.")
+    st.markdown("### 3단 검토 흐름\n실 담당자 점검 → 학교 담당자 수합·검토 → 교육청 발송. 권한 분리와 책임성 강화.")
 
 divider()
 
 # 법령 근거
-section("03", "6개 핵심 법령")
+section("02", "6개 핵심 법령")
 st.caption("AI 점검표의 모든 항목은 아래 법령의 구체 조항에 매핑되어 출력됩니다.")
 for law in CORE_LAWS:
     st.markdown(f"- **{law}**")
@@ -89,7 +71,7 @@ with st.expander("27 표준 항목 × 법령 매핑"):
 divider()
 
 # 데이터 흐름 (제도 관점)
-section("04", "제도 관점 데이터 흐름")
+section("03", "제도 관점 데이터 흐름")
 st.markdown(
     """
     | 단계 | 시스템 | 역할 |
@@ -103,56 +85,10 @@ st.markdown(
     """
 )
 
-divider()
-
 # ─────────────────────────────────────────
-# 05 순환 구조 Sankey (구 데이터순환 페이지에서 이관)
+# 04 교육청 정책 활용 프레임
 # ─────────────────────────────────────────
-section("05", "순환 구조 Sankey",
-        "학교 에듀파인 교육청 KEIIS 공공데이터 대시보드 다시 위험군 재평가")
-
-_sankey_labels = [
-    "공공데이터 (기존 BEFORE)", # 0
-    "위험군 526개교", # 1
-    "학교 · SafeLoop 점검", # 2
-    "에듀파인 결재", # 3
-    "교육청 수신·검증", # 4
-    "KEIIS · 환원", # 5
-    "AFTER 고도화 · 정책 결정", # 6
-]
-_sankey_sources = [0, 1, 2, 3, 4, 5]
-_sankey_targets = [1, 2, 3, 4, 5, 6]
-_sankey_values = [100, 80, 80, 80, 55, 55]
-
-_sankey_fig = go.Figure(data=[go.Sankey(
-    arrangement="snap",
-    node=dict(
-        pad=40, thickness=22,
-        line=dict(color="#0A0A0B", width=0.6),
-        label=_sankey_labels,
-        color=[
-            "#8BC34A", "#FFC107", "#D50000",
-            "#5C6BC0", "#29B6F6", "#26C6DA", "#2E7D32",
-        ],
-    ),
-    link=dict(source=_sankey_sources, target=_sankey_targets, value=_sankey_values,
-              color=["rgba(200,200,200,0.35)"] * len(_sankey_sources))
-)])
-_sankey_fig.update_layout(height=420, margin=dict(l=20, r=20, t=10, b=10),
-                           font=dict(size=13, color="#0A0A0B"))
-st.plotly_chart(_sankey_fig, width="stretch")
-
-st.caption(
-    "※ **순환의 핵심** — 6단계의 AFTER 고도화 결과는 다음 분기에 0단계 BEFORE 에 "
-    "추가되어 위험군 재평가에 사용됩니다. (매 분기 반복 '순환'의 의미)"
-)
-
-divider()
-
-# ─────────────────────────────────────────
-# 06 교육청 정책 활용 프레임 (구 데이터순환 페이지에서 이관)
-# ─────────────────────────────────────────
-section("06", "교육청 정책 활용 프레임",
+section("04", "교육청 정책 활용 프레임",
         "수집된 데이터로 위험군 학교에 일관된 개선 지원 효과 모니터링")
 
 st.markdown(
@@ -183,45 +119,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-st.markdown(
-    "<div style='margin-top:16px;padding:16px 20px; background:#FAFAFA; border:1px solid #E5E5E8; "
-    "border-radius:8px; font-size:13px; color:#0A0A0B; line-height:1.8;'>"
-    "<b style='color:#D50000;'>기존 제도 존중 원칙</b> — SafeLoop은 에듀파인·KEIIS·공공데이터포털을 "
-    "대체하지 않습니다. 법적 근거(공공데이터법 · 교육시설법 제10조 3항 · "
-    "<i>공공데이터는 업무 부산물 개방</i>)를 그대로 두고, 학교의 업무 부산물이 더 정확하게·구조화되어 "
-    "기존 경로로 흘러가도록 돕는 역할만 합니다."
-    "</div>",
-    unsafe_allow_html=True,
-)
-
-divider()
-
-# 확장 로드맵
-section("07", "확장 로드맵")
-st.markdown(
-    """
-    | 단계 | 내용 | 시기 |
-    |:---:|---|:---:|
-    | MVP | 앱 · 에듀파인 패키지 · Mock 수신함 | 2026 상반기 |
-    | Phase 2 | 교육청 수신 모듈 실제 운영 · 결재 증빙 자동 파싱 | 6~12개월 |
-    | Phase 3 | KEIIS API 직접 연동 · 공공데이터포털 자동 등록 | 1~3년 |
-    | 확장 1 | 학교 도서관 · 복지관 · 공공 문화·체육 시설 일반화 | 중기 |
-    | 확장 2 | 법령 RAG(국가법령정보센터 API) 구축 — 맞춤 점검표 범위 자동 확장 | 중장기 |
-    """
-)
-
-divider()
-
-# 기술 스택
-section("08", "기술 스택")
-c_a, c_b, c_c = st.columns(3)
-with c_a:
-    st.markdown("**Frontend**\n- Streamlit\n- Plotly · Altair")
-with c_b:
-    st.markdown("**AI**\n- Claude Opus 4.5 (Vision 단계 1·2)\n- Claude Haiku 4.5 (단계 3)")
-with c_c:
-    st.markdown("**Backend · 데이터**\n- Python 3.10+\n- pandas · ReportLab · openpyxl")
 
 divider()
 st.caption("세이프루프 SafeLoop · 학교 시설 안전 점검 시스템")

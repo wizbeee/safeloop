@@ -500,6 +500,48 @@ def _render_shot_card(s: dict) -> None:
     st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
 
 
+def _prefill_item_scores_from_stage2(stage2_confirmed: dict,
+                                      items: list,
+                                      current_scores: dict) -> dict:
+    """stage2_confirmed 의 detected/absent 정보를 점검표 라디오 기본값으로 매핑.
+
+    - detected_equipment 의 표준 매칭 항목 1.0 (양호) prefill
+    - likely_absent_equipment 의 표준 매칭 항목 0.0 (부재) prefill
+    - 이미 사용자가 입력한 항목은 보존 (덮어쓰지 않음)
+
+    이렇게 해야 사용자가 [반영하기] 누른 후 점검표로 가면 라디오가
+    AI 인식 결과 + 사용자 정정에 맞춰 자동으로 양호/부재로 미리 채워져 있음.
+    """
+    from modules.laws import find_std_match
+
+    detected_stds = set()
+    for eq in (stage2_confirmed.get("detected_equipment") or []):
+        name = eq.get("name", "") if isinstance(eq, dict) else str(eq)
+        std = find_std_match(name)
+        if std:
+            detected_stds.add(std)
+
+    absent_stds = set()
+    for eq in (stage2_confirmed.get("likely_absent_equipment") or []):
+        name = eq.get("name", "") if isinstance(eq, dict) else str(eq)
+        std = find_std_match(name)
+        if std:
+            absent_stds.add(std)
+
+    new_scores = dict(current_scores or {})
+    for itm in items:
+        no = str(itm.get("no", ""))
+        if not no or no in new_scores:
+            continue  # 이미 입력된 항목 보존
+        title = itm.get("title", "")
+        std = find_std_match(title)
+        if std and std in detected_stds:
+            new_scores[no] = 1.0
+        elif std and std in absent_stds:
+            new_scores[no] = 0.0
+    return new_scores
+
+
 def _render_wizard_nav(prev_step: str | None, next_step: str | None,
                         next_label: str = "다음 ", next_disabled: bool = False,
                         next_type: str = "primary") -> None:
@@ -738,13 +780,18 @@ else:
                 )
                 st.rerun()
 
-        _render_wizard_nav(
-            prev_step="ai_run",
-            next_step="review",
-            next_label="결과 단계로 ",
-        )
+        # supplement 단계의 [이전] 버튼은 여기서 (상단), [결과 단계로] 는
+        # 페이지 가장 아래에 표시 (사용자가 결과 다 보고 마지막에 누르도록).
+        _c_prev, _c_spacer = st.columns([1, 4])
+        with _c_prev:
+            if st.button("이전 (재분석)", key="nav_prev_supplement_top",
+                          width="stretch"):
+                _go_to_step("ai_run")
         if not supplement_photos:
-            st.caption("보완 촬영이 필요 없다면 그대로 '결과 단계로' 진행해도 됩니다.")
+            st.caption(
+                "보완 촬영이 필요 없다면 아래 결과를 확인하고 "
+                "페이지 가장 아래의 **[결과 단계로 ]** 버튼을 누르세요."
+            )
 
     elif step == "review":
         # 결과 단계는 아래 (B)/(C)/(D)/(E) 블록이 렌더
@@ -1124,6 +1171,16 @@ if s2 and _show_stage2_confirm:
                 label_visibility="collapsed",
             )
 
+    # 반영 직후 큰 success 박스 (rerun 후 1회 표시) — 사용자 인지 강화
+    _just_applied = st.session_state.pop("_stage2_just_applied", None)
+    if _just_applied:
+        st.success(
+            f"### 반영 완료\n\n"
+            f"{_just_applied['msg']}\n\n"
+            f"아래로 스크롤하여 **현장 점검 입력** 섹션을 펼치고 "
+            f"각 항목을 양호/불량/부재로 입력하세요."
+        )
+
     # ─── 반영하기 버튼 (일괄 적용) ───
     pending_changes = (
         sum(1 for v in marks["detected_remove"].values() if v)
@@ -1176,7 +1233,27 @@ if s2 and _show_stage2_confirm:
                     ],
                     "user_corrections": [],
                 }
-                st.toast("AI 결과 그대로 적용", icon=None)
+                # 점검표 라디오 자동 prefill (detected 양호 / absent 부재)
+                _s3_items = (
+                    (st.session_state.get("stage3_result") or {}).get("items")
+                    or []
+                )
+                if _s3_items:
+                    st.session_state["item_scores"] = (
+                        _prefill_item_scores_from_stage2(
+                            st.session_state["stage2_confirmed"],
+                            _s3_items,
+                            st.session_state.get("item_scores") or {},
+                        )
+                    )
+                    st.session_state["_radio_counter"] = (
+                        st.session_state.get("_radio_counter", 0) + 1
+                    )
+                # 명확한 시각 피드백 — 단순 toast 가 아닌 큰 success 박스
+                st.session_state["_stage2_just_applied"] = {
+                    "count": 0,
+                    "msg": "AI 결과를 그대로 적용했습니다. 아래 [현장 점검 입력] 으로 이동하세요.",
+                }
                 st.rerun()
                 # 아래 변경 적용 블록은 실행되지 않음 (rerun 으로 종료)
             # ── 변경 있는 경우: 기존 적용 로직 ──
@@ -1216,8 +1293,58 @@ if s2 and _show_stage2_confirm:
                 "ambiguous_resolutions": resolved,
                 "user_corrections": user_corrections,
             }
-            st.toast(f"반영 완료 — 사용자 수정 {len(user_corrections)}건", icon=None)
+            # 점검표 라디오 자동 prefill — 사용자 정정이 점검표에 즉시 반영됨
+            _s3_items = (
+                (st.session_state.get("stage3_result") or {}).get("items")
+                or []
+            )
+            if _s3_items:
+                st.session_state["item_scores"] = (
+                    _prefill_item_scores_from_stage2(
+                        st.session_state["stage2_confirmed"],
+                        _s3_items,
+                        st.session_state.get("item_scores") or {},
+                    )
+                )
+                # 라디오 위젯 새로 생성되어 prefill 값 적용되도록 카운터 +1
+                st.session_state["_radio_counter"] = (
+                    st.session_state.get("_radio_counter", 0) + 1
+                )
+            # 명확한 시각 피드백 — rerun 후 큰 success 박스로 표시
+            st.session_state["_stage2_just_applied"] = {
+                "count": len(user_corrections),
+                "msg": (
+                    f"사용자 수정 {len(user_corrections)}건 반영 완료. "
+                    f"점검표 라디오에 양호/부재가 자동 채워졌습니다. "
+                    f"아래 [현장 점검 입력] 으로 이동하세요."
+                ),
+            }
             st.rerun()
+
+# ─────────────────────────────────────────
+# supplement 단계 — 결과 카드 다 본 후 가장 아래 [결과 단계로] 버튼
+# (review 단계에서는 점검표 + 점수가 이어서 표시되므로 별도 nav 불필요)
+# ─────────────────────────────────────────
+if step == "supplement" and _show_stage2_confirm and s2:
+    st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='padding:10px 14px;background:#F5F5F5;"
+        "border:1px solid #E5E5E8;border-radius:6px;font-size:12.5px;color:#6B6B70;"
+        "margin-bottom:10px;'>"
+        "위 [결과 02 설비 탐지] 에서 정정한 사항을 [반영하기] 까지 끝낸 뒤 "
+        "아래 버튼으로 다음 단계(점검표 입력 + 점수 계산)로 이동하세요."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    _nav_l, _nav_r = st.columns([2, 1])
+    with _nav_l:
+        if st.button("이전 (재분석)", key="nav_prev_supplement_bottom",
+                      width="stretch"):
+            _go_to_step("ai_run")
+    with _nav_r:
+        if st.button("결과 단계로 ", type="primary", width="stretch",
+                      key="nav_to_review_bottom"):
+            _go_to_step("review")
 
 # 단계 3 결과
 if s3 and _show_checklist_and_score:

@@ -101,37 +101,45 @@ with st.expander(f"역할 변경 (현재: {current_role_display})", expanded=Fal
             st.switch_page("app.py")
 
 # ─────────────────────────────────────────
-# 이메일 등록 — 모바일PC 동기화 & 교육청 발송용
+# 이메일 등록 — 역할별 분리
+#  - 실 담당자: 본인 이메일만 (학교 담당자가 PIN/안내 보내기 위한 수신처)
+#  - 학교 담당자: 본인 이메일 + 우리 학교 교육청 담당자 이메일
+#  - 교육청 담당자: 본인 이메일만 (학교에게 회신용)
 # ─────────────────────────────────────────
 st.markdown("---")
 section("01-2", "이메일 등록",
-        "교육청 발송 시 mailto 자동 작성 + 본인 이메일 백업용")
+        "역할별로 필요한 이메일만 표시됩니다.")
 
-email_col1, email_col2 = st.columns(2)
-with email_col1:
-    my_email = st.text_input(
-        "내 이메일 (학교/교육청 담당자 본인 이메일)",
-        value=st.session_state.get("my_email", ""),
-        placeholder="예: teacher@school.go.kr",
-        key="my_email_input",
-        help="모바일에서 PC로 백업할 때 본인에게 메일 발송용으로 활용 가능.",
+_role_email = st.session_state.get("role", "학교")
+
+# 본인 이메일 (모든 역할 공통)
+_my_email_label = {
+    "실": "본인 이메일 (학교 담당자가 PIN·안내 보낼 수신처)",
+    "학교": "본인 이메일 (백업·교육청 회신 수신처)",
+    "교육청": "본인 이메일 (학교에게 답장 보낼 발신처)",
+}.get(_role_email, "본인 이메일")
+
+my_email = st.text_input(
+    _my_email_label,
+    value=st.session_state.get("my_email", ""),
+    placeholder="예: teacher@school.go.kr",
+    key="my_email_input",
+)
+
+# 학교 담당자만 — 교육청 담당자 이메일 (발송 대상)
+edu_office_email = st.session_state.get("edu_office_email", "")
+if _role_email == "학교":
+    edu_office_email = st.text_input(
+        "교육청 담당자 이메일 (학교가 보내는 대상)",
+        value=edu_office_email,
+        placeholder="예: officer@sen.go.kr",
+        key="edu_office_email_input",
+        help="점검 결과를 발송할 관할 교육청 담당자 이메일.",
     )
-with email_col2:
-    if st.session_state.get("role", "학교") == "학교":
-        edu_office_email = st.text_input(
-            "교육청 담당자 이메일 (학교가 보내는 대상)",
-            value=st.session_state.get("edu_office_email", ""),
-            placeholder="예: officer@sen.go.kr",
-            key="edu_office_email_input",
-            help="점검 결과를 발송할 관할 교육청 담당자 이메일.",
-        )
-    else:
-        edu_office_email = st.session_state.get("edu_office_email", "")
-        st.caption("교육청 담당자 이메일은 학교 담당자 모드에서 등록합니다.")
 
 if st.button("이메일 저장", key="save_emails", width="stretch"):
     st.session_state["my_email"] = (my_email or "").strip()
-    if st.session_state.get("role", "학교") == "학교":
+    if _role_email == "학교":
         st.session_state["edu_office_email"] = (edu_office_email or "").strip()
     st.toast("이메일 저장 완료", icon=None)
 
@@ -585,6 +593,87 @@ else:
         )
 
 # ─────────────────────────────────────────
+# 02-4 실 담당자 등록 정책 — 셀프 가입 (self) vs 사전 배정 (admin)
+#
+# 학교마다 운영 방식이 다름:
+# - 사전 배정 (admin, 기본): 학교 담당자가 모든 실 담당자 + 공간 등록 + PIN 발급.
+#   실 담당자는 PIN 으로 점검만. 통제 ↑.
+# - 셀프 가입 (self): 학교 인증번호만 알려주면 실 담당자가 본인 정보 + 공간을
+#   직접 등록. 학교 담당자 부담 ↓.
+# 두 방식 모두 등록은 1회만, 2회부터는 자동 로그인 30일 또는 PIN 으로 점검만.
+# ─────────────────────────────────────────
+divider()
+section(
+    "02-4",
+    "실 담당자 등록 정책",
+    "실 담당자를 학교 담당자가 직접 등록할지(통제), "
+    "또는 실 담당자가 본인 정보를 셀프 가입할지(자율) 학교가 선택합니다.",
+)
+
+if st.session_state.get("role") == "교육청":
+    st.caption("교육청 담당자 모드 — 등록 정책은 학교 담당자가 설정합니다.")
+elif st.session_state.get("role") == "실":
+    st.info(
+        "**실 담당자 모드** — 등록 정책은 학교 담당자의 권한입니다."
+    )
+elif not school:
+    st.caption("먼저 학교를 선택하세요.")
+else:
+    from modules.storage import (
+        get_school_registration_mode, set_school_registration_mode,
+    )
+    _reg_school_code = school.get("정보공시 학교코드") or ""
+    _cur_mode = get_school_registration_mode(_reg_school_code)
+
+    _MODE_LABEL = {
+        "admin": "사전 배정 — 학교 담당자가 직접 등록 (통제)",
+        "self": "셀프 가입 — 실 담당자가 본인 등록 (자율)",
+    }
+    st.markdown(
+        f"<div style='padding:10px 14px;border:1px solid #E5E5E8;"
+        f"border-left:3px solid #D50000;border-radius:6px;background:#FAFAFA;'>"
+        f"<div style='font-size:11px;letter-spacing:0.2em;color:#6B6B70;"
+        f"font-weight:600;margin-bottom:4px;'>현재 등록 정책</div>"
+        f"<b>{_MODE_LABEL[_cur_mode]}</b>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    _new_mode = st.radio(
+        "등록 정책 선택",
+        options=["admin", "self"],
+        format_func=lambda m: _MODE_LABEL[m],
+        index=0 if _cur_mode == "admin" else 1,
+        key="_school_reg_mode_radio",
+        label_visibility="collapsed",
+    )
+
+    if _new_mode != _cur_mode:
+        if st.button("등록 정책 변경 적용", key="_apply_reg_mode",
+                      type="primary", width="stretch"):
+            set_school_registration_mode(_reg_school_code, _new_mode)
+            st.toast(
+                f"등록 정책 변경됨 — {_MODE_LABEL[_new_mode]}", icon=None,
+            )
+            st.rerun()
+
+    # 정책별 안내
+    if _cur_mode == "admin":
+        st.caption(
+            "**사전 배정 (기본)** — 위 02-2 [실 담당자 명부 관리] 에서 학교 "
+            "담당자가 직접 실 담당자를 등록하고 PIN 을 발급해 전달합니다. "
+            "공간도 02 [공간 사전 등록] 에서 학교 담당자가 등록·할당. "
+            "실 담당자는 받은 PIN 으로 점검만 가능."
+        )
+    else:
+        st.caption(
+            "**셀프 가입** — 학교 담당자가 학교 인증번호(6자리)만 실 담당자에게 "
+            "알려주면, 실 담당자가 [실 담당자] 카드 진입 시 본인 이름·이메일·"
+            "담당 공간을 직접 등록합니다. PIN 은 자동 발급되며 다음 로그인부터 "
+            "사용. 학교 담당자 명부에 자동으로 추가됨."
+        )
+
+# ─────────────────────────────────────────
 # AI 공급자 (이전 04 03 으로 번호 재정렬)
 # ─────────────────────────────────────────
 divider()
@@ -608,11 +697,12 @@ def _fmt(pid: str) -> str:
     src = f" · {p['key_source']}" if p.get("key_source") else ""
     return f"{p['label']} — {mark}{src}"
 
-sel = st.radio(
+sel = st.selectbox(
     "공급자 선택",
     options=options,
     index=options.index(current_choice) if current_choice in options else 0,
     format_func=_fmt,
+    key="_ai_provider_selectbox",
 )
 st.session_state["ai_provider"] = sel
 
