@@ -279,6 +279,120 @@ _role = st.session_state.get("role", "학교")
 # ─────────────────────────────────────────
 # 2-A) 실 담당자 인증 — manager_id 선택 + PIN 입력
 # ─────────────────────────────────────────
+def _render_self_register_form(school_code, school, add_manager_fn):
+    """실 담당자 셀프 가입 폼 — self 등록 정책 학교에서 사용.
+
+    이름·이메일·전화·담당 공간(기존 선택 또는 새 공간 추가)을 입력받아
+    add_manager 호출 PIN 발급 _self_issued_pin 세션 저장 + rerun.
+    """
+    spaces_here = [
+        s for s in st.session_state.get("registered_spaces", [])
+        if s.get("school_code") == school_code
+    ]
+    space_opts = {
+        f"{s['type']}"
+        + (f" · {s['nickname']}" if s.get("nickname") else "")
+        + f" ({s['space_id'][:6]})": s["space_id"]
+        for s in spaces_here
+    }
+
+    with st.form("_self_register_form", clear_on_submit=False):
+        st.markdown("##### 본인 정보 등록")
+        _new_name = st.text_input(
+            "이름 *",
+            placeholder="예: 김선생님",
+            key="_self_name",
+        )
+        col_e, col_p = st.columns(2)
+        with col_e:
+            _new_email = st.text_input(
+                "이메일 (선택)",
+                placeholder="예: kim@school.kr",
+                key="_self_email",
+            )
+        with col_p:
+            _new_phone = st.text_input(
+                "전화 (선택)",
+                placeholder="예: 010-...",
+                key="_self_phone",
+            )
+
+        # 담당 공간 — 기존 공간 선택
+        st.markdown("##### 담당 공간")
+        if space_opts:
+            _picked_labels = st.multiselect(
+                "본인 담당 공간 선택 (복수 가능)",
+                options=list(space_opts.keys()),
+                key="_self_picked_spaces",
+            )
+        else:
+            _picked_labels = []
+            st.caption("학교에 등록된 공간이 없습니다. 아래에서 직접 추가하세요.")
+
+        # 새 공간 추가 (옵션)
+        st.markdown("**또는 새 공간 직접 추가 (선택)**")
+        SP_TYPES = [
+            "(추가 안 함)", "화학실", "물리실", "생명과학실", "지구과학실",
+            "기술실", "가정실", "음악실", "미술실", "디자인실",
+            "일반교실", "특별교실(과목 불명)",
+        ]
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            _new_sp_type = st.selectbox(
+                "공간 유형", SP_TYPES, key="_self_new_sp_type",
+            )
+        with c2:
+            _new_sp_nick = st.text_input(
+                "별칭 (선택)", placeholder="예: 3층 A",
+                key="_self_new_sp_nick",
+            )
+
+        submitted = st.form_submit_button(
+            "본인 등록 + PIN 발급",
+            type="primary",
+            width="stretch",
+        )
+
+        if submitted:
+            if not _new_name or not _new_name.strip():
+                st.error("이름을 입력하세요.")
+                return
+            # 새 공간 추가 처리
+            assigned_ids = [space_opts[lbl] for lbl in _picked_labels]
+            if _new_sp_type and _new_sp_type != "(추가 안 함)":
+                new_sp = {
+                    "space_id": uuid.uuid4().hex[:10],
+                    "school_code": school_code,
+                    "type": _new_sp_type,
+                    "nickname": (_new_sp_nick or "").strip() or None,
+                }
+                st.session_state.setdefault(
+                    "registered_spaces", []
+                ).append(new_sp)
+                assigned_ids.append(new_sp["space_id"])
+
+            if not assigned_ids:
+                st.error("담당 공간을 1개 이상 선택하거나 새 공간을 추가하세요.")
+                return
+
+            try:
+                _pub, _plain_pin = add_manager_fn(
+                    school_code,
+                    name=_new_name.strip(),
+                    email=(_new_email or "").strip(),
+                    phone=(_new_phone or "").strip(),
+                    assigned_space_ids=assigned_ids,
+                )
+                st.session_state["_self_issued_pin"] = {
+                    "manager_id": _pub["manager_id"],
+                    "name": _pub["name"],
+                    "pin": _plain_pin,
+                }
+                st.rerun()
+            except Exception as e:
+                st.error(f"등록 실패: {e}")
+
+
 if (_role == "실" and st.session_state.get("school")
         and not st.session_state.get("space_manager")):
     divider()
@@ -286,12 +400,15 @@ if (_role == "실" and st.session_state.get("school")
             "본인 매니저 ID 선택 + 학교 담당자가 발급한 6자리 PIN 입력")
 
     from modules.managers import (
-        list_managers, ensure_demo_manager, DEMO_PIN, authenticate_manager,
+        add_manager, authenticate_manager, DEMO_PIN, ensure_demo_manager,
+        list_managers,
     )
     from modules.auth import remember_manager
+    from modules.storage import get_school_registration_mode
 
     school = st.session_state["school"]
     school_code = school.get("정보공시 학교코드")
+    _reg_mode = get_school_registration_mode(school_code)  # 'admin' 또는 'self'
 
     # 시연 모드 — 매니저가 없으면 데모 매니저 자동 등록 + 안내.
     # 학교에 이미 등록된 공간이 있으면 모두 데모 매니저에게 자동 할당.
@@ -323,17 +440,63 @@ if (_role == "실" and st.session_state.get("school")
 
     managers = list_managers(school_code)
 
-    if not managers:
-        st.warning(
-            "이 학교에 등록된 실 담당자가 없습니다. **학교 담당자**가 먼저 "
-            "[설정] 페이지에서 실 담당자를 등록하고 PIN을 발급해야 합니다."
+    # ── 셀프 가입 직후 발급된 PIN 1회 표시 (다음 로그인용) ──
+    _self_issued = st.session_state.pop("_self_issued_pin", None)
+    if _self_issued:
+        st.success(
+            f"### 본인 등록 완료\n\n"
+            f"**이름**: {_self_issued['name']}\n\n"
+            f"**매니저 ID**: `{_self_issued['manager_id']}`\n\n"
+            f"**PIN (6자리)**: `{_self_issued['pin']}`\n\n"
+            f"이 정보를 **메모**하거나 아래에서 백업 다운로드 하세요. "
+            f"다음 로그인부터는 위 [본인 이름 선택] + PIN 으로 인증합니다."
         )
-        if st.button("학교 담당자로 전환해서 등록하러 가기",
-                      key="switch_to_school_for_register",
-                      width="stretch"):
-            st.session_state["role"] = "학교"
-            st.session_state["school_auth_verified"] = False
-            st.rerun()
+        # PIN 백업 TXT
+        import datetime as _dt_self
+        _self_txt = (
+            f"SafeLoop 실 담당자 인증 정보 (셀프 가입)\n"
+            f"=================================\n"
+            f"학교: {school.get('학교명', '-')}\n"
+            f"학교 코드: {school_code}\n"
+            f"---------------------------------\n"
+            f"이름: {_self_issued['name']}\n"
+            f"매니저 ID: {_self_issued['manager_id']}\n"
+            f"PIN: {_self_issued['pin']}\n"
+            f"---------------------------------\n"
+            f"발급일시: {_dt_self.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"다음 로그인부터 위 정보로 인증하세요.\n"
+            f"PIN 분실 시 학교 담당자에게 재발급 요청.\n"
+        )
+        st.download_button(
+            "PIN 정보 다운로드 (TXT 백업)",
+            data=_self_txt.encode("utf-8"),
+            file_name=f"SafeLoop_PIN_{_self_issued['manager_id']}_{_self_issued['name']}.txt",
+            mime="text/plain",
+            key="dl_self_pin",
+            width="stretch",
+        )
+        st.markdown("---")
+
+    # ── 매니저 명부가 비어있는 경우 — 정책에 따라 분기 ──
+    if not managers:
+        if _reg_mode == "admin":
+            st.warning(
+                "이 학교에 등록된 실 담당자가 없습니다. **학교 담당자**가 먼저 "
+                "[설정] 02-2 에서 실 담당자를 등록하고 PIN을 발급해야 합니다."
+            )
+            if st.button("학교 담당자로 전환해서 등록하러 가기",
+                          key="switch_to_school_for_register",
+                          width="stretch"):
+                st.session_state["role"] = "학교"
+                st.session_state["school_auth_verified"] = False
+                st.rerun()
+        else:  # self 모드
+            st.info(
+                "**셀프 가입 모드** — 학교 담당자가 학교 인증번호를 알려드렸다면, "
+                "아래에서 본인 정보를 직접 등록하세요. PIN 이 자동 발급되며 "
+                "다음 로그인부터 사용합니다."
+            )
+            _render_self_register_form(school_code, school, add_manager)
     else:
         # manager_id 선택 — 매니저 명단을 "이름 (M001)" 형식으로 표시
         mgr_options = {
@@ -424,6 +587,13 @@ if (_role == "실" and st.session_state.get("school")
                     st.rerun()
                 else:
                     st.error("PIN이 일치하지 않거나 비활성 매니저입니다.")
+
+        # 셀프 가입 모드 — 명단에 본인이 없으면 직접 등록 가능
+        if _reg_mode == "self":
+            st.markdown("---")
+            with st.expander("위 명단에 본인이 없나요? 본인 등록하기 (셀프 가입)",
+                              expanded=False):
+                _render_self_register_form(school_code, school, add_manager)
 
 # ─────────────────────────────────────────
 # 2-B) 학교/일반 담당자 인증 — 기존 6자리 학교 인증번호

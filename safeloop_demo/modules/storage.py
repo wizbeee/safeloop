@@ -1172,6 +1172,36 @@ def set_school_dual_approval(school_code: str, enabled: bool) -> None:
 
 
 # ─────────────────────────────────────────
+# 실 담당자 등록 정책 — 셀프 가입 (self) vs 사전 배정 (admin)
+#
+# self (셀프 가입):
+#   학교 담당자가 학교 인증번호만 알려주면 실 담당자가 본인 정보 + 담당 공간을
+#   직접 등록 (PIN 자동 발급). 학교 담당자 부담 ↓. 자율성 ↑.
+#
+# admin (사전 배정, 기본값):
+#   학교 담당자가 [설정] 02-2 에서 실 담당자 등록 + PIN 발급 + 공간 할당.
+#   실 담당자는 manager_id + PIN 으로 점검만. 권한 통제 ↑.
+#
+# 학교 단위로 한 번 정하면 그 학교는 일관되게 적용. 두 방식 다 등록 1회로
+# 끝 — 2회부터는 등록 정보 그대로 사용해 점검만 (자동 로그인 30일 쿠키).
+# ─────────────────────────────────────────
+def get_school_registration_mode(school_code: str) -> str:
+    """학교의 실 담당자 등록 정책 조회. 기본 'admin' (사전 배정)."""
+    if not school_code:
+        return "admin"
+    profile = load_school_profile(school_code)
+    mode = profile.get("registration_mode", "admin")
+    return mode if mode in ("self", "admin") else "admin"
+
+
+def set_school_registration_mode(school_code: str, mode: str) -> None:
+    """학교의 실 담당자 등록 정책 저장 (self / admin)."""
+    if not school_code or mode not in ("self", "admin"):
+        return
+    save_school_profile(school_code, {"registration_mode": mode})
+
+
+# ─────────────────────────────────────────
 # 디스크 사용량 + 캐시 정리
 # ─────────────────────────────────────────
 def _dir_size(path: Path) -> int:
