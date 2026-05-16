@@ -348,11 +348,18 @@ if (_role == "실" and st.session_state.get("school")
                 help="학교 담당자가 등록한 명부에서 본인을 찾으세요.",
             )
             picked_mid = mgr_options.get(picked_label, "")
+            # 자동입력 안전 패턴 — Streamlit 의 value= 는 위젯이 이미 존재하면
+            # 무시되므로, 위젯 key 를 카운터로 동적 변경해 새 위젯 인스턴스 생성.
+            # 자동 입력 버튼 클릭 시 카운터 +1 prefill 값 set rerun 새 위젯이
+            # value=prefill 로 적용된 상태로 그려짐.
+            _pin_counter = st.session_state.get("_space_mgr_pin_counter", 0)
+            _pin_prefill = st.session_state.pop("_space_mgr_pin_prefill", "")
             pin_input = st.text_input(
                 "PIN (6자리 숫자)",
+                value=_pin_prefill,
                 type="password",
                 max_chars=6, placeholder="예: 000000",
-                key="_space_mgr_pin",
+                key=f"_space_mgr_pin_v{_pin_counter}",
                 help="학교 담당자가 발급한 PIN. 분실 시 학교 담당자에게 재발급 요청.",
             )
             numeric_input_patch("PIN (6자리 숫자)")
@@ -380,7 +387,12 @@ if (_role == "실" and st.session_state.get("school")
                 )
                 if st.button("자동 입력", key="_space_mgr_autofill",
                               width="stretch"):
-                    st.session_state["_space_mgr_pin"] = DEMO_PIN
+                    # 카운터 +1 prefill set rerun.
+                    # 새 위젯이 생성되어 value=DEMO_PIN 이 실제로 적용됨.
+                    st.session_state["_space_mgr_pin_counter"] = (
+                        st.session_state.get("_space_mgr_pin_counter", 0) + 1
+                    )
+                    st.session_state["_space_mgr_pin_prefill"] = DEMO_PIN
                     st.rerun()
             else:
                 st.caption("실 운영 모드 — PIN은 학교 담당자가 발급합니다.")
@@ -454,10 +466,11 @@ if (_role != "실" and st.session_state.get("school")
     st.session_state["_seen_auth_help"] = True
 
     # 인증번호 (수동 입력 + 시연용 자동 입력)
+    # 자동입력 안전 패턴 — 위젯 key 를 카운터로 동적 변경해야 value 가 적용됨.
     colA, colB = st.columns([3, 2])
 
-    # 입력값 소스: 자동입력 버튼 누르면 세션에 저장 위젯에 주입
-    default_val = st.session_state.get("_auth_prefill", "")
+    _auth_counter = st.session_state.get("_auth_key_counter", 0)
+    default_val = st.session_state.pop("_auth_prefill", "")
 
     with colA:
         auth_input = st.text_input(
@@ -465,7 +478,7 @@ if (_role != "실" and st.session_state.get("school")
             value=default_val,
             max_chars=6, placeholder="예: 000000",
             help="실제 운영: 교육청 발급. 시연 중: 우측 빨강 카드 번호 입력 or '자동 입력' 버튼.",
-            key="auth_input",
+            key=f"auth_input_v{_auth_counter}",
         )
         # 모바일 숫자 키패드 강제 (iOS·Android 모두)
         numeric_input_patch("담당자 인증번호")
@@ -492,6 +505,8 @@ if (_role != "실" and st.session_state.get("school")
             # (이전 버전의 "이미 입력된 값 확인" 분기는 사용자 혼란만 줘서 제거)
             if st.button("자동 입력", key="auto_fill_auth",
                           width="stretch"):
+                # 카운터 +1 위젯 새로 생성되어 value 적용됨
+                st.session_state["_auth_key_counter"] = _auth_counter + 1
                 st.session_state["_auth_prefill"] = expected
                 st.rerun()
         else:
