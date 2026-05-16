@@ -38,15 +38,15 @@ def check(name: str, fn) -> None:
         msg = fn() or "OK"
         ok += 1
         results.append((name, True, msg))
-        print(f"  [OK]   {name}: {msg}")
+        print(f" [OK] {name}: {msg}")
     except Exception as e:
         fail += 1
         results.append((name, False, str(e)))
-        print(f"  [FAIL] {name}: {type(e).__name__}: {e}")
+        print(f" [FAIL] {name}: {type(e).__name__}: {e}")
 
 
 print("=" * 60)
-print("  SafeLoop Smoke Test")
+print(" SafeLoop Smoke Test")
 print("=" * 60)
 
 # 1. 모듈 임포트
@@ -92,7 +92,7 @@ status = providers_status()
 check("providers_status", lambda: f"{len(status)}개 공급자 발견")
 for p in status:
     label = "키 있음" if p["available"] else "키 없음(정상)"
-    check(f"  {p['id']}", lambda l=label: l)
+    check(f" {p['id']}", lambda l=label: l)
 
 # 6. 점수·추천
 print("\n[6/8] 점수·추천 핵심 함수")
@@ -101,7 +101,7 @@ from modules.recommend import recommend_from_scores
 test_scores = {"비상샤워": 1.0, "세안기": 0.5, "MSDS비치": 0.0}
 result = calculate_safety_score(test_scores)
 check("calculate_safety_score", lambda: f"점수 {result['score']}, 등급 {result['grade']}")
-check("get_grade", lambda: f"95→{get_grade(95)}, 75→{get_grade(75)}, 50→{get_grade(50)}")
+check("get_grade", lambda: f"95{get_grade(95)}, 75{get_grade(75)}, 50{get_grade(50)}")
 recs = recommend_from_scores(test_scores)
 check("recommend_from_scores", lambda: f"{len(recs)}건 추천")
 
@@ -177,7 +177,7 @@ try:
     for p in targets:
         check(f"runtime/{p.name}", lambda pp=p: _check_page_runtime(pp))
 except ImportError:
-    print("   streamlit.testing 모듈 사용 불가 — skipped")
+    print(" streamlit.testing 모듈 사용 불가 — skipped")
 
 # 10. 핵심 사용자 인터랙션 — 시연 시작 흐름 (단순 컴포넌트 검증)
 print("\n[10] 시연 캐시 자동 보장 동작")
@@ -193,10 +193,10 @@ try:
                   RuntimeError(f"{s} 캐시 보장 실패")
               ))
 except Exception as e:
-    print(f"   시연 캐시 검증 스킵 — {e}")
+    print(f" 시연 캐시 검증 스킵 — {e}")
 
-# 11. 라운드트립 — 저장 → 암호화 → 복호화 → 세션 복원 모의
-print("\n[11] .safeloop 라운드트립 (저장→암호화→복호화)")
+# 11. 라운드트립 — 저장 암호화 복호화 세션 복원 모의
+print("\n[11] .safeloop 라운드트립 (저장암호화복호화)")
 try:
     from modules.crypto import encrypt_to_file_bytes, decrypt_payload, is_encrypted
     from modules.storage import build_master_record, build_edu_package
@@ -223,9 +223,9 @@ try:
     check("decrypt_payload", lambda: f"record_type={decoded.get('record_type')}")
     assert decoded.get("record_type") == "safeloop_edu_submission", \
         f"record_type 불일치: {decoded.get('record_type')}"
-    print("   라운드트립 검증 OK")
+    print(" 라운드트립 검증 OK")
 except Exception as e:
-    print(f"   라운드트립 검증 실패 — {e}")
+    print(f" 라운드트립 검증 실패 — {e}")
     fail += 1
 
 
@@ -402,9 +402,9 @@ try:
     # 정리 — 테스트 폴더 삭제
     if test_path.exists():
         shutil.rmtree(test_path, ignore_errors=True)
-    print("   실 담당자 인프라 검증 완료 (21건)")
+    print(" 실 담당자 인프라 검증 완료 (21건)")
 except Exception as e:
-    print(f"   실 담당자 인프라 검증 실패 — {type(e).__name__}: {e}")
+    print(f" 실 담당자 인프라 검증 실패 — {type(e).__name__}: {e}")
     fail += 1
 
 
@@ -484,18 +484,18 @@ try:
                   if len(rec_with_prior["status_history"]) == 3 else
                   (_ for _ in ()).throw(AssertionError(f"누적 실패: {len(rec_with_prior['status_history'])}건")))
     check("master/history_order",
-          lambda: f"순서 보존: {rec_with_prior['status_history'][0]['status']} → {rec_with_prior['status_history'][1]['status']} → {rec_with_prior['status_history'][2]['status']}"
+          lambda: f"순서 보존: {rec_with_prior['status_history'][0]['status']} {rec_with_prior['status_history'][1]['status']} {rec_with_prior['status_history'][2]['status']}"
                   if rec_with_prior["status_history"][0]["status"] == "submitted"
                   and rec_with_prior["status_history"][2]["note"] == "재저장 (수정)" else
                   (_ for _ in ()).throw(AssertionError("history 순서·신규 항목 부적합")))
-    print("   master.json schema 1.1 검증 완료 (8건)")
+    print(" master.json schema 1.1 검증 완료 (8건)")
 except Exception as e:
-    print(f"   master.json schema 검증 실패 — {type(e).__name__}: {e}")
+    print(f" master.json schema 검증 실패 — {type(e).__name__}: {e}")
     fail += 1
 
 
 # 14. session.py 인증 통합 헬퍼 — is_authenticated_for_role (Sprint 2.5)
-print("\n[14] session 인증 헬퍼 분리 (school_auth_verified ↔ space_manager)")
+print("\n[14] session 인증 헬퍼 분리 (school_auth_verified space_manager)")
 try:
     from modules.session import is_authenticated_for_role
     check("session/is_auth_helper_import",
@@ -509,9 +509,9 @@ try:
           lambda: "헬퍼가 두 인증 모두 검사"
                   if "school_auth_verified" in src and "space_manager" in src else
                   (_ for _ in ()).throw(AssertionError("헬퍼 로직 부적합")))
-    print("   인증 헬퍼 검증 완료 (2건)")
+    print(" 인증 헬퍼 검증 완료 (2건)")
 except Exception as e:
-    print(f"   인증 헬퍼 검증 실패 — {type(e).__name__}: {e}")
+    print(f" 인증 헬퍼 검증 실패 — {type(e).__name__}: {e}")
     fail += 1
 
 
@@ -531,7 +531,7 @@ try:
     if _tdir.exists():
         _sh.rmtree(_tdir, ignore_errors=True)
 
-    # 가짜 점검 2건 저장 (학교 담당자 자체 점검 → approved)
+    # 가짜 점검 2건 저장 (학교 담당자 자체 점검 approved)
     for i, sp in enumerate(["화학실", "물리실"]):
         _sess = {
             "session_id": f"consol-{i+1:03d}",
@@ -607,14 +607,14 @@ try:
     # 정리
     if _tdir.exists():
         _sh.rmtree(_tdir, ignore_errors=True)
-    print("   consolidate 모듈 검증 완료 (6건)")
+    print(" consolidate 모듈 검증 완료 (6건)")
 except Exception as e:
-    print(f"   consolidate 모듈 검증 실패 — {type(e).__name__}: {e}")
+    print(f" consolidate 모듈 검증 실패 — {type(e).__name__}: {e}")
     fail += 1
 
 
 # 결과
 print("\n" + "=" * 60)
-print(f"  결과: {ok}건 통과 / {fail}건 실패 (총 {ok + fail}건)")
+print(f" 결과: {ok}건 통과 / {fail}건 실패 (총 {ok + fail}건)")
 print("=" * 60)
 sys.exit(0 if fail == 0 else 1)

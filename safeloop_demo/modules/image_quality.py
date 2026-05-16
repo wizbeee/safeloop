@@ -7,7 +7,7 @@
   3) EXIF 회전 정보 적용 (특히 iPhone 가로/세로)
 
 알고리즘:
-  - 블러: Pillow 내장 가우시안 차이 → 고주파 분산
+  - 블러: Pillow 내장 가우시안 차이 고주파 분산
   - 밝기: 그레이스케일 평균
   - 채도: HSV 채널 표준편차
   - 해상도: 최소 600x400
@@ -20,13 +20,13 @@ from dataclasses import dataclass
 from PIL import Image, ImageFilter, ImageOps
 
 
-MAX_LONG_EDGE = 1568   # Claude Vision 권장 최대 긴 변
+MAX_LONG_EDGE = 1568 # Claude Vision 권장 최대 긴 변
 JPEG_QUALITY = 85
 MIN_WIDTH = 600
 MIN_HEIGHT = 400
-BLUR_VARIANCE_OK = 15.0      # 그 미만이면 흐림 의심
-BRIGHTNESS_DARK = 60         # 0~255, 그 미만이면 어두움
-BRIGHTNESS_BRIGHT = 220      # 그 초과면 과노출
+BLUR_VARIANCE_OK = 15.0 # 그 미만이면 흐림 의심
+BRIGHTNESS_DARK = 60 # 0~255, 그 미만이면 어두움
+BRIGHTNESS_BRIGHT = 220 # 그 초과면 과노출
 
 
 @dataclass
@@ -35,10 +35,10 @@ class QualityReport:
     width: int
     height: int
     brightness: float
-    blur_score: float        # 클수록 선명
+    blur_score: float # 클수록 선명
     issues: list[str]
     warnings: list[str]
-    optimized_bytes: bytes   # 회전·리사이즈 적용 후 JPEG
+    optimized_bytes: bytes # 회전·리사이즈 적용 후 JPEG
 
     def summary(self) -> str:
         if self.ok and not self.warnings:
@@ -49,7 +49,7 @@ class QualityReport:
 
 
 def _laplacian_like_variance(img: Image.Image) -> float:
-    """Pillow 만으로 라플라시안 분산 근사: 원본 ↔ 가우시안 블러 차이의 분산.
+    """Pillow 만으로 라플라시안 분산 근사: 원본 가우시안 블러 차이의 분산.
     OpenCV 의존 회피."""
     gray = img.convert("L")
     blurred = gray.filter(ImageFilter.GaussianBlur(radius=2))

@@ -9,19 +9,19 @@ from __future__ import annotations
 from pathlib import Path
 
 
-# 파일명 키워드 → SHOT 키 매핑 (의미 기반).
+# 파일명 키워드 SHOT 키 매핑 (의미 기반).
 # 우선순위 순서로 매칭 — 첫 일치 키워드의 슬롯에 배치.
 KEYWORD_MAP: list[tuple[str, str]] = [
-    ("fire_alarm", "ceiling"),                  # 화재경보기/감지기 → 천장
-    ("hood", "center_back_door"),                # 흄후드 → 뒷벽
+    ("fire_alarm", "ceiling"), # 화재경보기/감지기 천장
+    ("hood", "center_back_door"), # 흄후드 뒷벽
     ("safety_poster", "center_back_door"),
-    ("emergency_shower", "center_front_door"),   # 안전샤워 → 앞문 쪽
-    ("ppe", "center_front_door"),                # PPE 보관함 → 앞문 쪽
-    ("fire_extinguisher", "center_corridor"),    # 소화기 → 복도쪽
-    ("sinks_line", "center_window"),             # 싱크 라인 → 창가
-    ("sinks_storage", "center_window"),          # 싱크+수납 → 창가
-    ("wide_full", "entrance_diag"),              # 전체 와이드 → 입구 시야
-    ("wide_equipment", "front_view"),            # 설비 와이드 → 교탁 앞
+    ("emergency_shower", "center_front_door"), # 안전샤워 앞문 쪽
+    ("ppe", "center_front_door"), # PPE 보관함 앞문 쪽
+    ("fire_extinguisher", "center_corridor"), # 소화기 복도쪽
+    ("sinks_line", "center_window"), # 싱크 라인 창가
+    ("sinks_storage", "center_window"), # 싱크+수납 창가
+    ("wide_full", "entrance_diag"), # 전체 와이드 입구 시야
+    ("wide_equipment", "front_view"), # 설비 와이드 교탁 앞
     ("wide_alt", "front_view"),
 ]
 
@@ -41,7 +41,7 @@ def dispatch_samples_to_shots(paths: list[Path]) -> dict[str, list[dict]]:
     반환: {shot_key: [{name, bytes, source}], ...} — 9개 키 모두 포함 (값은 빈 리스트일 수 있음).
 
     분배 규칙:
-    1) 파일명 키워드가 KEYWORD_MAP 에 일치 → 해당 슬롯에 배치
+    1) 파일명 키워드가 KEYWORD_MAP 에 일치 해당 슬롯에 배치
     2) 매칭 못 한 파일은 비어 있는 필수 슬롯(TARGET_ORDER)에 순서대로 배치
     3) 중복 슬롯에는 1장만 (먼저 매칭된 파일이 우선)
     """

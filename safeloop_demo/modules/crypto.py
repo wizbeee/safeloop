@@ -10,7 +10,7 @@ SafeLoop 데이터 자동 암호화 모듈 — AES-256-GCM.
 키 우선순위:
 1. 환경변수 `SAFELOOP_KEY` (32바이트 hex) — 운영 환경 표준
 2. 환경변수 `SAFELOOP_DEMO_MODE=1` 일 때 내장 데모 키 사용 — 시연·콘테스트용
-3. SAFELOOP_KEY 가 잘못된 값(32바이트 hex 아님) → RuntimeError (조용한 fallback 차단)
+3. SAFELOOP_KEY 가 잘못된 값(32바이트 hex 아님) RuntimeError (조용한 fallback 차단)
 4. 둘 다 없으면 데모 키 + 강한 경고 (시연 환경 보호)
 
 보호 가능:
@@ -20,7 +20,7 @@ SafeLoop 데이터 자동 암호화 모듈 — AES-256-GCM.
 
 보호 불가:
 - 앱 코드 자체를 분석한 키 추출 (전문 해커)
-- → 운영 시에는 환경변수 키 + 학교별 페어링 으로 강화
+- 운영 시에는 환경변수 키 + 학교별 페어링 으로 강화
 """
 from __future__ import annotations
 
@@ -42,8 +42,8 @@ _DEMO_KEY: bytes = b"SafeLoop_v1_demo_key_2026__APRX!"
 assert len(_DEMO_KEY) == 32, "AES-256 requires exactly 32 bytes"
 
 # 매직 헤더 — 암호화된 파일임을 식별
-MAGIC = b"SLOOP1\x00"  # 7 bytes
-NONCE_LEN = 12  # AES-GCM 표준
+MAGIC = b"SLOOP1\x00" # 7 bytes
+NONCE_LEN = 12 # AES-GCM 표준
 
 # 잘못된 환경변수 사용 1회 경고 (반복 노이즈 방지)
 _warned_invalid_env_key = False
@@ -54,11 +54,11 @@ def _key() -> bytes:
     """현재 사용 키 결정.
 
     우선순위:
-    1. SAFELOOP_KEY 환경변수가 32바이트 hex 로 유효 → 그걸 사용
-    2. SAFELOOP_KEY 가 있지만 잘못된 값 → 한 번 경고 + DEMO_MODE 로 fallback
+    1. SAFELOOP_KEY 환경변수가 32바이트 hex 로 유효 그걸 사용
+    2. SAFELOOP_KEY 가 있지만 잘못된 값 한 번 경고 + DEMO_MODE 로 fallback
        (잘못된 값을 조용히 무시하지 않음)
-    3. SAFELOOP_DEMO_MODE=1 → 내장 데모 키 사용 (한 번 경고)
-    4. 그 외 → RuntimeError (운영 환경 안전장치)
+    3. SAFELOOP_DEMO_MODE=1 내장 데모 키 사용 (한 번 경고)
+    4. 그 외 RuntimeError (운영 환경 안전장치)
     """
     global _warned_invalid_env_key, _warned_demo_fallback
     env_key = os.environ.get("SAFELOOP_KEY")
@@ -75,7 +75,7 @@ def _key() -> bytes:
                 _warned_invalid_env_key = True
                 # Streamlit 환경이면 화면 경고, 아니면 stderr
                 _emit_warning(
-                    f"⚠ SAFELOOP_KEY 환경변수가 유효하지 않습니다 ({e}). "
+                    f"SAFELOOP_KEY 환경변수가 유효하지 않습니다 ({e}). "
                     f"32바이트 hex 64자 문자열이어야 합니다."
                 )
             if not demo_mode:
@@ -90,7 +90,7 @@ def _key() -> bytes:
         if not _warned_demo_fallback:
             _warned_demo_fallback = True
             _emit_warning(
-                "🎬 SAFELOOP_DEMO_MODE=1 — 내장 데모 키 사용 중. "
+                "SAFELOOP_DEMO_MODE=1 — 내장 데모 키 사용 중. "
                 "운영 환경에서는 반드시 SAFELOOP_KEY 환경변수를 설정하세요."
             )
         return _DEMO_KEY
@@ -99,7 +99,7 @@ def _key() -> bytes:
     if not _warned_demo_fallback:
         _warned_demo_fallback = True
         _emit_warning(
-            "⚠ 암호화 키 환경변수 미설정 — 내장 데모 키로 자동 fallback. "
+            "암호화 키 환경변수 미설정 — 내장 데모 키로 자동 fallback. "
             "운영 환경에서는 SAFELOOP_KEY (32바이트 hex) 또는 "
             "SAFELOOP_DEMO_MODE=1 을 명시적으로 설정하세요."
         )
@@ -109,7 +109,7 @@ def _key() -> bytes:
 def _emit_warning(msg: str) -> None:
     """Streamlit 환경이면 st.warning, 아니면 stderr 로 출력."""
     try:
-        import streamlit as st  # noqa
+        import streamlit as st # noqa
         st.warning(msg)
         return
     except Exception:

@@ -35,7 +35,7 @@ if _in_demo:
     st.markdown(
         "<div style='padding:10px 14px;background:#FFF6F6;border:1px solid #F8D0D0;"
         "border-radius:6px;font-size:13px;color:#0A0A0B;line-height:1.6;'>"
-        "🎬 <b>현재 시연 모드입니다</b> — 더미 이미지·자동 채움이 허용됩니다. "
+        "<b>현재 시연 모드입니다</b> — 더미 이미지·자동 채움이 허용됩니다. "
         "실 사용으로 전환하려면 아래 버튼을 누르세요."
         "</div>",
         unsafe_allow_html=True,
@@ -43,12 +43,12 @@ if _in_demo:
     if st.button("시연 종료 (실 사용으로 전환)", key="end_demo_mode",
                   width="stretch"):
         st.session_state["demo_mode"] = False
-        st.toast("시연 종료 — 이제 실 사용 모드입니다", icon="✅")
+        st.toast("시연 종료 — 이제 실 사용 모드입니다", icon=None)
         st.rerun()
 else:
     st.caption(
         "현재 실 사용 모드입니다. 시연을 다시 시작하려면 홈의 "
-        "**🎬 시연 시작** 버튼을 누르세요."
+        "**시연 시작** 버튼을 누르세요."
     )
 
 # 역할 변경 — 3택 (실 / 학교 / 교육청)
@@ -85,10 +85,10 @@ with st.expander(f"역할 변경 (현재: {current_role_display})", expanded=Fal
             )
             from modules.session import reset_inspection
             # 다른 역할로 전환 시 모든 인증·자동 로그인·세션 데이터 해제 (보안)
-            clear_authentication()      # 교육청 PIN 인증 해제 + 쿠키 삭제
-            forget_school()             # 학교 자동 로그인 쿠키 삭제
-            forget_manager()            # 실 담당자 자동 로그인 쿠키 삭제
-            reset_inspection()          # 점검 진행 중 데이터 정리
+            clear_authentication() # 교육청 PIN 인증 해제 + 쿠키 삭제
+            forget_school() # 학교 자동 로그인 쿠키 삭제
+            forget_manager() # 실 담당자 자동 로그인 쿠키 삭제
+            reset_inspection() # 점검 진행 중 데이터 정리
             # 학교·매니저 세션 명시적 초기화
             for _k in ("school", "eduline", "space_manager",
                         "_show_pin_edu", "_auto_login_checked",
@@ -97,11 +97,11 @@ with st.expander(f"역할 변경 (현재: {current_role_display})", expanded=Fal
             st.session_state["school_auth_verified"] = False
             st.session_state["role"] = target_role
             st.toast(f"{new_role} 모드로 전환했습니다 — 다시 로그인이 필요합니다",
-                      icon="🔄")
+                      icon=None)
             st.switch_page("app.py")
 
 # ─────────────────────────────────────────
-# 이메일 등록 — 모바일↔PC 동기화 & 교육청 발송용
+# 이메일 등록 — 모바일PC 동기화 & 교육청 발송용
 # ─────────────────────────────────────────
 st.markdown("---")
 section("01-2", "이메일 등록",
@@ -133,7 +133,7 @@ if st.button("이메일 저장", key="save_emails", width="stretch"):
     st.session_state["my_email"] = (my_email or "").strip()
     if st.session_state.get("role", "학교") == "학교":
         st.session_state["edu_office_email"] = (edu_office_email or "").strip()
-    st.toast("이메일 저장 완료", icon="✅")
+    st.toast("이메일 저장 완료", icon=None)
 
 # ─────────────────────────────────────────
 # 온보딩 다시 보기 버튼
@@ -148,12 +148,12 @@ with oc2:
     if st.button("온보딩 다시 보기", key="show_onboarding_again",
                   width="stretch"):
         st.session_state["_onboarding_done"] = False
-        st.toast("홈으로 이동하면 온보딩 안내가 다시 표시됩니다.", icon="ℹ️")
+        st.toast("홈으로 이동하면 온보딩 안내가 다시 표시됩니다.", icon="")
         st.switch_page("app.py")
 
 # ─────────────────────────────────────────
 # 공간 사전 등록 (이전 02 결재라인 기본값 섹션은 삭제 —
-#   실제 결재는 K에듀파인에서 이뤄지므로 이 앱에서 관리할 필요 없음)
+# 실제 결재는 K에듀파인에서 이뤄지므로 이 앱에서 관리할 필요 없음)
 # ─────────────────────────────────────────
 divider()
 section("02", "공간 사전 등록")
@@ -163,7 +163,7 @@ school = st.session_state.get("school")
 _role_here = st.session_state.get("role", "학교")
 if _role_here == "실":
     st.info(
-        "👤 **실 담당자 모드** — 공간 등록은 학교 담당자의 권한입니다. "
+        "**실 담당자 모드** — 공간 등록은 학교 담당자의 권한입니다. "
         "본인 담당 공간이 보이지 않으면 학교 담당자에게 공간 등록 + 본인 할당을 요청하세요."
     )
 elif not school:
@@ -188,8 +188,8 @@ else:
             "nickname": new_nick.strip() or None,
         })
         # toast 는 rerun 후에도 잠시 표시되어 사용자가 인지 가능
-        st.toast(f"✅ '{new_type}'{' (' + new_nick + ')' if new_nick.strip() else ''} 등록 완료",
-                  icon="✅")
+        st.toast(f"'{new_type}'{' (' + new_nick + ')' if new_nick.strip() else ''} 등록 완료",
+                  icon=None)
         st.rerun()
 
     # 등록된 공간 목록
@@ -226,12 +226,12 @@ section(
 
 if st.session_state.get("role") == "교육청":
     st.caption(
-        "🏛 교육청 담당자 모드 — 본 섹션은 학교 담당자가 우리 학교의 "
+        "교육청 담당자 모드 — 본 섹션은 학교 담당자가 우리 학교의 "
         "공간별 담당 교사를 관리하는 화면입니다."
     )
 elif st.session_state.get("role") == "실":
     st.info(
-        "👤 **실 담당자 모드** — 본인을 포함한 실 담당자 명부 등록·관리는 "
+        "**실 담당자 모드** — 본인을 포함한 실 담당자 명부 등록·관리는 "
         "학교 담당자의 권한입니다. PIN 분실 시 학교 담당자에게 재발급을 요청하세요."
     )
 elif not school:
@@ -244,7 +244,7 @@ else:
 
     _mgr_school_code = school.get("정보공시 학교코드")
 
-    # 학교 등록 공간 → 담당 공간 선택 옵션
+    # 학교 등록 공간 담당 공간 선택 옵션
     _spaces_for_mgr = [
         s for s in st.session_state.get("registered_spaces", [])
         if s.get("school_code") == _mgr_school_code
@@ -253,7 +253,7 @@ else:
         (
             f"{s['type']}"
             + (f" · {s['nickname']}" if s.get("nickname") else "")
-            + f"  ({s['space_id'][:6]})"
+            + f" ({s['space_id'][:6]})"
         ): s["space_id"]
         for s in _spaces_for_mgr
     }
@@ -262,12 +262,12 @@ else:
     _newly_issued = st.session_state.pop("_newly_issued_manager_pin", None)
     if _newly_issued:
         st.success(
-            f"✅ **{_newly_issued['name']}** 등록 완료 · "
+            f"**{_newly_issued['name']}** 등록 완료 · "
             f"매니저 ID `{_newly_issued['manager_id']}` · "
             f"**PIN: `{_newly_issued['pin']}`**"
         )
         st.warning(
-            "⚠ **PIN 은 지금 한 번만 표시됩니다.** "
+            "**PIN 은 지금 한 번만 표시됩니다.** "
             "메모해서 본인에게 전달하세요. 분실 시 [PIN 재발급] 으로 "
             "새로 발급 가능하지만 이전 PIN 은 즉시 무효화됩니다."
         )
@@ -315,7 +315,7 @@ else:
                 f"<code style='font-size:11px;color:#6B6B70;'>{_mid}</code>"
                 f"{_badges_html}"
                 f"<div style='font-size:12px;color:#6B6B70;margin-top:2px;'>"
-                f"📧 {_email_disp} · 📍 담당 공간 {_spaces_count}개"
+                f"{_email_disp} · 담당 공간 {_spaces_count}개"
                 f"</div></div>",
                 unsafe_allow_html=True,
             )
@@ -348,13 +348,13 @@ else:
                     if st.button("비활성화", key=f"mgr_off_{_mid}",
                                   width="stretch"):
                         deactivate_manager(_mgr_school_code, _mid)
-                        st.toast(f"{_m['name']} 비활성화", icon="🔒")
+                        st.toast(f"{_m['name']} 비활성화", icon=None)
                         st.rerun()
                 else:
                     if st.button("재활성화", key=f"mgr_on_{_mid}",
                                   width="stretch"):
                         reactivate_manager(_mgr_school_code, _mid)
-                        st.toast(f"{_m['name']} 재활성화", icon="✅")
+                        st.toast(f"{_m['name']} 재활성화", icon=None)
                         st.rerun()
             with _ac4:
                 _last = _m.get("last_login_at")
@@ -396,7 +396,7 @@ else:
                                 assigned_space_ids=_new_ids,
                             )
                             st.session_state.pop("_edit_mgr_id", None)
-                            st.toast(f"{_m['name']} 담당 공간 변경 완료", icon="✅")
+                            st.toast(f"{_m['name']} 담당 공간 변경 완료", icon=None)
                             st.rerun()
                         if _b2.button(
                             "취소", key=f"_cancel_edit_{_mid}",
@@ -408,7 +408,7 @@ else:
     # ── 신규 등록 폼 ──
     st.markdown("---")
     with st.expander(
-        "➕ 새 실 담당자 등록",
+        "새 실 담당자 등록",
         expanded=not bool(_actives),
     ):
         if not _spaces_for_mgr:
@@ -473,10 +473,10 @@ else:
 # 02-3 결재 정책 — 단일/이중 결재 선택 (학교 담당자 전용)
 #
 # 학교마다 결재 흐름이 다름:
-#  - 단일 결재 (기본): 에듀파인 결재 완료된 파일을 SafeLoop 으로 그대로 발송.
-#    SafeLoop 안에 결재 입력 화면 없음. 가장 단순.
-#  - 이중 결재: 에듀파인 결재 + SafeLoop 안에서도 결재자 정보 기록.
-#    자체 감사·추적 이력을 추가로 남기고 싶은 학교용.
+# - 단일 결재 (기본): 에듀파인 결재 완료된 파일을 SafeLoop 으로 그대로 발송.
+# SafeLoop 안에 결재 입력 화면 없음. 가장 단순.
+# - 이중 결재: 에듀파인 결재 + SafeLoop 안에서도 결재자 정보 기록.
+# 자체 감사·추적 이력을 추가로 남기고 싶은 학교용.
 # ─────────────────────────────────────────
 divider()
 section(
@@ -488,11 +488,11 @@ section(
 
 if st.session_state.get("role") == "교육청":
     st.caption(
-        "🏛 교육청 담당자 모드 — 결재 정책은 학교 담당자가 설정합니다."
+        "교육청 담당자 모드 — 결재 정책은 학교 담당자가 설정합니다."
     )
 elif st.session_state.get("role") == "실":
     st.info(
-        "👤 **실 담당자 모드** — 결재 정책은 학교 담당자의 권한입니다. "
+        "**실 담당자 모드** — 결재 정책은 학교 담당자의 권한입니다. "
         "본인 점검 제출 시에는 결재 입력 화면이 없습니다 (학교 담당자가 검토·발송)."
     )
 elif not school:
@@ -503,9 +503,9 @@ else:
     _cur_dual = get_school_dual_approval(_approval_school_code)
 
     _mode_label = (
-        "🔐 이중 결재 (에듀파인 + SafeLoop 자체 기록)"
+        "이중 결재 (에듀파인 + SafeLoop 자체 기록)"
         if _cur_dual else
-        "📋 단일 결재 (에듀파인만 — 권장)"
+        "단일 결재 (에듀파인만 — 권장)"
     )
     st.markdown(
         f"<div style='padding:10px 14px;border:1px solid #E5E5E8;"
@@ -535,26 +535,26 @@ else:
             st.toast(
                 ("이중 결재로 전환" if _new_dual else "단일 결재(에듀파인만)로 전환")
                 + " — 결과 저장 페이지에서 확인 가능",
-                icon="🔄",
+                icon=None,
             )
             st.rerun()
 
     # 정책 설명 카드
     if _cur_dual:
         st.caption(
-            "🔐 **이중 결재**: 학교 담당자가 결과 저장 페이지에서 결재자 이름을 "
+            "**이중 결재**: 학교 담당자가 결과 저장 페이지에서 결재자 이름을 "
             "입력하면 SafeLoop 안에도 결재 기록이 남고, `결재첨부_공문.pdf` 가 "
             "함께 생성됩니다. 에듀파인 결재는 외부에서 별도 진행."
         )
     else:
         st.caption(
-            "📋 **단일 결재 (기본)**: SafeLoop 안에서는 결재 입력을 받지 않습니다. "
+            "**단일 결재 (기본)**: SafeLoop 안에서는 결재 입력을 받지 않습니다. "
             "에듀파인에서 결재 완료된 파일을 첨부해 교육청에 발송하세요. "
             "가장 단순하고 빠른 흐름 — 대부분 학교 권장."
         )
 
 # ─────────────────────────────────────────
-# AI 공급자 (이전 04 → 03 으로 번호 재정렬)
+# AI 공급자 (이전 04 03 으로 번호 재정렬)
 # ─────────────────────────────────────────
 divider()
 section("03", "AI 공급자",
@@ -573,9 +573,9 @@ options = [p["id"] for p in _providers]
 
 def _fmt(pid: str) -> str:
     p = _avail_map[pid]
-    mark = "✓ 사용 가능" if p["available"] else "✗ 키 필요"
+    mark = "사용 가능" if p["available"] else "키 필요"
     src = f" · {p['key_source']}" if p.get("key_source") else ""
-    return f"{p['label']}  —  {mark}{src}"
+    return f"{p['label']} — {mark}{src}"
 
 sel = st.radio(
     "공급자 선택",
@@ -609,14 +609,14 @@ if st.button("연결 확인 (ping)"):
         with st.spinner(f"{selected['label']} 에 ping 호출 중…"):
             ok, msg = test_provider_connection(sel)
         if ok:
-            st.success(f"✅ {selected['label']} — {msg}")
+            st.success(f"{selected['label']} — {msg}")
         else:
-            st.error(f"❌ {selected['label']} — {msg}")
+            st.error(f"{selected['label']} — {msg}")
 
 # 전체 공급자 상태 요약
 st.markdown("##### 전체 공급자 상태")
 for p in _providers:
-    status = "✅ 사용 가능" if p["available"] else "⚪ 키 없음"
+    status = "사용 가능" if p["available"] else "키 없음"
     src = f" · {p['key_source']}" if p.get("key_source") else ""
     st.markdown(f"- **{p['label']}** — {status}{src}")
 
@@ -688,7 +688,7 @@ if _is_admin:
         st.markdown(
             "<div style='border:1px solid #F8D0D0;background:#FFF6F6;"
             "border-radius:6px;padding:10px 14px;font-size:12px;color:#D50000;'>"
-            "⚠ <b>로컬 저장소 정리</b>는 실제 점검 이력 폴더를 통째로 삭제합니다. "
+            "<b>로컬 저장소 정리</b>는 실제 점검 이력 폴더를 통째로 삭제합니다. "
             "복구 불가 — 신중히 사용하세요. (`_ai_cache`, `_drafts` 등 시스템 폴더는 보호됩니다.)"
             "</div>",
             unsafe_allow_html=True,
@@ -699,7 +699,7 @@ if _is_admin:
         if confirm_button(
             f"{sdays}일 이전 로컬 저장소 점검 이력 삭제",
             key="cleanup_school_storage",
-            message=f"⚠ {sdays}일 이상 지난 모든 학교의 점검 세션 폴더를 삭제합니다. "
+            message=f"{sdays}일 이상 지난 모든 학교의 점검 세션 폴더를 삭제합니다. "
                     f"이 작업은 되돌릴 수 없습니다.",
         ):
             n_s, freed_s = cleanup_school_storage(days=sdays)

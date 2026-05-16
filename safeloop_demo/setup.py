@@ -3,10 +3,10 @@ SafeLoop .env 암호화/복호화 도구.
 
 GitHub public repo에 API 키를 안전하게 싣기 위한 AES-256-GCM + PBKDF2 기반 래퍼.
 사용법:
-    python setup.py              # 자동 감지(.env 있으면 lock, .env.enc만 있으면 unlock)
-    python setup.py lock         # .env → .env.enc (커밋 가능)
-    python setup.py unlock       # .env.enc → .env (로컬 실행용)
-    python setup.py status       # 현재 파일 상태 확인
+    python setup.py # 자동 감지(.env 있으면 lock, .env.enc만 있으면 unlock)
+    python setup.py lock # .env .env.enc (커밋 가능)
+    python setup.py unlock # .env.enc .env (로컬 실행용)
+    python setup.py status # 현재 파일 상태 확인
 
 암호화 스펙:
   - KDF: PBKDF2-HMAC-SHA256, 390,000 iter, 16-byte salt
@@ -32,7 +32,7 @@ try:
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 except ImportError:
     print("필요 패키지가 없습니다.")
-    print("  pip install cryptography")
+    print(" pip install cryptography")
     sys.exit(1)
 
 HERE = Path(__file__).resolve().parent
@@ -57,11 +57,11 @@ def derive_key(password: str, salt: bytes) -> bytes:
 def encrypt_env() -> int:
     if not ENV_PATH.exists():
         print(f"[오류] {ENV_PATH.name}이 없습니다.")
-        print("       먼저 .env 파일에 API 키를 저장한 뒤 다시 실행하세요.")
+        print(" 먼저 .env 파일에 API 키를 저장한 뒤 다시 실행하세요.")
         return 1
 
     print("==========================================")
-    print("  .env 암호화 (lock)")
+    print(" .env 암호화 (lock)")
     print("==========================================")
     print("이 암호는 다른 컴퓨터에서 복호화(unlock) 할 때 필요합니다.")
     print("분실 시 복구 불가 — password manager에 저장하세요.\n")
@@ -81,22 +81,22 @@ def encrypt_env() -> int:
 
     output = base64.urlsafe_b64encode(salt) + SEPARATOR + token
     ENC_PATH.write_bytes(output)
-    print(f"\n✓ 암호화 완료 → {ENC_PATH.name}  ({len(output)}B)")
+    print(f"\n암호화 완료 {ENC_PATH.name} ({len(output)}B)")
     print("\n다음 단계:")
-    print("  1) git add safeloop_demo/.env.enc")
-    print("  2) git commit -m \"chore: encrypt .env\"")
-    print("  3) git push")
+    print(" 1) git add safeloop_demo/.env.enc")
+    print(" 2) git commit -m \"chore: encrypt .env\"")
+    print(" 3) git push")
     return 0
 
 
 def decrypt_env() -> int:
     if not ENC_PATH.exists():
         print(f"[오류] {ENC_PATH.name}이 없습니다.")
-        print("       git pull로 최신 코드를 받은 뒤 다시 실행하세요.")
+        print(" git pull로 최신 코드를 받은 뒤 다시 실행하세요.")
         return 1
 
     print("==========================================")
-    print("  .env.enc 복호화 (unlock)")
+    print(" .env.enc 복호화 (unlock)")
     print("==========================================")
     pw = getpass.getpass("암호: ").strip()
     if not pw:
@@ -121,28 +121,28 @@ def decrypt_env() -> int:
     if ENV_PATH.exists():
         backup = HERE / ".env.backup"
         ENV_PATH.rename(backup)
-        print(f"  기존 .env → {backup.name} 으로 백업")
+        print(f" 기존 .env {backup.name} 으로 백업")
 
     ENV_PATH.write_bytes(plain)
-    print(f"\n✓ 복호화 완료 → {ENV_PATH.name}")
+    print(f"\n복호화 완료 {ENV_PATH.name}")
     print("\n다음 단계:")
-    print("  python -m streamlit run app.py")
+    print(" python -m streamlit run app.py")
     return 0
 
 
 def status() -> int:
     print("==========================================")
-    print("  SafeLoop 환경 파일 상태")
+    print(" SafeLoop 환경 파일 상태")
     print("==========================================")
     env_ok = ENV_PATH.exists()
     enc_ok = ENC_PATH.exists()
-    mark = lambda v: "✓" if v else "×"
-    print(f"  {mark(env_ok)}  .env      (로컬 실행용, 커밋 안 됨)")
-    print(f"  {mark(enc_ok)}  .env.enc  (암호화본, 커밋 대상)")
+    mark = lambda v: "" if v else "×"
+    print(f" {mark(env_ok)} .env (로컬 실행용, 커밋 안 됨)")
+    print(f" {mark(enc_ok)} .env.enc (암호화본, 커밋 대상)")
     if env_ok and not enc_ok:
-        print("\n→ `python setup.py lock` 으로 암호화하세요.")
+        print("\n`python setup.py lock` 으로 암호화하세요.")
     elif enc_ok and not env_ok:
-        print("\n→ `python setup.py unlock` 으로 복호화하세요.")
+        print("\n`python setup.py unlock` 으로 복호화하세요.")
     elif env_ok and enc_ok:
         print("\n둘 다 존재 — 필요 시 암호화 갱신(lock) 하세요.")
     else:
@@ -161,16 +161,16 @@ def main() -> int:
 
     # 자동 감지
     if not ENV_PATH.exists() and ENC_PATH.exists():
-        print("[자동] .env.enc만 발견 → unlock 진행")
+        print("[자동] .env.enc만 발견 unlock 진행")
         return decrypt_env()
     if ENV_PATH.exists() and not ENC_PATH.exists():
-        print("[자동] .env만 발견 → lock 진행")
+        print("[자동] .env만 발견 lock 진행")
         return encrypt_env()
 
     print("사용법:")
-    print("  python setup.py lock      # .env → .env.enc")
-    print("  python setup.py unlock    # .env.enc → .env")
-    print("  python setup.py status    # 상태 확인")
+    print(" python setup.py lock # .env .env.enc")
+    print(" python setup.py unlock # .env.enc .env")
+    print(" python setup.py status # 상태 확인")
     return 1
 
 

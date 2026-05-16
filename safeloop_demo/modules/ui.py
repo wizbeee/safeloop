@@ -437,59 +437,59 @@ def render_sidebar(active_key: str = "") -> None:
             # 교육청 담당자 — 수신·전국대시보드·정책시뮬
             groups = [
                 ("업무", [
-                    ("app.py",                    "홈"),
-                    ("pages/7_교육청수신함.py",    "교육청 수신함"),
+                    ("app.py", "홈"),
+                    ("pages/7_교육청수신함.py", "교육청 수신함"),
                 ]),
                 ("정책 의사결정", [
-                    ("pages/5_전국대시보드.py",    "전국 대시보드"),
+                    ("pages/5_전국대시보드.py", "전국 대시보드"),
                     ("pages/11_정책시뮬레이터.py", "정책 시뮬레이터"),
                 ]),
                 ("학습 · 이해", [
-                    ("pages/9_프로젝트소개.py",    "프로젝트 소개"),
+                    ("pages/9_프로젝트소개.py", "프로젝트 소개"),
                 ]),
                 ("시스템", [
-                    ("pages/8_설정.py",            "설정"),
+                    ("pages/8_설정.py", "설정"),
                 ]),
             ]
         elif is_space_mgr:
             # 실 담당자 — 본인 점검 흐름만 (학교 단위 통계·발송·매니저 등록 차단)
             groups = [
                 ("내 점검", [
-                    ("app.py",                  "홈"),
-                    ("pages/1_점검시작.py",      "점검 시작"),
-                    ("pages/2_AI점검.py",        "AI 점검"),
-                    ("pages/3_결과저장.py",      "결과 제출"),
+                    ("app.py", "홈"),
+                    ("pages/1_점검시작.py", "점검 시작"),
+                    ("pages/2_AI점검.py", "AI 점검"),
+                    ("pages/3_결과저장.py", "결과 제출"),
                 ]),
                 ("참고·정보", [
-                    ("pages/9_프로젝트소개.py",   "ℹ️ 프로젝트 소개"),
+                    ("pages/9_프로젝트소개.py", "프로젝트 소개"),
                 ]),
             ]
         else:
             # 학교 담당자 — 점검 + 수합검토 + 본교조회 + 발송
             groups = [
                 ("점검", [
-                    ("app.py",                  "홈"),
-                    ("pages/1_점검시작.py",      "점검 시작"),
-                    ("pages/2_AI점검.py",        "AI 점검"),
-                    ("pages/3_결과저장.py",      "결과 저장"),
+                    ("app.py", "홈"),
+                    ("pages/1_점검시작.py", "점검 시작"),
+                    ("pages/2_AI점검.py", "AI 점검"),
+                    ("pages/3_결과저장.py", "결과 저장"),
                 ]),
                 ("수합·검토", [
-                    ("pages/0_수합검토.py",      "✅ 수합·검토"),
+                    ("pages/0_수합검토.py", "수합·검토"),
                 ]),
                 ("본교 조회", [
-                    ("pages/4_본교현황.py",      "📊 본교 통계"),
-                    ("pages/10_점검이력.py",     "📈 점검 변화 추이"),
-                    ("pages/12_데이터불러오기.py", "📥 받은 파일 열기"),
+                    ("pages/4_본교현황.py", "본교 통계"),
+                    ("pages/10_점검이력.py", "점검 변화 추이"),
+                    ("pages/12_데이터불러오기.py", "받은 파일 열기"),
                 ]),
                 ("교육청 발송", [
-                    ("pages/6_데이터순환.py",    "📤 데이터 전송"),
+                    ("pages/6_데이터순환.py", "데이터 전송"),
                 ]),
                 ("참고·정보", [
-                    ("pages/5_전국대시보드.py",   "🌐 전국 대시보드"),
-                    ("pages/9_프로젝트소개.py",   "ℹ️ 프로젝트 소개"),
+                    ("pages/5_전국대시보드.py", "전국 대시보드"),
+                    ("pages/9_프로젝트소개.py", "프로젝트 소개"),
                 ]),
                 ("시스템", [
-                    ("pages/8_설정.py",          "설정"),
+                    ("pages/8_설정.py", "설정"),
                 ]),
             ]
 
@@ -504,10 +504,10 @@ def render_sidebar(active_key: str = "") -> None:
                 # 배지 부착 (수신함·수합검토)
                 show_label = label
                 if is_edu and target == "pages/7_교육청수신함.py" and unread_inbox > 0:
-                    show_label = f"{label}  ●{unread_inbox}"
+                    show_label = f"{label} {unread_inbox}"
                 elif (not is_edu and not is_space_mgr
                       and target == "pages/0_수합검토.py" and pending_review > 0):
-                    show_label = f"{label}  ●{pending_review}"
+                    show_label = f"{label} {pending_review}"
                 try:
                     st.page_link(target, label=show_label)
                 except Exception:
@@ -556,7 +556,7 @@ def _page_key_prefix() -> str:
     """
     import inspect, os
     try:
-        frame = inspect.stack()[2]  # 0=여기, 1=confirm_button, 2=호출자
+        frame = inspect.stack()[2] # 0=여기, 1=confirm_button, 2=호출자
         fname = os.path.basename(frame.filename)
         stem = os.path.splitext(fname)[0]
         # 한글 파일명 등 특수문자는 hash 로 안정화
@@ -607,9 +607,9 @@ def confirm_button(label: str, key: str, message: str = "이 작업은 되돌릴
 # 친절 에러 박스
 # ─────────────────────────────────────────
 def friendly_error(operation: str, exc: Exception, hint: str = "") -> None:
-    st.error(f"❌ **{operation} 중 오류가 발생했습니다.**")
+    st.error(f"**{operation} 중 오류가 발생했습니다.**")
     if hint:
-        st.info(f"💡 {hint}")
+        st.info(f"{hint}")
     with st.expander("기술 상세 보기 (개발자/지원팀용)"):
         st.code(f"{type(exc).__name__}: {exc}")
         st.exception(exc)

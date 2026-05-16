@@ -25,20 +25,20 @@ render_sidebar(active_key="school_dash")
 # (교육청·실 담당자는 별도 안내 + 적절 페이지로 유도)
 if st.session_state.get("role") == "교육청":
     st.warning(
-        "🏛 **교육청 담당자 모드** — '본교 현황' 은 학교 담당자가 자신의 학교 데이터를 "
+        "**교육청 담당자 모드** — '본교 현황' 은 학교 담당자가 자신의 학교 데이터를 "
         "확인하는 내부용 화면입니다. 교육청 관점에서는 '전국 대시보드' 를 사용하세요."
     )
-    if st.button("→ 전국 대시보드로 이동", key="dash_guard_national",
+    if st.button("전국 대시보드로 이동", key="dash_guard_national",
                   type="primary", width="stretch"):
         st.switch_page("pages/5_전국대시보드.py")
     st.stop()
 
 if st.session_state.get("role") == "실":
     st.warning(
-        "👤 **실 담당자 모드** — '본교 현황' 은 학교 단위 통계·이력 화면으로 "
-        "학교 담당자 전용입니다. 실 담당자는 본인 점검 흐름(점검 시작 → AI 점검 → 결과 제출)을 사용하세요."
+        "**실 담당자 모드** — '본교 현황' 은 학교 단위 통계·이력 화면으로 "
+        "학교 담당자 전용입니다. 실 담당자는 본인 점검 흐름(점검 시작 AI 점검 결과 제출)을 사용하세요."
     )
-    if st.button("→ 내 점검 시작", key="dash_guard_space",
+    if st.button("내 점검 시작", key="dash_guard_space",
                   type="primary", width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
@@ -46,7 +46,7 @@ if st.session_state.get("role") == "실":
 school = st.session_state.get("school")
 if not school:
     st.warning("학교가 선택되지 않았습니다. 점검 시작에서 학교를 선택하세요.")
-    if st.button("← 점검 시작", key="dash_noschool_to_start",
+    if st.button("점검 시작", key="dash_noschool_to_start",
                   width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
@@ -63,14 +63,14 @@ if not sessions:
         title=f"{school.get('학교명','이 학교')}에 저장된 점검이 없습니다",
         description=(
             "AI 점검 후 결과 저장을 누르면 이 화면에 누적·시각화됩니다.\n\n"
-            "💡 **처음이라 어떻게 해볼지 모르시겠다면** — 홈으로 돌아가 "
-            "🎬 **시연 시작**을 눌러보세요. 9개 공간 중 하나를 선택하면 "
+            "**처음이라 어떻게 해볼지 모르시겠다면** — 홈으로 돌아가 "
+            "**시연 시작**을 눌러보세요. 9개 공간 중 하나를 선택하면 "
             "더미 이미지 7컷 + AI 분석 + 점검표가 자동 진행되어 결과 화면까지 보여줍니다."
         ),
         action_label="지금 점검 시작",
         action_target="pages/1_점검시작.py",
     )
-    if st.button("← 홈으로 돌아가서 시연 시작", width="stretch",
+    if st.button("홈으로 돌아가서 시연 시작", width="stretch",
                   key="empty_state_demo_home"):
         st.switch_page("app.py")
     st.stop()
@@ -94,17 +94,17 @@ if pd.notna(_last_dt):
     _elapsed = (_dt_remind.datetime.now() - _last_dt.to_pydatetime()).days
     if _elapsed >= 180:
         st.error(
-            f"🚨 **재점검이 필요합니다** — 마지막 점검 후 **{_elapsed}일 경과** "
+            f"**재점검이 필요합니다** — 마지막 점검 후 **{_elapsed}일 경과** "
             f"(권장: 분기당 1회 = 90일 이내). 즉시 새 점검을 시작하세요."
         )
     elif _elapsed >= 90:
         st.warning(
-            f"⏰ **재점검 권장** — 마지막 점검 후 **{_elapsed}일 경과**. "
+            f"**재점검 권장** — 마지막 점검 후 **{_elapsed}일 경과**. "
             f"분기당 1회(90일 이내) 점검이 권장됩니다."
         )
     elif _elapsed >= 60:
         st.info(
-            f"💡 마지막 점검 후 **{_elapsed}일 경과** — 다음 점검까지 약 "
+            f"마지막 점검 후 **{_elapsed}일 경과** — 다음 점검까지 약 "
             f"{max(90 - _elapsed, 0)}일 남았습니다."
         )
 
@@ -296,7 +296,7 @@ if sido_means:
     st.plotly_chart(fig_sido, width="stretch")
 
 st.caption(
-    "💡 **공공데이터 환원 시각화** — 본교 점검은 익명화돼 공공 데이터셋에 합쳐지고, "
+    "**공공데이터 환원 시각화** — 본교 점검은 익명화돼 공공 데이터셋에 합쳐지고, "
     "이 차트는 그 데이터셋을 기반으로 시도별 평균을 산출합니다. "
     "본교 점수(빨강 세로선)와 우리 시도 막대(빨강)를 한눈에 비교하세요."
 )

@@ -12,14 +12,14 @@ import streamlit as st
 
 DEFAULT_STATE = {
     # 학교 식별 (Step 1)
-    "school": None,          # {"정보공시 학교코드": ..., "학교명": ..., ...}
+    "school": None, # {"정보공시 학교코드": ..., "학교명": ..., ...}
     # 학교 인증번호(6자리) 통과 여부 — 학교 담당자(role="학교") 흐름에서 사용.
     # 실 담당자(role="실")의 인증 통과는 space_manager 객체 존재로 판단한다
     # (별도 플래그 없음). is_authenticated_for_role() 헬퍼로 통합 검사 권장.
     "school_auth_verified": False,
 
     # 공간 (Step 2)
-    "active_space": None,    # {"space_id": "...", "type": "화학실", "nickname": "3층 A"}
+    "active_space": None, # {"space_id": "...", "type": "화학실", "nickname": "3층 A"}
     "registered_spaces": [], # 학교별 공간 목록
 
     # 촬영 (Step 3) — 실제 사진 저장은 `shots` dict 사용 (페이지 단계에서 초기화).
@@ -28,11 +28,11 @@ DEFAULT_STATE = {
     # AI 파이프라인 (Step 4)
     "stage1_result": None,
     "stage2_result": None,
-    "stage2_confirmed": None,   # 사용자 확정 결과
+    "stage2_confirmed": None, # 사용자 확정 결과
     "stage3_result": None,
 
     # 현장 점검 (Step 5)
-    "item_scores": {},          # {항목: 0/0.5/1}
+    "item_scores": {}, # {항목: 0/0.5/1}
     "score_result": None,
 
     # AI 추천 (Step 6)
@@ -40,33 +40,33 @@ DEFAULT_STATE = {
 
     # 저장 (Step 7)
     "saved_session_id": None,
-    "eduline": None,                    # 결재라인 (PDF 표시용 — 학교마다 양식 다르므로 참고용)
-    "edu_package_ready": False,         # 통합 PDF 다운로드 준비 플래그
-    "internal_approval_confirmed": False,  # 학교 내부 결재 메타 (선택 — 강제 아님)
-    "my_email": "",                     # 본인 이메일 (학교 또는 교육청 담당자)
-    "edu_office_email": "",             # 교육청 담당자 이메일 (학교가 등록 — 발송 대상)
+    "eduline": None, # 결재라인 (PDF 표시용 — 학교마다 양식 다르므로 참고용)
+    "edu_package_ready": False, # 통합 PDF 다운로드 준비 플래그
+    "internal_approval_confirmed": False, # 학교 내부 결재 메타 (선택 — 강제 아님)
+    "my_email": "", # 본인 이메일 (학교 또는 교육청 담당자)
+    "edu_office_email": "", # 교육청 담당자 이메일 (학교가 등록 — 발송 대상)
 
     # 모드 — 환경변수 또는 URL 파라미터로 결정 (ensure_state 에서 처리)
     # 기본 False (실 사용). SAFELOOP_DEMO_MODE=1 또는 ?demo=1 시 True.
     "demo_mode": False,
-    "role": "학교",             # "실" | "학교" | "교육청"
+    "role": "학교", # "실" | "학교" | "교육청"
 
     # 실 담당자 정보 — role="실" 인증 통과 시 저장
     # {"manager_id": "M001", "name": "홍길동", "email": ..., "phone": ...,
-    #  "assigned_space_ids": ["sp_chem_3a", ...], "active": True, ...}
+    # "assigned_space_ids": ["sp_chem_3a", ...], "active": True, ...}
     "space_manager": None,
 
     # 전국 대시보드
     "filter_sido": None,
 
     # AI 공급자
-    "ai_provider": None,        # None=자동, "anthropic" | "openai" 등
+    "ai_provider": None, # None=자동, "anthropic" | "openai" 등
     "api_key_anthropic": "",
     "api_key_openai": "",
     "image_quality_check": True,
 
     # UX
-    "_auth_prefill": "",        # 인증번호 자동 입력 버퍼
+    "_auth_prefill": "", # 인증번호 자동 입력 버퍼
     "_seen_auth_help": False,
 }
 
@@ -117,7 +117,7 @@ def has_unsaved_inspection_work() -> bool:
 def reset_inspection() -> None:
     """한 공간 점검 세션 초기화 (다른 공간 이어서 점검 시).
     학교 선택과 인증 상태, 등록된 공간 목록, 직전 저장 ID 이력은 유지."""
-    # 직전 저장된 세션 ID는 별도 보관 → 결과 페이지에서 이력 추적 가능
+    # 직전 저장된 세션 ID는 별도 보관 결과 페이지에서 이력 추적 가능
     last_saved = st.session_state.get("saved_session_id")
     if last_saved:
         st.session_state.setdefault("_recent_saved_ids", [])
@@ -188,8 +188,8 @@ def set_(key: str, value: Any) -> None:
 def is_authenticated_for_role() -> bool:
     """현재 역할에 맞는 인증이 통과되었는지 통합 검사.
 
-    - role="실"   → space_manager 객체 존재 여부 (매니저 PIN 통과 시 set)
-    - role="학교"/그 외 → school_auth_verified (학교 인증번호 통과 시 True)
+    - role="실" space_manager 객체 존재 여부 (매니저 PIN 통과 시 set)
+    - role="학교"/그 외 school_auth_verified (학교 인증번호 통과 시 True)
     """
     role = st.session_state.get("role", "학교")
     if role == "실":

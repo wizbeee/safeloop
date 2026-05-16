@@ -4,7 +4,7 @@ Step 1~2 — 학교 식별 + 인증 + 공간 선택/등록.
 학교 찾기 3가지 방식(탭):
 1) GPS 자동 (편의용 — HTTPS 필요)
 2) 학교명 검색
-3) 지역 단계 검색 (시도 → 시군구 → 학교)
+3) 지역 단계 검색 (시도 시군구 학교)
 
 인증은 '학교 식별번호'(정보공시 코드, 자동 표시) + '담당자 인증번호'(수동 입력) 2요소.
 """
@@ -40,10 +40,10 @@ hero("단계 1 — 점검 시작", "점검 시작", "학교를 찾아 인증한 
 from modules.session import has_unsaved_inspection_work as _has_unsaved
 if _has_unsaved():
     st.warning(
-        "⚠ **저장되지 않은 점검 작업이 있습니다** — 새 공간 선택·등록 시 사라집니다. "
+        "**저장되지 않은 점검 작업이 있습니다** — 새 공간 선택·등록 시 사라집니다. "
         "현재 작업을 보관하려면 **결과 저장 페이지**에서 먼저 저장한 뒤 이 페이지로 돌아오세요."
     )
-    if st.button("→ 결과 저장 페이지로 돌아가기", key="goto_save_unsaved",
+    if st.button("결과 저장 페이지로 돌아가기", key="goto_save_unsaved",
                   width="stretch"):
         st.switch_page("pages/3_결과저장.py")
 
@@ -64,7 +64,7 @@ if not st.session_state.get("school_auth_verified") and not st.session_state.get
                     st.session_state["eduline"] = profile["eduline"]
             except Exception:
                 pass
-            st.toast(f"자동 로그인 — {_school.get('학교명', '')}", icon="🔑")
+            st.toast(f"자동 로그인 — {_school.get('학교명', '')}", icon=None)
 
 # 실 담당자 자동 로그인 — 쿠키에서 (school_code, manager_id) 읽어 학교 자동 인식.
 # PIN 은 보안상 자동 입력하지 않고, 매니저 명단 selectbox 의 기본값으로만 사용.
@@ -81,7 +81,7 @@ if (st.session_state.get("role") == "실"
             st.session_state["school"] = _rem_school
             # 매니저 인증 단계 selectbox 기본 선택용
             st.session_state["_remembered_mgr_id"] = _rem_manager_id
-            st.toast(f"자동 인식 — {_rem_school.get('학교명', '')}", icon="🔑")
+            st.toast(f"자동 인식 — {_rem_school.get('학교명', '')}", icon=None)
 
 # 1-7 수정: 공간이 이미 선택된 경우 상단에 즉시 이동 가능한 바로가기 표시
 _active_sp = st.session_state.get("active_space")
@@ -101,7 +101,7 @@ if _active_sp and _is_auth_role() and st.session_state.get("school"):
             unsafe_allow_html=True,
         )
     with colQ2:
-        if st.button("→ AI 점검으로 바로 이동", type="primary",
+        if st.button("AI 점검으로 바로 이동", type="primary",
                       key="quick_goto_ai", width="stretch"):
             st.switch_page("pages/2_AI점검.py")
 
@@ -161,9 +161,9 @@ if not current:
                     c1, c2 = st.columns([5, 1])
                     with c1:
                         st.markdown(
-                            f"**{row['학교명']}**  "
+                            f"**{row['학교명']}** "
                             f"<span class='sl-pill'>{row['학교급']}</span>"
-                            f"<span class='sl-pill'>{row['설립구분']}</span>  \n"
+                            f"<span class='sl-pill'>{row['설립구분']}</span> \n"
                             f"<span style='color:#6B6B70;font-size:12px'>"
                             f"{row['시도교육청']} · {row['지역']}</span>",
                             unsafe_allow_html=True,
@@ -179,7 +179,7 @@ if not current:
                 if total_hits > PAGE_SIZE:
                     nav_prev, nav_info, nav_next = st.columns([1, 2, 1])
                     with nav_prev:
-                        if st.button("← 이전", key=f"pg_prev_{q}",
+                        if st.button("이전", key=f"pg_prev_{q}",
                                       disabled=(cur_page <= 1),
                                       width="stretch"):
                             st.session_state[page_key] = cur_page - 1
@@ -192,7 +192,7 @@ if not current:
                             unsafe_allow_html=True,
                         )
                     with nav_next:
-                        if st.button("다음 →", key=f"pg_next_{q}",
+                        if st.button("다음 ", key=f"pg_next_{q}",
                                       disabled=(cur_page >= total_pages),
                                       width="stretch"):
                             st.session_state[page_key] = cur_page + 1
@@ -222,9 +222,9 @@ if not current:
                     c1, c2 = st.columns([5, 1])
                     with c1:
                         st.markdown(
-                            f"**{row['학교명']}**  "
+                            f"**{row['학교명']}** "
                             f"<span class='sl-pill'>{row['학교급']}</span>"
-                            f"<span class='sl-pill'>{row['설립구분']}</span>  \n"
+                            f"<span class='sl-pill'>{row['설립구분']}</span> \n"
                             f"<span style='color:#6B6B70;font-size:12px'>{row['지역']}</span>",
                             unsafe_allow_html=True,
                         )
@@ -247,7 +247,7 @@ if not current:
             unsafe_allow_html=True,
         )
         try:
-            from streamlit_geolocation import streamlit_geolocation  # type: ignore
+            from streamlit_geolocation import streamlit_geolocation # type: ignore
             loc = streamlit_geolocation()
             if loc and loc.get("latitude") and loc.get("longitude"):
                 st.success(f"현재 위치: {loc['latitude']:.5f}, {loc['longitude']:.5f}")
@@ -258,8 +258,8 @@ if not current:
 
 # ─────────────────────────────────────────
 # 2) 인증 — 역할별 분기
-#    role="실"  : 학교 인증번호 대신 매니저 PIN (학교 담당자가 발급)
-#    role="학교"/그 외: 학교 인증번호 (기존 흐름)
+# role="실" : 학교 인증번호 대신 매니저 PIN (학교 담당자가 발급)
+# role="학교"/그 외: 학교 인증번호 (기존 흐름)
 # ─────────────────────────────────────────
 _role = st.session_state.get("role", "학교")
 
@@ -305,7 +305,7 @@ if (_role == "실" and st.session_state.get("school")
             "이 학교에 등록된 실 담당자가 없습니다. **학교 담당자**가 먼저 "
             "[설정] 페이지에서 실 담당자를 등록하고 PIN을 발급해야 합니다."
         )
-        if st.button("← 학교 담당자로 전환해서 등록하러 가기",
+        if st.button("학교 담당자로 전환해서 등록하러 가기",
                       key="switch_to_school_for_register",
                       width="stretch"):
             st.session_state["role"] = "학교"
@@ -365,7 +365,7 @@ if (_role == "실" and st.session_state.get("school")
                     f"</div>",
                     unsafe_allow_html=True,
                 )
-                if st.button("↓ 자동 입력", key="_space_mgr_autofill",
+                if st.button("자동 입력", key="_space_mgr_autofill",
                               width="stretch"):
                     st.session_state["_space_mgr_pin"] = DEMO_PIN
                     st.rerun()
@@ -415,22 +415,22 @@ if (_role != "실" and st.session_state.get("school")
 
     # 1-4: 플래그를 expander 바깥에서 설정 — 한 번이라도 페이지 보면 이후 접힘
     _was_seen = st.session_state.get("_seen_auth_help", False)
-    with st.expander("❓ 담당자 인증번호가 없으신가요? (발급 절차 안내)", expanded=not _was_seen):
+    with st.expander("담당자 인증번호가 없으신가요? (발급 절차 안내)", expanded=not _was_seen):
         st.markdown(
             "**담당자 인증번호**는 점검을 등록할 자격이 있는 **담당 교사·시설관리자**를 증명하는 "
             "6자리 숫자 비밀번호입니다.\n\n"
-            "##### 📋 발급 절차 (실 운영 시)\n"
-            "1. **학교 → 교육청 신청** — 학교 측에서 점검 담당 교사·시설관리자를 지정해 "
+            "##### 발급 절차 (실 운영 시)\n"
+            "1. **학교 교육청 신청** — 학교 측에서 점검 담당 교사·시설관리자를 지정해 "
             "교육청 시설안전 담당 부서에 인증번호 신청 (공문 또는 SafeLoop 신청 양식)\n"
-            "2. **교육청 발급** — 교육청이 학교 코드 기반으로 6자리 인증번호 자동 생성 → "
+            "2. **교육청 발급** — 교육청이 학교 코드 기반으로 6자리 인증번호 자동 생성 "
             "공문·이메일·시도교육청 행정망(K-에듀파인 등)으로 학교에 회신\n"
-            "3. **학교 내부 전달** — 학교 행정실 → 담당 교사에게 인증번호 전달\n"
+            "3. **학교 내부 전달** — 학교 행정실 담당 교사에게 인증번호 전달\n"
             "4. **분실·재발급** — 인증번호 분실 시 학교가 교육청에 재발급 요청 (학교 단위 1회 재발급 권장)\n\n"
-            "##### 🔑 운영 시 받는 곳\n"
+            "##### 운영 시 받는 곳\n"
             "- **교사 본인** — 학교 행정실 또는 교육청 시설안전 담당자\n"
             "- **시설관리자** — 학교장 직접 전달 또는 행정실 보관함\n"
             "- **교감·교장** — 교육청 시설안전 담당 직접 발급\n\n"
-            "##### ⚠ 중요 안내\n"
+            "##### 중요 안내\n"
             "- **학교 코드**(예: `S120002870`)는 위에 자동 표시됩니다 — 공개 정보, 입력 불필요\n"
             "- **담당자 인증번호**는 비공개 — 외부 공유 금지\n"
             "- **이 앱은 현재 시연 모드**이므로 실제 발급 체계가 없어, "
@@ -443,7 +443,7 @@ if (_role != "실" and st.session_state.get("school")
     # 인증번호 (수동 입력 + 시연용 자동 입력)
     colA, colB = st.columns([3, 2])
 
-    # 입력값 소스: 자동입력 버튼 누르면 세션에 저장 → 위젯에 주입
+    # 입력값 소스: 자동입력 버튼 누르면 세션에 저장 위젯에 주입
     default_val = st.session_state.get("_auth_prefill", "")
 
     with colA:
@@ -477,7 +477,7 @@ if (_role != "실" and st.session_state.get("school")
             )
             # 시연 모드: 자동 입력 버튼 단일 — 항상 expected 값으로 덮어씀
             # (이전 버전의 "이미 입력된 값 확인" 분기는 사용자 혼란만 줘서 제거)
-            if st.button("↓ 자동 입력", key="auto_fill_auth",
+            if st.button("자동 입력", key="auto_fill_auth",
                           width="stretch"):
                 st.session_state["_auth_prefill"] = expected
                 st.rerun()
@@ -509,8 +509,8 @@ if (_role != "실" and st.session_state.get("school")
 
 # ─────────────────────────────────────────
 # 3) 공간 선택 / 등록
-#    role="실" : 본인 assigned_space_ids 와 매칭되는 공간만 표시, 새 공간 등록 불가
-#    그 외      : 학교의 모든 등록 공간 + 새 공간 등록 가능
+# role="실" : 본인 assigned_space_ids 와 매칭되는 공간만 표시, 새 공간 등록 불가
+# 그 외 : 학교의 모든 등록 공간 + 새 공간 등록 가능
 #
 # 가드 — 역할별 인증 방식이 달라 통합 헬퍼로 검사 (학교 인증번호 또는 매니저 PIN)
 # ─────────────────────────────────────────
@@ -537,8 +537,8 @@ if _is_auth_role():
         if my_space_ids:
             spaces_here = [s for s in spaces_here if s.get("space_id") in my_space_ids]
         else:
-            spaces_here = []  # 담당 공간 0개 → 학교 담당자에게 요청 안내
-        # 실 담당자는 새 공간 등록 권한 없음 → 단일 탭만
+            spaces_here = [] # 담당 공간 0개 학교 담당자에게 요청 안내
+        # 실 담당자는 새 공간 등록 권한 없음 단일 탭만
         tab_pick = st.container()
         tab_new = None
     else:
@@ -559,7 +559,7 @@ if _is_auth_role():
                         "학교 담당자가 [점검 시작 · 새 공간 등록]에서 공간을 먼저 만든 뒤 "
                         "[설정]에서 본인에게 할당해야 합니다."
                     )
-                if st.button("← 학교 담당자로 전환", key="space_role_to_school",
+                if st.button("학교 담당자로 전환", key="space_role_to_school",
                               width="stretch"):
                     st.session_state["role"] = "학교"
                     st.session_state["space_manager"] = None
@@ -598,7 +598,7 @@ if _is_auth_role():
                         st.rerun()
                     if st.session_state.get(_confirm_key):
                         st.warning(
-                            "⚠ 현재 점검 중인 작업이 **저장되지 않았습니다**. "
+                            "현재 점검 중인 작업이 **저장되지 않았습니다**. "
                             "다른 공간으로 전환하면 사진·점수·결과가 사라집니다.\n\n"
                             "**'선택'** 을 한 번 더 누르면 그래도 진행하고, "
                             "취소하려면 결과 저장 페이지에서 먼저 저장하세요."
@@ -609,7 +609,7 @@ if _is_auth_role():
                             st.session_state.pop(_confirm_key, None)
                             st.rerun()
 
-    # 실 담당자(_role="실")에겐 새 공간 등록 권한이 없음 → tab_new=None.
+    # 실 담당자(_role="실")에겐 새 공간 등록 권한이 없음 tab_new=None.
     # 학교 담당자만 아래 블록이 실행됨.
     if tab_new is not None:
       with tab_new:
@@ -651,7 +651,7 @@ if _is_auth_role():
             st.session_state.setdefault("registered_spaces", []).append(new_sp)
             st.session_state["active_space"] = new_sp
             # 시연 모드 — 새 공간이 생기면 데모 실 담당자에게도 자동 할당
-            # (ensure_demo_manager 는 멱등 + 공간 합집합 처리 → 안전하게 매번 호출 가능)
+            # (ensure_demo_manager 는 멱등 + 공간 합집합 처리 안전하게 매번 호출 가능)
             if st.session_state.get("demo_mode"):
                 try:
                     from modules.managers import ensure_demo_manager
@@ -665,7 +665,7 @@ if _is_auth_role():
             st.rerun()
         if st.session_state.get(_confirm_new_key):
             st.warning(
-                "⚠ 현재 점검 중인 작업이 **저장되지 않았습니다**. "
+                "현재 점검 중인 작업이 **저장되지 않았습니다**. "
                 "새 공간을 등록·선택하면 사진·점수·결과가 사라집니다.\n\n"
                 "**'등록·선택'** 을 한 번 더 누르면 그래도 진행하고, "
                 "취소하려면 결과 저장 페이지에서 먼저 저장하세요."

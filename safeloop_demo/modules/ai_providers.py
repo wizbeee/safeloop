@@ -21,7 +21,7 @@ from typing import Callable, Optional
 # 모듈 임포트 시점에 .env 자동 로드 (Streamlit 페이지 직접 진입 대응)
 # - 기본은 override=False로 외부 환경변수 존중
 # - 단, 외부 값이 빈 문자열인 경우(쉘에 ANTHROPIC_API_KEY= 식으로 잡혀있는 경우)는
-#   .env 값으로 덮어써야 정상 작동
+# .env 값으로 덮어써야 정상 작동
 try:
     from dotenv import load_dotenv, dotenv_values
     _env_path = Path(__file__).resolve().parent.parent / ".env"
@@ -127,8 +127,8 @@ class AnthropicProvider(VisionProvider):
             })
 
         # Stage 3 (text tier) 는 맞춤 점검표 20~30개 항목을 생성하므로 더 넉넉한 토큰 필요
-        # - vision (Stage 1, 2): 짧은 JSON → 4096 충분
-        # - text (Stage 3): 긴 점검표 JSON → 16000 (응답 중단 방지)
+        # - vision (Stage 1, 2): 짧은 JSON 4096 충분
+        # - text (Stage 3): 긴 점검표 JSON 16000 (응답 중단 방지)
         max_tok = 16000 if tier == "text" else 4096
 
         def _do() -> str:

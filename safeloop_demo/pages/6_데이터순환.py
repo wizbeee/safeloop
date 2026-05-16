@@ -1,11 +1,11 @@
 """
-📤 데이터 전송 — 학교 담당자용 통합 발송 화면.
+데이터 전송 — 학교 담당자용 통합 발송 화면.
 
 이 페이지에서 가능한 작업:
   ① 본교의 저장된 점검 중 발송할 건 선택
   ② 두 가지 방법으로 발송:
      - 방법 1 (권장): SafeLoop 다이렉트 전송 (1클릭, 수신 확인 자동)
-     - 방법 2 (대체): PDF + .safeloop 다운로드 → 본인이 메일·카톡으로 직접 전송
+     - 방법 2 (대체): PDF + .safeloop 다운로드 본인이 메일·카톡으로 직접 전송
   ③ 발송 기록 + 수신 확인 상태 추적
 
 결과 저장 페이지의 발송 섹션은 "방금 저장한 점검을 즉시 발송" 단축 흐름을 위해
@@ -30,7 +30,7 @@ from modules.storage import (
 )
 from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
 
-st.set_page_config(page_title="📤 데이터 전송 · SafeLoop",
+st.set_page_config(page_title="데이터 전송 · SafeLoop",
                    page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="auto")
 apply_theme()
@@ -40,15 +40,15 @@ render_sidebar(active_key="my_submission")
 # 역할 가드
 if st.session_state.get("role") == "교육청":
     st.warning(
-        "🏛 **교육청 담당자 모드** — '📤 데이터 전송' 은 학교 담당자 화면입니다. "
+        "**교육청 담당자 모드** — '데이터 전송' 은 학교 담당자 화면입니다. "
         "전체 수신 목록은 '교육청 수신함'에서 확인하세요."
     )
-    if st.button("→ 교육청 수신함으로 이동", key="track_guard_inbox",
+    if st.button("교육청 수신함으로 이동", key="track_guard_inbox",
                   type="primary", width="stretch"):
         st.switch_page("pages/7_교육청수신함.py")
     st.stop()
 
-hero("SUBMISSION", "📤 데이터 전송",
+hero("SUBMISSION", "데이터 전송",
      "본교 점검 결과를 교육청 담당자에게 발송 + 발송 기록·수신 확인 추적")
 
 school = st.session_state.get("school")
@@ -92,7 +92,7 @@ def _label(s: dict) -> str:
     sp_label = f"{sp}" + (f" ({nick})" if nick else "")
     sc = s.get("score", "-")
     gr = s.get("grade", "-")
-    return f"{ts}  ·  {sp_label}  ·  {sc}점 ({gr})  ·  {s.get('session_id','-')[:14]}"
+    return f"{ts} · {sp_label} · {sc}점 ({gr}) · {s.get('session_id','-')[:14]}"
 
 # 발송 기록과 매칭 — 이미 발송한 세션 표시 (중복 방지)
 outbox = get_school_outbox(school_code) if school_code else []
@@ -114,13 +114,13 @@ picked_path = Path(picked_session.get("path", "")) / "master.json" if picked_ses
 
 # 발송 데이터 준비 — master.json 로드
 if not picked_path or not picked_path.exists():
-    st.error(f"⚠ 점검 데이터 파일을 찾을 수 없습니다: {picked_path}")
+    st.error(f"점검 데이터 파일을 찾을 수 없습니다: {picked_path}")
     st.stop()
 
 try:
     master = json.loads(picked_path.read_text(encoding="utf-8"))
 except Exception as e:
-    st.error(f"⚠ 점검 데이터 로드 실패: {e}")
+    st.error(f"점검 데이터 로드 실패: {e}")
     st.stop()
 
 edu_pkg = build_edu_package(master)
@@ -139,7 +139,7 @@ st.markdown(
     f"{sp_label} · {picked_session.get('score', '-')}점 "
     f"({picked_session.get('grade', '-')}등급)</div>"
     f"<div style='font-size:13px;color:#6B6B70;'>"
-    f"📅 저장: {ts_short} · 🆔 세션 ID: <code>{picked_sid}</code>"
+    f"저장: {ts_short} · 🆔 세션 ID: <code>{picked_sid}</code>"
     f"</div></div>",
     unsafe_allow_html=True,
 )
@@ -167,13 +167,13 @@ edu_email = edu_email_user or edu_email_fallback or ""
 
 if not edu_email:
     st.warning(
-        f"⚠ 교육청 담당자 이메일이 등록되지 않았습니다 (시도: {school_sido or '미상'}). "
+        f"교육청 담당자 이메일이 등록되지 않았습니다 (시도: {school_sido or '미상'}). "
         f"설정 페이지에서 등록하거나, 방법 1 (다이렉트 전송)만 사용 가능합니다."
     )
 
 tab_direct, tab_manual = st.tabs([
-    "🚀 다이렉트 (권장)",
-    "📤 다운로드 후 발송",
+    "다이렉트 (권장)",
+    "다운로드 후 발송",
 ])
 
 # ── 방법 1: 다이렉트 전송 ──
@@ -186,25 +186,25 @@ with tab_direct:
     st.markdown(
         "<div style='padding:10px 14px;background:#F0F7F0;border:1px solid #C8E6C9;"
         "border-radius:6px;font-size:12px;color:#2E7D32;line-height:1.6;'>"
-        "✅ 1번의 클릭 · ✅ 수신 확인 자동 추적 · ✅ 첨부 파일 누락 위험 없음<br>"
-        "⚠ 단일 PC 또는 공유 데이터 폴더 환경 한정 — 분산 PC 환경은 정식 출시 시 검토."
+        "1번의 클릭 · 수신 확인 자동 추적 · 첨부 파일 누락 위험 없음<br>"
+        "단일 PC 또는 공유 데이터 폴더 환경 한정 — 분산 PC 환경은 정식 출시 시 검토."
         "</div>",
         unsafe_allow_html=True,
     )
 
     if already_today:
         st.info(
-            "📨 오늘 같은 점검을 이미 한 번 발송했습니다. 아래 버튼을 누르면 추가 "
+            "오늘 같은 점검을 이미 한 번 발송했습니다. 아래 버튼을 누르면 추가 "
             "발송이 됩니다 (수정본 재발송 시 사용)."
         )
 
-    if st.button("🚀 SafeLoop 수신함으로 다이렉트 전송",
+    if st.button("SafeLoop 수신함으로 다이렉트 전송",
                   type="primary", width="stretch", key="send_direct_now"):
         try:
             res = submit_to_edu_inbox_direct(edu_pkg)
             if res.get("ok"):
                 st.success(
-                    f"✅ 전송 완료 — 발송 ID `{res['submit_id']}` · "
+                    f"전송 완료 — 발송 ID `{res['submit_id']}` · "
                     f"수신 시도교육청: {res.get('sido')}"
                 )
                 st.rerun()
@@ -227,7 +227,7 @@ with tab_manual:
         try:
             pdf_bytes = build_pdf_report(master)
             st.download_button(
-                f"📄 PDF 보고서 다운로드 ({len(pdf_bytes) // 1024} KB)",
+                f"PDF 보고서 다운로드 ({len(pdf_bytes) // 1024} KB)",
                 pdf_bytes,
                 file_name=f"안전점검_{sp}_{(picked_session.get('timestamp','')[:10])}.pdf",
                 mime="application/pdf",
@@ -240,7 +240,7 @@ with tab_manual:
         try:
             blob = encrypt_to_file_bytes(edu_pkg)
             st.download_button(
-                f"🔒 암호화 데이터 다운로드 ({len(blob) // 1024} KB)",
+                f"암호화 데이터 다운로드 ({len(blob) // 1024} KB)",
                 blob,
                 file_name=f"안전점검_{sp}_{(picked_session.get('timestamp','')[:10])}.safeloop",
                 mime="application/octet-stream",
@@ -270,7 +270,7 @@ with tab_manual:
         col_a, col_b = st.columns([1, 1])
         with col_a:
             st.text_input("받는사람", value=edu_email, key="send_to_box_b",
-                           help="클릭 후 Ctrl+A → Ctrl+C 로 복사")
+                           help="클릭 후 Ctrl+A Ctrl+C 로 복사")
             st.text_input("제목", value=subject, key="send_subject_box_b")
         with col_b:
             st.text_area("본문", value=body, height=150, key="send_body_box_b",
@@ -316,7 +316,7 @@ with tab_manual:
             )
 
         st.caption(
-            "💡 카톡 공유 — 본문 복사해 카톡 채팅에 붙여넣고 PDF·.safeloop 함께 첨부 전송."
+            "카톡 공유 — 본문 복사해 카톡 채팅에 붙여넣고 PDF·.safeloop 함께 첨부 전송."
         )
 
 # ─────────────────────────────────────────
@@ -331,7 +331,7 @@ outbox = get_school_outbox(school_code) if school_code else []
 
 if not outbox:
     st.caption(
-        "💡 아직 SafeLoop 다이렉트 전송 기록이 없습니다. 위 **방법 1** 으로 발송하면 "
+        "아직 SafeLoop 다이렉트 전송 기록이 없습니다. 위 **방법 1** 으로 발송하면 "
         "여기에 발송 기록과 수신 확인 상태가 표시됩니다."
     )
 else:
@@ -342,7 +342,7 @@ else:
     k1.metric("다이렉트 발송", f"{n_total}건")
     k2.metric("교육청 수신 확인", f"{n_read}건")
     k3.metric("수신 대기", f"{n_pending}건",
-              delta=("⏳ 미확인 있음" if n_pending else "✓ 모두 확인"),
+              delta=("미확인 있음" if n_pending else "모두 확인"),
               delta_color=("inverse" if n_pending else "normal"))
 
     for r in outbox[:30]:
@@ -352,7 +352,7 @@ else:
             border_color = "#4CAF50"
             status_html = (
                 f"<span style='color:#2E7D32;font-weight:700;'>"
-                f"✅ 수신 확인 완료 — {(read_at or '')[:16].replace('T', ' ')}"
+                f"수신 확인 완료 — {(read_at or '')[:16].replace('T', ' ')}"
                 f"</span>"
             )
         else:
@@ -365,7 +365,7 @@ else:
             border_color = color
             status_html = (
                 f"<span style='color:{color};font-weight:700;'>"
-                f"⏳ 수신 대기 중 (발송 후 {elapsed_days}일 경과)"
+                f"수신 대기 중 (발송 후 {elapsed_days}일 경과)"
                 f"</span>"
             )
 
@@ -378,14 +378,14 @@ else:
             f"<span style='font-size:11px;color:#6B6B70;font-weight:400;'>"
             f"· 발송 ID `{r.get('submit_id', '-')}`</span></div>"
             f"<div style='font-size:12px;color:#6B6B70;line-height:1.7;'>"
-            f"📤 발송 시각: {sub_at} · 시도: {r.get('sido', '-')}<br>"
+            f"발송 시각: {sub_at} · 시도: {r.get('sido', '-')}<br>"
             f"{status_html}"
             f"</div></div>",
             unsafe_allow_html=True,
         )
 
 st.caption(
-    f"💡 학교: **{school_name}** · 조회 시각: "
+    f"학교: **{school_name}** · 조회 시각: "
     f"{datetime.datetime.now():%Y-%m-%d %H:%M}\n\n"
     "메일·카톡(방법 2)으로 발송한 건은 SafeLoop 가 추적할 수 없으므로 본인의 발송함을 "
     "직접 확인하세요."

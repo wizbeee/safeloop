@@ -36,7 +36,7 @@ _my_school_name = _my_school.get("학교명", "")
 _my_school_sido = _my_school.get("시도교육청", "")
 if _my_school_code:
     st.success(
-        f"🏫 **본교 인증됨** — `{_my_school_name}` ({_my_school_sido}) — "
+        f"**본교 인증됨** — `{_my_school_name}` ({_my_school_sido}) — "
         "차트와 지도에 본교 시도가 빨간색으로 강조됩니다."
     )
 
@@ -46,7 +46,7 @@ try:
     cluster = load_cluster_summary()
     hr = load_high_risk()
 except FileNotFoundError as e:
-    st.error("📁 공공데이터 CSV가 누락되었습니다.")
+    st.error("공공데이터 CSV가 누락되었습니다.")
     st.markdown(
         f"```\n{e}\n```\n\n"
         "**해결 방법**\n"
@@ -80,14 +80,14 @@ SIDO_COORDS = {
     "대전광역시교육청": (36.3504, 127.3845),
     "울산광역시교육청": (35.5384, 129.3114),
     "세종특별자치시교육청": (36.4800, 127.2890),
-    "경기도교육청":       (37.4138, 127.5183),
+    "경기도교육청": (37.4138, 127.5183),
     "강원특별자치도교육청": (37.8228, 128.1555),
-    "충청북도교육청":     (36.6357, 127.4917),
-    "충청남도교육청":     (36.5184, 126.8000),
+    "충청북도교육청": (36.6357, 127.4917),
+    "충청남도교육청": (36.5184, 126.8000),
     "전북특별자치도교육청": (35.7175, 127.1530),
-    "전라남도교육청":     (34.8679, 126.9910),
-    "경상북도교육청":     (36.4919, 128.8889),
-    "경상남도교육청":     (35.4606, 128.2132),
+    "전라남도교육청": (34.8679, 126.9910),
+    "경상북도교육청": (36.4919, 128.8889),
+    "경상남도교육청": (35.4606, 128.2132),
     "제주특별자치도교육청": (33.4996, 126.5312),
 }
 
@@ -224,7 +224,7 @@ if _my_school_sido and _my_school_sido in SIDO_COORDS:
         lat=[_lat], lon=[_lon],
         mode="markers+text",
         marker=dict(size=22, color="#D50000", symbol="star"),
-        text=[f"🏫 {_my_school_name}"],
+        text=[f"{_my_school_name}"],
         textposition="top center",
         textfont=dict(size=14, color="#D50000"),
         name="본교",
@@ -283,7 +283,7 @@ if len(hr_filtered):
             fig_hist.add_vline(
                 x=_my_risk,
                 line_dash="dash", line_color="#0A0A0B", line_width=2,
-                annotation_text=f"🏫 본교 ({_my_risk:.1f})",
+                annotation_text=f"본교 ({_my_risk:.1f})",
                 annotation_position="top",
             )
     fig_hist.update_layout(height=240, margin=dict(l=20, r=20, t=40, b=40),
@@ -293,7 +293,7 @@ if len(hr_filtered):
     st.plotly_chart(fig_hist, width="stretch")
     if _my_risk is not None:
         st.caption(
-            f"💡 **본교 위치** — 위험도 점수 **{_my_risk:.1f}** "
+            f"**본교 위치** — 위험도 점수 **{_my_risk:.1f}** "
             f"(공공 데이터셋 기준). 분포에서 본교가 어디에 위치하는지 검은 세로선 참고."
         )
 else:
