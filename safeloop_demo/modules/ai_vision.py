@@ -3,7 +3,7 @@ AI 비전 파이프라인 — 단계 1(공간 식별) · 단계 2(설비 탐지)
 
 modules.ai_providers 의 Adapter(Anthropic · OpenAI · …)를 투명 교체하며 호출.
 해시 기반 디스크 캐싱으로 동일 입력 재분석 시 API 호출 생략.
-사진에 샷 메타데이터(03-1 식 라벨)를 주입해 설비→사진 매핑 품질 향상.
+사진에 샷 메타데이터(03-1 식 라벨)를 주입해 설비사진 매핑 품질 향상.
 """
 from __future__ import annotations
 
@@ -115,7 +115,7 @@ def _recover_truncated_json(text: str) -> dict:
 
     # 복구된 JSON 조립: 앞부분(items 앞) + [완성 아이템들] + 닫는 }
     # 뒤쪽 rationale 등이 없으므로 items 만 살려 최소 JSON 구성
-    head = text[:items_start]  # 예: {"space_type": "...", "checklist_name": "...",
+    head = text[:items_start] # 예: {"space_type": "...", "checklist_name": "...",
     recovered = head.rstrip().rstrip(',') + f' "items": {text[bracket:last_complete+1]}]' + ', "rationale": "(응답이 길어 일부 복구됨)"}}'
     # 다만 recovered 의 끝이 너무 많은 }}} 이 붙을 수 있으므로 단순화된 복구:
     # head + "items": [...] 만 감싸서 반환
@@ -143,7 +143,7 @@ def run_stage1(images: list[bytes], use_cache: bool = True,
     """단계 1 — 공간 유형 식별.
 
     wide_only: True면 첫 3장(광각)만 사용해 캐시 키 안정화 (보완 사진 추가해도
-               stage1 결과 재사용 가능 → 비용 절감).
+               stage1 결과 재사용 가능 비용 절감).
     """
     images = _optimize_batch(images)
     cache_inputs = images[:3] if wide_only and len(images) >= 3 else images
@@ -316,7 +316,7 @@ def load_demo_pipeline_for_samples(images: list[bytes],
             candidates = []
             for p in CACHE_DIR.glob(f"stage2_{provider_id}_{img_hash}_*.json"):
                 # 파일명에서 space_type 추출
-                stem = p.stem  # stage2_anthropic_{hash}_{space_type}
+                stem = p.stem # stage2_anthropic_{hash}_{space_type}
                 parts = stem.split("_")
                 if len(parts) >= 4:
                     sp_type = "_".join(parts[3:])
@@ -372,11 +372,11 @@ def ensure_demo_cache_for_shots(shots: dict, space_type: str,
     except Exception:
         return False
 
-    # 7컷 → optimized bytes 추출
+    # 7컷 optimized bytes 추출
     try:
         from .image_quality import analyze_and_optimize
     except Exception:
-        analyze_and_optimize = None  # type: ignore
+        analyze_and_optimize = None # type: ignore
 
     # 더미 이미지를 shots dict 에서 추출 — REQUIRED_KEYS 순서대로
     required_keys = [

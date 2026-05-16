@@ -39,7 +39,7 @@ render_sidebar(active_key="save")
 
 school = require_school()
 if not school:
-    if st.button("← 학교 찾기로", key="save_noschool_back",
+    if st.button("학교 찾기로", key="save_noschool_back",
                   width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
@@ -48,7 +48,7 @@ if not school:
 active_space = st.session_state.get("active_space")
 if not active_space:
     st.warning("점검할 공간이 선택되지 않았습니다. 점검 시작 페이지에서 공간을 선택해 주세요.")
-    if st.button("← 공간 선택으로", key="save_nospace_back",
+    if st.button("공간 선택으로", key="save_nospace_back",
                   width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
@@ -56,7 +56,7 @@ if not active_space:
 sr = st.session_state.get("score_result")
 if not sr:
     st.warning("점검 결과가 아직 없습니다. AI 점검을 먼저 완료하세요.")
-    if st.button("← AI 점검으로", key="save_noresult_back",
+    if st.button("AI 점검으로", key="save_noresult_back",
                   width="stretch"):
         st.switch_page("pages/2_AI점검.py")
     st.stop()
@@ -75,7 +75,7 @@ if _is_space_role:
         f"· 제출자: {_space_mgr.get('name', '실 담당자')}",
     )
     st.info(
-        "👤 **실 담당자 모드** — 본 점검 결과는 **학교 담당자에게 제출**되어 검토 후 "
+        "**실 담당자 모드** — 본 점검 결과는 **학교 담당자에게 제출**되어 검토 후 "
         "교육청에 통합 보고됩니다. 교육청 직접 발송은 학교 담당자만 가능합니다."
     )
 else:
@@ -90,7 +90,7 @@ else:
 from modules.session import has_unsaved_inspection_work
 if has_unsaved_inspection_work():
     st.warning(
-        "⚠ **현재 점검은 아직 저장되지 않았습니다** — 다른 페이지로 이동하기 전 "
+        "**현재 점검은 아직 저장되지 않았습니다** — 다른 페이지로 이동하기 전 "
         "아래 **'점검 결과 저장'** 버튼을 먼저 누르세요. "
         "저장 안 한 상태로 이동하면 사진·점수·결과가 사라질 수 있습니다."
     )
@@ -201,7 +201,7 @@ with col_save1:
     if st.button(_save_btn_label, type="primary", width="stretch"):
         result = save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
         st.session_state["saved_session_id"] = result["session_id"]
-        # 본저장 완료 → 드래프트 정리 (공간별)
+        # 본저장 완료 드래프트 정리 (공간별)
         try:
             clear_draft(
                 school.get("정보공시 학교코드", ""),
@@ -227,7 +227,7 @@ if st.session_state.get("_just_saved_files") and st.session_state.get("saved_ses
 
 with col_save2:
     if st.session_state.get("saved_session_id"):
-        st.success("✅ 저장됨")
+        st.success("저장됨")
         st.caption(st.session_state["saved_session_id"])
 
 # 추가 포맷 다운로드 — 일반 사용자에겐 통합 PDF + .safeloop 두 개로 충분.
@@ -235,7 +235,7 @@ with col_save2:
 if st.session_state.get("saved_session_id"):
     if not korean_font_available():
         st.warning(
-            "⚠ 시스템에 한글 PDF 폰트가 없어 PDF의 한글이 깨질 수 있습니다. "
+            "시스템에 한글 PDF 폰트가 없어 PDF의 한글이 깨질 수 있습니다. "
             "Linux 서버라면 `apt install fonts-nanum fonts-noto-cjk` 후 재시작하세요. "
             "(Streamlit Cloud는 packages.txt로 자동 처리됨)"
         )
@@ -243,7 +243,7 @@ if st.session_state.get("saved_session_id"):
     master = build_master_record({**st.session_state,
                                    "session_id": st.session_state.get("saved_session_id")})
 
-    with st.expander("📊 추가 포맷 다운로드 (Excel · CSV · 원본 JSON)", expanded=False):
+    with st.expander("추가 포맷 다운로드 (Excel · CSV · 원본 JSON)", expanded=False):
         st.caption(
             "일반 결재·발송에는 아래 04 섹션의 **통합 PDF + 암호화 데이터** 만으로 충분합니다. "
             "이 expander 의 포맷들은 데이터 분석·외부 시스템 이관·연구 용도입니다."
@@ -288,16 +288,16 @@ section("04", "통합 PDF 다운로드",
         "공문 + 점검 결과 보고서를 하나의 PDF 로 묶어 다운로드 (사람용)")
 
 if not st.session_state.get("edu_package_ready"):
-    if st.button("📄 통합 PDF 생성", type="primary",
+    if st.button("통합 PDF 생성", type="primary",
                   key="build_unified_pdf", width="stretch"):
         if not st.session_state.get("saved_session_id"):
             save_inspection({**st.session_state, "timestamp": datetime.datetime.now().isoformat()})
         st.session_state["edu_package_ready"] = True
         st.session_state["_edufine_letter_cache"] = None
         st.session_state["_edufine_report_cache"] = None
-        st.rerun()  # 즉시 다운로드 버튼이 같은 위치에 나타나도록 페이지 재렌더
+        st.rerun() # 즉시 다운로드 버튼이 같은 위치에 나타나도록 페이지 재렌더
 else:
-    st.success("✅ PDF 준비 완료 — 아래 다운로드 버튼을 누르세요")
+    st.success("PDF 준비 완료 — 아래 다운로드 버튼을 누르세요")
 
 # 첨부파일 — 통합 PDF (공문 + 점검 보고서 단일 PDF) 다운로드
 if st.session_state.get("edu_package_ready"):
@@ -367,8 +367,8 @@ if st.session_state.get("edu_package_ready"):
     with dl_col1:
         if merged_bytes:
             _pdf_label = (
-                "📄 사람용 PDF (공문 + 보고서)"
-                if letter_bytes else "📄 사람용 PDF (보고서)"
+                "사람용 PDF (공문 + 보고서)"
+                if letter_bytes else "사람용 PDF (보고서)"
             )
             st.download_button(
                 f"{_pdf_label} ({_fmt_size(len(merged_bytes))})",
@@ -382,12 +382,12 @@ if st.session_state.get("edu_package_ready"):
                     "결재 첨부·인쇄용. 결재는 에듀파인 등 외부 시스템에서 진행."
                     if letter_bytes else
                     "인쇄·결재 첨부용. 결재 정보를 함께 기록하려면 위 "
-                    "[📋 결재 정보 기록 (선택)]을 사용하세요."
+                    "[결재 정보 기록 (선택)]을 사용하세요."
                 ),
             )
     with dl_col2:
         st.download_button(
-            f"🔒 암호화 데이터 ({_fmt_size(len(encrypted_blob))})",
+            f"암호화 데이터 ({_fmt_size(len(encrypted_blob))})",
             encrypted_blob,
             file_name=f"안전점검_데이터_{sid}.safeloop",
             mime="application/octet-stream",
@@ -395,17 +395,17 @@ if st.session_state.get("edu_package_ready"):
             width="stretch",
             key="dl_data_encrypted",
             help="자동 암호화 (AES-256). SafeLoop 앱 안에서만 복호화 가능. "
-                  "모바일↔PC 동기화 + 교육청 발송용.",
+                  "모바일PC 동기화 + 교육청 발송용.",
         )
 
     st.caption(
-        "🔒 **데이터 파일(.safeloop)은 자동 암호화**됩니다 — "
+        "**데이터 파일(.safeloop)은 자동 암호화**됩니다 — "
         "이메일·카톡 잘못 발송이나 파일 분실 시 외부인이 텍스트 에디터로 열어도 "
         "안전합니다. SafeLoop 앱끼리만 자동 복호화 됩니다.\n\n"
-        "💡 **모바일에서 PC로 옮길 때** — 위 파일들을 다운로드한 뒤 "
+        "**모바일에서 PC로 옮길 때** — 위 파일들을 다운로드한 뒤 "
         "**카톡 (나에게 보내기 또는 일반 채팅 공유)** · 이메일 · Google Drive · "
         "OneDrive · AirDrop 등 편한 방법으로 보내세요. PC 앱의 "
-        "**📥 데이터 불러오기** 페이지에 .safeloop 파일을 업로드하면 자동 복호화 후 "
+        "**데이터 불러오기** 페이지에 .safeloop 파일을 업로드하면 자동 복호화 후 "
         "같은 데이터로 이어집니다."
     )
 
@@ -417,7 +417,7 @@ if st.session_state.get("edu_package_ready"):
                 st.markdown(
                     f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
                     f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
-                    f"<b>📄 공문 (품의서)</b><br>"
+                    f"<b>공문 (품의서)</b><br>"
                     f"<span style='font-size:11px;color:#6B6B70;'>결재 정보 입력분 포함 · "
                     f"{_fmt_size(len(letter_bytes))}</span></div>",
                     unsafe_allow_html=True,
@@ -432,7 +432,7 @@ if st.session_state.get("edu_package_ready"):
                 st.markdown(
                     f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
                     f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
-                    f"<b>📊 점검 결과 보고서</b><br>"
+                    f"<b>점검 결과 보고서</b><br>"
                     f"<span style='font-size:11px;color:#6B6B70;'>안전점수·카테고리·법령 근거 · "
                     f"{_fmt_size(len(report_bytes))}</span></div>",
                     unsafe_allow_html=True,
@@ -447,7 +447,7 @@ if st.session_state.get("edu_package_ready"):
             st.markdown(
                 f"<div style='padding:10px 12px;border:1px solid #E5E5E8;"
                 f"border-left:3px solid #D50000;border-radius:6px;background:#FFF;'>"
-                f"<b>📊 점검 결과 보고서</b><br>"
+                f"<b>점검 결과 보고서</b><br>"
                 f"<span style='font-size:11px;color:#6B6B70;'>안전점수·카테고리·법령 근거 · "
                 f"{_fmt_size(len(report_bytes))}</span></div>",
                 unsafe_allow_html=True,
@@ -459,7 +459,7 @@ if st.session_state.get("edu_package_ready"):
                 key="dl_report_only", width="stretch",
             )
             st.caption(
-                "💡 공문(품의서) PDF 를 함께 받으려면 위 [📋 결재 정보 기록 (선택)] "
+                "공문(품의서) PDF 를 함께 받으려면 위 [결재 정보 기록 (선택)] "
                 "에 결재자 이름을 입력하세요."
             )
 
@@ -475,18 +475,18 @@ if _is_space_role:
     st.markdown(
         "<div style='padding:16px 18px;border:1px solid #C8E6C9;background:#F0F7F0;"
         "border-radius:6px;color:#2E7D32;font-size:13.5px;line-height:1.65;'>"
-        "<b>✅ 학교 담당자 검토 대기 중</b><br>"
+        "<b>학교 담당자 검토 대기 중</b><br>"
         "제출이 완료되면 학교 담당자가 결과를 검토합니다. "
         "수정 요청(반려)이 있으면 알림이 표시되며, 승인되면 교육청 통합 보고에 포함됩니다."
         "</div>",
         unsafe_allow_html=True,
     )
     st.caption(
-        "💡 교육청 직접 발송은 **학교 담당자**만 가능합니다. "
+        "교육청 직접 발송은 **학교 담당자**만 가능합니다. "
         "본 점검 외에도 다른 공간(다른 실 담당자) 제출이 있을 수 있으므로, "
         "학교 단위로 통합해서 한 번에 발송하는 흐름입니다."
     )
-    st.stop()  # 실 담당자는 여기서 페이지 종료 — 아래 발송 흐름 미노출
+    st.stop() # 실 담당자는 여기서 페이지 종료 — 아래 발송 흐름 미노출
 
 divider()
 section(
@@ -511,11 +511,11 @@ edu_email_source = (
 
 if not edu_email:
     st.warning(
-        f"⚠ **교육청 담당자 이메일을 찾을 수 없습니다** — "
+        f"**교육청 담당자 이메일을 찾을 수 없습니다** — "
         f"학교 시도교육청({school_sido or '미상'})에 등록된 공통 주소가 없습니다. "
         f"설정 페이지에서 직접 등록해주세요."
     )
-    if st.button("→ 설정 페이지에서 이메일 등록", key="goto_settings_email",
+    if st.button("설정 페이지에서 이메일 등록", key="goto_settings_email",
                   width="stretch"):
         st.switch_page("pages/8_설정.py")
 else:
@@ -523,21 +523,21 @@ else:
     st.markdown(
         f"<div style='padding:10px 14px;background:#F7F7F8;border:1px solid #E5E5E8;"
         f"border-radius:6px;font-size:13px;color:#6B6B70;'>"
-        f"📬 발송 대상: <b style='color:#0A0A0B'>{edu_email}</b> "
+        f"발송 대상: <b style='color:#0A0A0B'>{edu_email}</b> "
         f"<span style='font-size:11px;color:{_src_color};'>· 출처: {edu_email_source}</span>"
         f"</div>",
         unsafe_allow_html=True,
     )
     if not edu_email_user and edu_email_fallback:
         st.caption(
-            "💡 본교 담당 교육청 담당자의 직접 이메일을 알면 설정 페이지에 등록하세요. "
+            "본교 담당 교육청 담당자의 직접 이메일을 알면 설정 페이지에 등록하세요. "
             "등록 시 그 주소가 우선 사용됩니다."
         )
 
     # 2) 결재 정보 기록 — 학교별 결재 정책에 따라 노출
-    #    학교 정책이 "이중 결재"인 경우만 결재 입력 expander 표시.
-    #    "단일 결재"(기본)인 학교는 에듀파인 결재된 파일을 그대로 발송 — 입력 화면 없음.
-    #    정책 변경은 [설정] → [02-3 결재 정책] 에서.
+    # 학교 정책이 "이중 결재"인 경우만 결재 입력 expander 표시.
+    # "단일 결재"(기본)인 학교는 에듀파인 결재된 파일을 그대로 발송 — 입력 화면 없음.
+    # 정책 변경은 [설정] [02-3 결재 정책] 에서.
     from modules.storage import get_school_dual_approval
     _dual_approval_enabled = get_school_dual_approval(
         (school or {}).get("정보공시 학교코드") or ""
@@ -546,12 +546,12 @@ else:
     st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
     if _dual_approval_enabled:
-        with st.expander("📋 결재 정보 기록 (이중 결재 — 선택 입력)",
+        with st.expander("결재 정보 기록 (이중 결재 — 선택 입력)",
                           expanded=False):
             st.caption(
-                "🔐 본교는 **이중 결재 정책**입니다. 에듀파인 결재 외에 "
+                "본교는 **이중 결재 정책**입니다. 에듀파인 결재 외에 "
                 "SafeLoop 안에도 결재자·일자를 기록할 수 있습니다. "
-                "**비워두어도 정상 발송됩니다.** 정책 변경은 [설정] → [02-3] 에서."
+                "**비워두어도 정상 발송됩니다.** 정책 변경은 [설정] [02-3] 에서."
             )
             col_app1, col_app2 = st.columns([2, 1])
             with col_app1:
@@ -579,9 +579,9 @@ else:
             "<div style='padding:10px 14px;background:#F0F7F0;"
             "border:1px solid #C8E6C9;border-radius:6px;color:#2E7D32;"
             "font-size:12.5px;line-height:1.6;'>"
-            "📋 <b>단일 결재 정책</b> — 결재는 K-에듀파인 등 외부 시스템에서 "
+            "<b>단일 결재 정책</b> — 결재는 K-에듀파인 등 외부 시스템에서 "
             "진행하세요. 결재 완료된 파일을 아래에서 다운받아 교육청에 "
-            "발송하면 됩니다. <i>이중 결재가 필요하면 [설정] → [02-3] 에서 "
+            "발송하면 됩니다. <i>이중 결재가 필요하면 [설정] [02-3] 에서 "
             "정책을 변경할 수 있습니다.</i>"
             "</div>",
             unsafe_allow_html=True,
@@ -626,8 +626,8 @@ else:
         # 방법 2 (대체): 다운로드 + 본인 채널로 직접 전송
         # ────────────────────────────────────────────────
         tab_direct, tab_manual = st.tabs([
-            "🚀 다이렉트 (권장)",
-            "📤 다운로드 후 발송",
+            "다이렉트 (권장)",
+            "다운로드 후 발송",
         ])
 
         # ── 방법 1: 다이렉트 전송 ──
@@ -643,8 +643,8 @@ else:
             st.markdown(
                 "<div style='padding:10px 14px;background:#F0F7F0;border:1px solid #C8E6C9;"
                 "border-radius:6px;font-size:12px;color:#2E7D32;line-height:1.6;'>"
-                "✅ 1번의 클릭 · ✅ 수신 확인 자동 추적 · ✅ 첨부 파일 누락 위험 없음<br>"
-                "⚠ 단일 PC 또는 공유 데이터 폴더 환경 한정 — 분산 PC 환경은 정식 출시 시 검토."
+                "1번의 클릭 · 수신 확인 자동 추적 · 첨부 파일 누락 위험 없음<br>"
+                "단일 PC 또는 공유 데이터 폴더 환경 한정 — 분산 PC 환경은 정식 출시 시 검토."
                 "</div>",
                 unsafe_allow_html=True,
             )
@@ -665,25 +665,25 @@ else:
                 read_at = already_sent.get("read_at")
                 if read_at:
                     st.success(
-                        f"✅ **교육청 수신 확인 완료** — "
+                        f"**교육청 수신 확인 완료** — "
                         f"발송: {already_sent.get('submitted_at','')[:16].replace('T',' ')} · "
                         f"열람: {(read_at or '')[:16].replace('T',' ')}"
                     )
                 else:
                     st.info(
-                        f"⏳ **발송 완료 · 수신 대기 중** — "
+                        f"**발송 완료 · 수신 대기 중** — "
                         f"발송 시각: {already_sent.get('submitted_at','')[:16].replace('T',' ')} · "
                         f"발송 ID: `{already_sent.get('submit_id','-')}`"
                     )
-                if st.button("🔄 다시 발송 (수정본)", key="resubmit_direct",
+                if st.button("다시 발송 (수정본)", key="resubmit_direct",
                               width="stretch"):
-                    pass  # 아래 발송 버튼 흐름으로 떨어짐
+                    pass # 아래 발송 버튼 흐름으로 떨어짐
                 else:
                     # 같은 날짜 발송 기록이 있으면 추가 발송 차단 (사용자가 다시 발송 클릭 시 재전송)
                     pass
 
             # 발송 버튼
-            if st.button("🚀 SafeLoop 수신함으로 다이렉트 전송",
+            if st.button("SafeLoop 수신함으로 다이렉트 전송",
                           type="primary", width="stretch",
                           key="submit_direct_btn"):
                 try:
@@ -695,7 +695,7 @@ else:
                     res = submit_to_edu_inbox_direct(edu_pkg)
                     if res.get("ok"):
                         st.success(
-                            f"✅ 전송 완료 — 발송 ID `{res['submit_id']}` · "
+                            f"전송 완료 — 발송 ID `{res['submit_id']}` · "
                             f"수신 시도교육청: {res.get('sido')}\n\n"
                             f"교육청 담당자가 수신함에서 열람하면 이 화면에 "
                             f"**수신 확인** 이 자동 반영됩니다."
@@ -719,11 +719,11 @@ else:
             col_send_a, col_send_b = st.columns([1, 1])
             with col_send_a:
                 st.text_input("받는사람", value=edu_email, key="send_to_box",
-                               help="클릭 후 Ctrl+A → Ctrl+C 로 복사")
+                               help="클릭 후 Ctrl+A Ctrl+C 로 복사")
                 st.text_input("제목", value=subject, key="send_subject_box")
             with col_send_b:
                 st.text_area("본문", value=body, height=170, key="send_body_box",
-                              help="클릭 후 Ctrl+A → Ctrl+C 로 복사. 첨부 파일은 위에서 다운로드한 PDF + .safeloop")
+                              help="클릭 후 Ctrl+A Ctrl+C 로 복사. 첨부 파일은 위에서 다운로드한 PDF + .safeloop")
 
             st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
@@ -781,12 +781,12 @@ else:
                 )
 
             st.caption(
-                "💡 **카톡 공유** — 위 본문을 복사해 카톡 채팅에 붙여넣고 PDF·.safeloop "
+                "**카톡 공유** — 위 본문을 복사해 카톡 채팅에 붙여넣고 PDF·.safeloop "
                 "파일을 함께 첨부 전송하세요."
             )
     else:
         st.button(
-            "📤 발송하기 (먼저 점검 결과 저장 필요)",
+            "발송하기 (먼저 점검 결과 저장 필요)",
             disabled=True, width="stretch", key="mailto_disabled",
         )
 

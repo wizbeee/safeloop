@@ -100,7 +100,7 @@ def build_master_record(session: dict, prior_history: list | None = None) -> dic
     schema_version 1.1 (2026-05): submitter + status + status_history 필드 추가
     - submitter: 누가 이 점검을 수행/제출했는지 (실 담당자 vs 학교 담당자)
     - status: 현재 제출·검토 상태 (submitted/approved/returned/consolidated)
-      실 담당자 제출 → 학교 담당자 검토 → 교육청 발송의 3단 흐름 추적용
+      실 담당자 제출 학교 담당자 검토 교육청 발송의 3단 흐름 추적용
     - status_history: 상태 변경 이력 누적 (감사·추적)
 
     Args:
@@ -122,7 +122,7 @@ def build_master_record(session: dict, prior_history: list | None = None) -> dic
             "email": space_manager.get("email", ""),
             "phone": space_manager.get("phone", ""),
         }
-        # 실 담당자 제출 → 학교 담당자 검토 대기
+        # 실 담당자 제출 학교 담당자 검토 대기
         status = "submitted"
     else:
         submitter = {
@@ -132,7 +132,7 @@ def build_master_record(session: dict, prior_history: list | None = None) -> dic
             "email": session.get("my_email", ""),
             "phone": "",
         }
-        # 학교 담당자가 직접 점검·저장 → 자체 승인 상태 (스프린트 1 호환)
+        # 학교 담당자가 직접 점검·저장 자체 승인 상태 (스프린트 1 호환)
         status = "approved"
 
     now_iso = datetime.datetime.now().isoformat(timespec="seconds")
@@ -148,7 +148,7 @@ def build_master_record(session: dict, prior_history: list | None = None) -> dic
     if base_history and base_history[-1].get("at") == now_iso \
             and base_history[-1].get("status") == status \
             and base_history[-1].get("by") == new_history_entry["by"]:
-        accumulated_history = base_history  # 중복 — 그대로 사용
+        accumulated_history = base_history # 중복 — 그대로 사용
     else:
         accumulated_history = base_history + [new_history_entry]
 
@@ -378,7 +378,7 @@ def build_pdf_report(master: dict) -> bytes:
     flow.append(Spacer(1, 6 * mm))
 
     # 기본 정보
-    flow.append(Paragraph("■ 기본 정보", sub_style))
+    flow.append(Paragraph("기본 정보", sub_style))
     basic = [
         ["학교명", school.get("name", "") or ""],
         ["학교코드", school.get("code", "") or ""],
@@ -400,7 +400,7 @@ def build_pdf_report(master: dict) -> bytes:
     flow.append(t)
 
     # 안전 점수
-    flow.append(Paragraph("■ 안전 점수", sub_style))
+    flow.append(Paragraph("안전 점수", sub_style))
     sc_rows = [
         ["종합 점수", f"{score.get('score', 0)}점"],
         ["등급", f"{score.get('grade', '-')}"],
@@ -418,7 +418,7 @@ def build_pdf_report(master: dict) -> bytes:
 
     # 점검표
     flow.append(PageBreak())
-    flow.append(Paragraph("■ AI 맞춤 점검표", sub_style))
+    flow.append(Paragraph("AI 맞춤 점검표", sub_style))
     df = build_checklist_dataframe(master)
     if df.empty:
         flow.append(Paragraph("점검 항목이 없습니다.", body))
@@ -447,7 +447,7 @@ def build_pdf_report(master: dict) -> bytes:
     recs = master.get("recommendations") or []
     if recs:
         flow.append(PageBreak())
-        flow.append(Paragraph("■ 안전 설비 추천 (부재·불량 기준)", sub_style))
+        flow.append(Paragraph("안전 설비 추천 (부재·불량 기준)", sub_style))
         data = [["우선순위", "항목", "분류", "법적 근거", "조치"]]
         for r in recs:
             data.append([
@@ -533,7 +533,7 @@ def build_official_letter_pdf(master: dict) -> bytes:
     flow.append(Paragraph("2. 점검 데이터 (XLSX) 1부", body))
     flow.append(Paragraph("3. AI 가 읽는 데이터 (JSON) 1부", body))
     flow.append(Paragraph("4. 교육청 발송 패키지 (JSON) 1부", body))
-    flow.append(Paragraph("5. 공공데이터 환원 패키지 (JSON, 익명화 적용) 1부.  끝.", body))
+    flow.append(Paragraph("5. 공공데이터 환원 패키지 (JSON, 익명화 적용) 1부. 끝.", body))
     flow.append(Spacer(1, 14 * mm))
 
     # 발신 학교 + 결재선
@@ -683,9 +683,9 @@ def bulk_delete_edu_inbox(items: list[dict]) -> int:
 
 
 # ─────────────────────────────────────────
-# 학교 → 교육청 다이렉트 전송 + 수신 확인
+# 학교 교육청 다이렉트 전송 + 수신 확인
 # (같은 SafeLoop 인스턴스 / 공유 데이터 폴더 환경에서만 동작.
-#  분산 환경은 정식 출시 시 별도 백엔드 검토.)
+# 분산 환경은 정식 출시 시 별도 백엔드 검토.)
 # ─────────────────────────────────────────
 def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
     """학교 담당자가 SafeLoop 안에서 교육청 수신함으로 직접 발송.
@@ -1011,12 +1011,12 @@ def load_school_profile(school_code: str) -> dict:
 # 학교별 결재 정책 — 단일 결재(에듀파인만) vs 이중 결재(에듀파인 + SafeLoop)
 #
 # 단일 결재 (기본, dual_approval_enabled=False):
-#   에듀파인에서 결재 완료된 파일을 그대로 첨부해 발송. SafeLoop 안에서 추가
-#   결재 입력 화면 자체가 나타나지 않음. 단순·빠른 흐름.
+# 에듀파인에서 결재 완료된 파일을 그대로 첨부해 발송. SafeLoop 안에서 추가
+# 결재 입력 화면 자체가 나타나지 않음. 단순·빠른 흐름.
 #
 # 이중 결재 (학교 선택, dual_approval_enabled=True):
-#   에듀파인 결재 + SafeLoop 안에서도 결재자 정보 기록. 학교가 자체 감사·
-#   추적 이력을 추가로 남기고 싶을 때.
+# 에듀파인 결재 + SafeLoop 안에서도 결재자 정보 기록. 학교가 자체 감사·
+# 추적 이력을 추가로 남기고 싶을 때.
 #
 # 학교 담당자가 [설정] 페이지에서 한 번 정하면 그 학교는 일관되게 적용됨.
 # ─────────────────────────────────────────
@@ -1128,7 +1128,7 @@ def list_recent_sessions(limit: int = 20) -> list[dict]:
         for sess in school_dir.iterdir():
             if not sess.is_dir():
                 continue
-            if sess.name.startswith("_"):  # _drafts 등 시스템 폴더 제외
+            if sess.name.startswith("_"): # _drafts 등 시스템 폴더 제외
                 continue
             master_path = sess / "master.json"
             if not master_path.exists():
@@ -1187,7 +1187,7 @@ def list_school_submissions(
         except Exception:
             continue
 
-        status = data.get("status") or "approved"  # 옛 호환
+        status = data.get("status") or "approved" # 옛 호환
         if status_filter and status != status_filter:
             continue
 

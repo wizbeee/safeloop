@@ -1,7 +1,7 @@
 """
 AI 안전 설비·시설·장비 추천 모듈.
 
-부재·불량 설비 → 법령 근거 + 우선순위 기반 추천 리스트 생성.
+부재·불량 설비 법령 근거 + 우선순위 기반 추천 리스트 생성.
 비용·구매처는 의도적으로 제외 (핵심서사: "예산은 부수 요소").
 """
 from __future__ import annotations
@@ -11,10 +11,10 @@ from modules.laws import LAW_BASIS, items_for_space
 
 def _priority_label(weight: int) -> tuple[str, str]:
     if weight >= 9:
-        return ("★★★", "즉시 조치")
+        return ("", "즉시 조치")
     if weight >= 7:
-        return ("★★", "우선 조치")
-    return ("★", "권고 조치")
+        return ("", "우선 조치")
+    return ("", "권고 조치")
 
 
 def recommend_from_scores(item_scores: dict[str, float],
@@ -31,7 +31,7 @@ def recommend_from_scores(item_scores: dict[str, float],
             continue
         s = float(item_scores.get(name, 0.0))
         if s >= 1.0:
-            continue  # 양호는 추천 불필요
+            continue # 양호는 추천 불필요
         stars, action = _priority_label(info["weight"])
         reason = "부재 — 신규 설치 필요" if s == 0.0 else "불량 — 점검·교체 필요"
         recs.append({

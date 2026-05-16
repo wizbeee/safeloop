@@ -28,7 +28,7 @@ ensure_state()
 render_sidebar(active_key="home")
 
 # ─────────────────────────────────────────
-# 자동 로그인 — 홈 진입 시 한 번만 쿠키 검사 (다른 페이지에선 호출 X → 깜빡임 방지)
+# 자동 로그인 — 홈 진입 시 한 번만 쿠키 검사 (다른 페이지에선 호출 X 깜빡임 방지)
 #
 # 의도적 설계: cookie_manager 가 매 호출 시 IFrame 을 로드하므로 모든 페이지
 # 에서 호출하면 사이드바·콘텐츠가 깜빡인다. 따라서 홈 진입 시 1회만 검사하고
@@ -37,7 +37,7 @@ render_sidebar(active_key="home")
 # 끝에 선택된 방향. 변경 시 사이드바 깜빡임 회귀 위험 있음.
 # ─────────────────────────────────────────
 if not st.session_state.get("_auto_login_checked"):
-    # 교육청 자동 로그인 시도 (쿠키 → 세션)
+    # 교육청 자동 로그인 시도 (쿠키 세션)
     is_authenticated("edu")
     st.session_state["_auto_login_checked"] = True
 
@@ -101,7 +101,7 @@ with role_col_a:
         _role_card_html(
             "SPACE",
             "실 담당자",
-            "본인 담당 공간(화학실·물리실·디자인실 등) AI 점검 → 학교 담당자에게 제출",
+            "본인 담당 공간(화학실·물리실·디자인실 등) AI 점검 학교 담당자에게 제출",
             is_space,
         ),
         unsafe_allow_html=True,
@@ -124,7 +124,7 @@ with role_col_b:
         _role_card_html(
             "SCHOOL",
             "학교 담당자",
-            "실 담당자 제출 수합·검토 + 본인 점검 가능 → 교육청 발송 (이메일)",
+            "실 담당자 제출 수합·검토 + 본인 점검 가능 교육청 발송 (이메일)",
             is_school,
         ),
         unsafe_allow_html=True,
@@ -145,7 +145,7 @@ with role_col_c:
         _role_card_html(
             "EDU OFFICE",
             "교육청 담당자",
-            "학교 제출본 수신·검증 → 전국 대시보드·정책 시뮬레이터",
+            "학교 제출본 수신·검증 전국 대시보드·정책 시뮬레이터",
             is_edu,
         ),
         unsafe_allow_html=True,
@@ -169,7 +169,7 @@ with role_col_c:
 # 교육청 PIN 입력 박스 (카드에서 호출 시 표시)
 # - role 이 "학교" 면 PIN 박스 안 띄움 (학교 담당자 모드에서는 교육청 인증 불필요)
 # - 사용자가 학교 카드 클릭 시 role="학교" 로 자동 설정되므로,
-#   다른 페이지 갔다 돌아와도 PIN 박스가 잔존하지 않음
+# 다른 페이지 갔다 돌아와도 PIN 박스가 잔존하지 않음
 # ─────────────────────────────────────────
 if (st.session_state.get("_show_pin_edu")
         and st.session_state.get("role", "학교") != "학교"
@@ -202,7 +202,7 @@ with col_c:
             st.switch_page("pages/1_점검시작.py")
         st.markdown(
             "<div style='text-align:center; margin-top:8px; font-size:12px; color:#9A9A9F;'>"
-            "학교 + 본인 PIN 인증 → 본인 담당 공간만 표시"
+            "학교 + 본인 PIN 인증 본인 담당 공간만 표시"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -217,13 +217,13 @@ with col_c:
         )
 
 # ─────────────────────────────────────────
-# 운영 모드 안내 (토글 제거 — 시연은 아래 '🎬 시연 시작' 으로만 진입)
+# 운영 모드 안내 (토글 제거 — 시연은 아래 '시연 시작' 으로만 진입)
 # ─────────────────────────────────────────
 st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
 divider()
 if st.session_state.get("demo_mode", True):
     st.caption(
-        "💡 현재 **시연 모드** 입니다 — 더미 이미지·자동 채움 허용. "
+        "현재 **시연 모드** 입니다 — 더미 이미지·자동 채움 허용. "
         "실 사용 시에는 설정 페이지에서 '시연 종료' 를 누르세요."
     )
 
@@ -237,19 +237,19 @@ def _render_tutorial_content() -> None:
         unsafe_allow_html=True,
     )
     st.markdown(
-        "**1단계 · 학교 찾기 + 인증**  \n"
+        "**1단계 · 학교 찾기 + 인증** \n"
         "GPS · 학교명 · 지역 단계 검색 중 편한 방식으로 학교를 찾고, "
         "담당자 인증번호(6자리)를 입력합니다.\n\n"
-        "**2단계 · AI 점검**  \n"
+        "**2단계 · AI 점검** \n"
         "정면·우측·좌측 **광각 3장** 만 촬영하면 AI가 공간 유형과 안전설비를 자동 식별하여 "
         "맞춤 점검표를 생성합니다. 놓친 항목은 '보완 촬영' 으로 추가하세요.\n\n"
-        "**3단계 · 저장 + 발송**  \n"
+        "**3단계 · 저장 + 발송** \n"
         "결과는 Human용(읽기 좋은 PDF/Excel) 과 Machine용(구조화 JSON) 으로 이중 저장됩니다. "
         "내부 결재 완료 후 교육청 담당자 이메일로 발송할 수 있습니다."
     )
     st.markdown("---")
     st.caption(
-        "💡 **팁** — 홈의 '시연 시작' 버튼을 누르면 데모 학교·공간이 자동 세팅되고 "
+        "**팁** — 홈의 '시연 시작' 버튼을 누르면 데모 학교·공간이 자동 세팅되고 "
         "AI 점검 화면까지 바로 이동합니다. 발표·리뷰 시 유용합니다."
     )
 
@@ -276,9 +276,9 @@ divider()
 oc1, oc2 = st.columns(2)
 
 with oc1:
-    st.markdown("**🎓 사용 방법 안내 (글)**")
+    st.markdown("**사용 방법 안내 (글)**")
     st.caption(
-        "글로 읽는 3단계 흐름 — 학교 검색·인증 → AI 점검 → 결과 저장·발송. "
+        "글로 읽는 3단계 흐름 — 학교 검색·인증 AI 점검 결과 저장·발송. "
         "처음 사용 시 30초 안에 이해 가능."
     )
     if st.button("사용 방법 보기", key="open_tutorial", width="stretch"):
@@ -302,7 +302,7 @@ with oc1:
                 st.rerun()
 
 with oc2:
-    st.markdown("**🎬 시연 시작 (자동 흐름)**")
+    st.markdown("**시연 시작 (자동 흐름)**")
     st.caption(
         "심사·발표용 1클릭 시연 — 공간 선택 후 학교·공간·더미 사진 7장 + AI 분석까지 "
         "**자동 진행**. 그 다음 단계(점검표 입력·점수 계산·결과 저장)는 사용자가 직접 "
@@ -317,7 +317,7 @@ with oc2:
     autoplay_space = st.selectbox(
         "데모 공간",
         options=DEMO_SPACES,
-        index=1,  # 기본 화학실 (가장 풍부한 점검표)
+        index=1, # 기본 화학실 (가장 풍부한 점검표)
         key="autoplay_space_choice",
     )
 
@@ -326,12 +326,12 @@ with oc2:
         st.markdown(
             "<div style='background:#FFF2F2; border:1px solid #F8D0D0; "
             "border-radius:6px; padding:8px 12px; font-size:12px; color:#D50000;'>"
-            "⚠ 기존 선택된 학교·공간·진행 중 작업이 모두 초기화됩니다."
+            "기존 선택된 학교·공간·진행 중 작업이 모두 초기화됩니다."
             "</div>",
             unsafe_allow_html=True,
         )
     # 원클릭 자동재생 — 2단계 확인 없이 즉시 실행 (발표 시 빠르게)
-    if st.button(f"🎬 시연 시작 ({autoplay_space})", key="autoplay_btn",
+    if st.button(f"시연 시작 ({autoplay_space})", key="autoplay_btn",
                   type="primary", width="stretch"):
         from modules.data_loader import search_schools_by_name, get_school_by_code
         from modules.session import reset_inspection
@@ -350,7 +350,7 @@ with oc2:
 
         # 0-3 수정: 자동재생 학교를 결정적으로 선택
         # 1) 세션에 이미 사용된 데모 학교 코드가 있으면 그걸 재사용
-        # 2) 없으면 "중학교" 검색 → 학교명 정렬 → 첫 결과 → 세션에 저장
+        # 2) 없으면 "중학교" 검색 학교명 정렬 첫 결과 세션에 저장
         demo_school = None
         cached_code = st.session_state.get("_demo_school_code")
         if cached_code:
@@ -372,7 +372,7 @@ with oc2:
 
             # 0-2: 동일 데모 공간 재사용 (누적 방지)
             school_code = demo_school.get("정보공시 학교코드")
-            demo_space_type = autoplay_space  # "화학실" / "일반교실" / "미술실"
+            demo_space_type = autoplay_space # "화학실" / "일반교실" / "미술실"
             existing_demo = next(
                 (sp for sp in st.session_state.get("registered_spaces", [])
                  if sp.get("school_code") == school_code
@@ -393,7 +393,7 @@ with oc2:
                 st.session_state.setdefault("registered_spaces", []).append(demo_space)
             st.session_state["active_space"] = demo_space
 
-            # 🎬 시연 자동 재생 — PIL 더미 이미지로 7컷 즉석 생성 (실 사진 사용 X)
+            # 시연 자동 재생 — PIL 더미 이미지로 7컷 즉석 생성 (실 사진 사용 X)
             from modules.demo_image import make_all_demo_shots
             shots = make_all_demo_shots(autoplay_space)
             st.session_state["shots"] = shots
@@ -407,7 +407,7 @@ with oc2:
             # 시연용 풍부한 응답을 세션에 직접 주입 — API 호출 우회.
             # API 키가 있어도 더미 이미지에 실 API 를 호출하면 "부재 N" 결과가
             # 나오므로, 시연 의도(풍부한 응답 표시)에 맞춰 합성 응답을 미리 세팅.
-            # 실패 시 silent pass 하면 빈 결과로 supplement 점프해 사용자 혼란 → 명시 에러.
+            # 실패 시 silent pass 하면 빈 결과로 supplement 점프해 사용자 혼란 명시 에러.
             try:
                 from modules.demo_responses import (
                     synth_stage2_for_space, synth_stage3_for_space,
@@ -431,7 +431,7 @@ with oc2:
                 ensure_demo_cache_for_shots(shots, autoplay_space)
             except Exception as e:
                 st.error(
-                    f"⚠ 시연 합성 응답 준비 실패 — {e.__class__.__name__}: {e}\n\n"
+                    f"시연 합성 응답 준비 실패 — {e.__class__.__name__}: {e}\n\n"
                     f"다시 시도하거나 다른 공간을 선택하세요. 문제가 반복되면 "
                     f"`modules/demo_responses.py` 또는 `modules/ai_vision.py` "
                     f"확인 필요."
@@ -445,8 +445,8 @@ with oc2:
             st.session_state["wizard_step"] = "supplement"
             st.session_state["_autoplay_consumed"] = True
             st.toast(
-                f"🎬 {autoplay_space} 시연 시작 — 더미 이미지로 흐름 진행",
-                icon="🎬",
+                f"{autoplay_space} 시연 시작 — 더미 이미지로 흐름 진행",
+                icon=None,
             )
             st.switch_page("pages/2_AI점검.py")
 

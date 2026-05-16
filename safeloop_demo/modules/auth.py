@@ -9,7 +9,7 @@ SafeLoop 인증 모듈 — PIN 인증 + 30일 자동 로그인.
 
 PIN 결정 우선순위:
 1. 환경변수 `SAFELOOP_EDU_PIN` — 운영·교육청별 발급 흐름
-2. SAFELOOP_DEMO_MODE=1 → 시연 PIN `EDU2026` 사용
+2. SAFELOOP_DEMO_MODE=1 시연 PIN `EDU2026` 사용
 3. 둘 다 없으면 시연 PIN `EDU2026` + 경고 (시연 환경 보호)
 
 실 운영 시 GPKI(행정전자서명) 또는 KEIIS SSO 로 대체.
@@ -53,7 +53,7 @@ def _resolve_edu_pin() -> str:
         _pin_warning_emitted = True
         try:
             st.warning(
-                "⚠ SAFELOOP_EDU_PIN 환경변수 미설정 — 시연 기본 PIN 사용. "
+                "SAFELOOP_EDU_PIN 환경변수 미설정 — 시연 기본 PIN 사용. "
                 "운영 환경에서는 반드시 SAFELOOP_EDU_PIN 을 설정하세요."
             )
         except Exception:
@@ -370,18 +370,18 @@ def render_pin_gate(
         placeholder="인증번호 입력",
     )
     remember = st.checkbox(
-        f"✅ 이 기기에서 {AUTOLOGIN_DAYS}일 자동 로그인 (본인 지급 기기 권장)",
+        f"이 기기에서 {AUTOLOGIN_DAYS}일 자동 로그인 (본인 지급 기기 권장)",
         value=False,
         key=f"_remember_{role_key}",
         help="본인 지급 기기에서만 체크하세요. 공용 PC·외부 기기에서는 해제. "
               f"체크 시 다음 접속부터 {AUTOLOGIN_DAYS}일간 PIN 재입력 없이 자동 진입.",
     )
     st.caption(
-        "💡 상급기관(교육부/도교육청 또는 교육청)으로부터 발급받은 인증번호를 입력하세요."
+        "상급기관(교육부/도교육청 또는 교육청)으로부터 발급받은 인증번호를 입력하세요."
     )
     if st.session_state.get("demo_mode", True):
         st.info(
-            f"🎬 **시연용 인증번호**: `{PIN_CODES[role_key]}`  \n"
+            f"**시연용 인증번호**: `{PIN_CODES[role_key]}` \n"
             f"실 출시 시 GPKI(행정전자서명) 또는 KEIIS SSO 로 대체됩니다."
         )
 
@@ -391,12 +391,12 @@ def render_pin_gate(
         if verify_pin(role_key, pin_input):
             set_authenticated(role_key, remember=remember)
             st.session_state[f"_show_pin_{role_key}"] = False
-            st.toast(f"{role_label}로 인증되었습니다", icon="✅")
+            st.toast(f"{role_label}로 인증되었습니다", icon=None)
             if on_success_redirect:
                 st.switch_page(on_success_redirect)
             st.rerun()
         else:
-            st.error("⚠ 유효하지 않은 인증번호입니다")
+            st.error("유효하지 않은 인증번호입니다")
     if col_b.button(cancel_label, key=f"_cancel_{role_key}",
                      width="stretch"):
         st.session_state[f"_show_pin_{role_key}"] = False

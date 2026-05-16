@@ -28,10 +28,10 @@ render_sidebar(active_key="history")
 # 교육청 담당자는 전체 학교 이력 대신 '교육청 수신함' 또는 '전국 대시보드' 사용
 if st.session_state.get("role") == "교육청":
     st.warning(
-        "🏛 **교육청 담당자 모드** — '점검 이력' 은 학교 담당자가 본교의 점검 시계열을 "
+        "**교육청 담당자 모드** — '점검 이력' 은 학교 담당자가 본교의 점검 시계열을 "
         "추적하는 화면입니다. 교육청 관점의 수신 데이터는 '교육청 수신함'을 이용하세요."
     )
-    if st.button("→ 교육청 수신함으로 이동", key="history_guard_inbox",
+    if st.button("교육청 수신함으로 이동", key="history_guard_inbox",
                   type="primary", width="stretch"):
         st.switch_page("pages/7_교육청수신함.py")
     st.stop()
@@ -47,15 +47,15 @@ if not all_sessions:
     empty_state(
         title="누적된 점검 이력이 없습니다",
         description=(
-            "AI 점검 → 결과 저장을 한 번 이상 수행하면 이 화면에 시계열·비교가 표시됩니다.\n\n"
-            "💡 **처음 둘러보시려면** — 홈의 🎬 **시연 시작** 으로 점검 1회를 "
+            "AI 점검 결과 저장을 한 번 이상 수행하면 이 화면에 시계열·비교가 표시됩니다.\n\n"
+            "**처음 둘러보시려면** — 홈의 **시연 시작** 으로 점검 1회를 "
             "실행한 뒤 결과를 저장해보세요. 같은 공간을 두 번 이상 시연하면 "
             "**시계열 비교** 까지 활성화됩니다."
         ),
         action_label="지금 점검 시작",
         action_target="pages/1_점검시작.py",
     )
-    if st.button("← 홈으로 돌아가서 시연 시작", width="stretch",
+    if st.button("홈으로 돌아가서 시연 시작", width="stretch",
                   key="history_empty_demo_home"):
         st.switch_page("app.py")
     st.stop()
@@ -68,7 +68,7 @@ df = df.dropna(subset=["timestamp_dt"]).sort_values("timestamp_dt")
 school = st.session_state.get("school")
 default_code = school.get("정보공시 학교코드") if school else None
 codes = sorted(df["school_code"].unique().tolist())
-labels = {c: f"{c}  ·  {df[df['school_code']==c]['school_name'].iloc[-1]}" for c in codes}
+labels = {c: f"{c} · {df[df['school_code']==c]['school_name'].iloc[-1]}" for c in codes}
 
 # ─────────────────────────────────────────
 # 데스크톱: 좌(학교 선택 + KPI) | 우(시계열 추이)
@@ -138,7 +138,7 @@ fig2.update_layout(height=320, margin=dict(l=20, r=20, t=20, b=20),
                    coloraxis_showscale=False)
 st.plotly_chart(fig2, width="stretch")
 
-with st.expander("🔬 고급 — 점수 분포 상자그림 (통계 전공자용)", expanded=False):
+with st.expander("고급 — 점수 분포 상자그림 (통계 전공자용)", expanded=False):
     st.caption(
         "각 공간의 점수 분포를 박스플롯(boxplot) 으로 봅니다. "
         "박스 = 25~75 백분위수, 가운데 선 = 중앙값, 점 = 개별 점검."
@@ -214,7 +214,7 @@ else:
             if not new_m:
                 missing.append("최근 시점")
             st.warning(
-                f"⚠ {' / '.join(missing)} 의 데이터를 불러올 수 없습니다. "
+                f"{' / '.join(missing)} 의 데이터를 불러올 수 없습니다. "
                 "파일이 삭제되었거나 손상되었을 수 있습니다. "
                 "전체 이력 표에서 다른 세션을 선택해보세요."
             )
@@ -283,7 +283,7 @@ if comparable_spaces:
                               paper_bgcolor="#FFF", plot_bgcolor="#FFF")
         st.plotly_chart(fig_ts, width="stretch")
         st.caption(
-            "💡 카테고리 점수가 일관되게 오르면 개선 효과가 누적됨을 의미합니다. "
+            "카테고리 점수가 일관되게 오르면 개선 효과가 누적됨을 의미합니다. "
             "특정 카테고리만 떨어지면 그 영역의 점검이 약해진 신호 — 추가 조치 권장."
         )
 

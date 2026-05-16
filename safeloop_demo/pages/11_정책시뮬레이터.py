@@ -33,10 +33,10 @@ render_sidebar(active_key="policy")
 # 미인증 시 홈으로 보내 거기서 자동 로그인 또는 PIN 입력 받음.
 if not is_authenticated_session("edu"):
     st.warning(
-        "🔐 **교육청 담당자 인증이 필요합니다** — 홈으로 돌아가 PIN 입력 또는 "
+        "**교육청 담당자 인증이 필요합니다** — 홈으로 돌아가 PIN 입력 또는 "
         "자동 로그인을 해주세요."
     )
-    if st.button("← 홈으로 돌아가서 인증", type="primary",
+    if st.button("홈으로 돌아가서 인증", type="primary",
                   width="stretch", key="policy_back_home"):
         st.session_state["_show_pin_edu"] = True
         st.switch_page("app.py")
@@ -60,17 +60,17 @@ hr = load_high_risk()
 # - 안내·표지: MSDS·포스터·안전수칙 교체 (가장 저비용)
 # 출처: 조달청 나라장터 평균 단가 · 교육시설공제회 시설개선 사례 (2023-2024)
 # ─────────────────────────────────────────
-CATEGORY_UNIT_COST = {   # 단위: 만원 (1개 학교 · 1개 공간당)
-    "비상 대응": 450,       # 비상샤워+세안기+가스차단 세트
-    "환기·배기": 820,       # 흄후드 또는 국소배기 증설 (가장 고가)
-    "보관·격리": 280,       # 잠금 시약장 + 폐액 수거함
-    "감지·경보": 220,       # 감지기 3종 + 비상벨
-    "개인보호구": 80,       # 학급 분량 PPE 일괄
-    "안내·표지": 15,        # MSDS·포스터 (저비용 고효과)
-    "시설·전기": 350,       # 절연 콘센트(GFCI) + 안전 LED + 창문 추락방지 가드
+CATEGORY_UNIT_COST = { # 단위: 만원 (1개 학교 · 1개 공간당)
+    "비상 대응": 450, # 비상샤워+세안기+가스차단 세트
+    "환기·배기": 820, # 흄후드 또는 국소배기 증설 (가장 고가)
+    "보관·격리": 280, # 잠금 시약장 + 폐액 수거함
+    "감지·경보": 220, # 감지기 3종 + 비상벨
+    "개인보호구": 80, # 학급 분량 PPE 일괄
+    "안내·표지": 15, # MSDS·포스터 (저비용 고효과)
+    "시설·전기": 350, # 절연 콘센트(GFCI) + 안전 LED + 창문 추락방지 가드
 }
 
-# 카테고리별 예상 점수 기여도 (법령 가중치 합산 → 100 정규화)
+# 카테고리별 예상 점수 기여도 (법령 가중치 합산 100 정규화)
 _cat_weight_sum = {
     c: sum(info["weight"] for info in LAW_BASIS.values() if info["category"] == c)
     for c in CATEGORIES
@@ -87,7 +87,7 @@ with control_col:
     section("01", "투자 시나리오 설정")
 
     # 한국 학교 안전 정책 실무 단위 — 작은 단위부터 큰 단위까지
-    # 단계: 시군구 시범 → 시도 시범 → 시도 확대 → 전국 시범 → 전국 확대
+    # 단계: 시군구 시범 시도 시범 시도 확대 전국 시범 전국 확대
     # 학교당 평균 패키지 약 1,500만원 기준 (위험도 우선 종합 개선)
     PRESETS = {
         "맞춤 입력": None,
@@ -118,7 +118,7 @@ with control_col:
     )
 
     # 현실 단가 표시
-    with st.expander("📑 개선 단가 레퍼런스 (카테고리별)", expanded=False):
+    with st.expander("개선 단가 레퍼런스 (카테고리별)", expanded=False):
         ref_df = pd.DataFrame([
             {"카테고리": c,
              "학교당 평균 단가 (만원)": CATEGORY_UNIT_COST[c],
@@ -136,9 +136,9 @@ with control_col:
         "border:1px solid #E5E5E8; border-radius:6px; font-size:11px; "
         "line-height:1.6; color:#6B6B70;'>"
         "<b>모델</b> — 학교당 투자액에 대해 <b>로그 감쇠</b> 를 적용 "
-        "(초기 투자 효과 ↑, 이후 한계효용 체감). "
+        "(초기 투자 효과 , 이후 한계효용 체감). "
         "단순 선형 가정이 아닌 실제 관측에 더 가까운 형태입니다. "
-        "운영 배포 시에는 환원 데이터(BEFORE→AFTER 페어) 로 회귀 모델로 대체."
+        "운영 배포 시에는 환원 데이터(BEFOREAFTER 페어) 로 회귀 모델로 대체."
         "</div>",
         unsafe_allow_html=True,
     )
@@ -160,11 +160,11 @@ if target_strategy.startswith("위험도 높은 순"):
     per_school_won = pkg_cost_won
 elif target_strategy.startswith("고른 분산"):
     # 저비용 기본 패키지 — 안내·표지 + PPE + 감지경보 = 약 320만원 + 시공비 = 약 1000만원
-    pkg_cost_won = 10_000_000  # 학교당 1,000만 원
+    pkg_cost_won = 10_000_000 # 학교당 1,000만 원
     n = int(budget_won // pkg_cost_won)
     targets = hr.sample(min(n, len(hr)), random_state=42).copy()
     per_school_won = pkg_cost_won
-else:  # 카테고리 집중
+else: # 카테고리 집중
     # 위 카테고리별 우선순위 산식 상위 3개 (환기+보관+감지 또는 시설전기+감지+개인보호구)
     # = 약 820+280+220 = 1,320만 원
     pkg_cost_won = 13_200_000
@@ -173,15 +173,15 @@ else:  # 카테고리 집중
     per_school_won = pkg_cost_won
 
 # 로그 감쇠 모델:
-#   before_score = 100 - 위험도_점수
-#   gap = 100 - before_score  (개선 여지)
-#   lift = gap × (1 - exp(-k × 투자만원/500))  → 투자 500만원 도달 시 약 63%, 2000만원에서 98%
-#   k=1.0 기준
+# before_score = 100 - 위험도_점수
+# gap = 100 - before_score (개선 여지)
+# lift = gap × (1 - exp(-k × 투자만원/500)) 투자 500만원 도달 시 약 63%, 2000만원에서 98%
+# k=1.0 기준
 if len(targets) > 0:
     targets["before_score"] = 100 - targets["위험도_점수"]
     gap = 100 - targets["before_score"]
     k = 1.0
-    invest_units = (per_school_won / 10_000) / 500.0  # 500만원 단위
+    invest_units = (per_school_won / 10_000) / 500.0 # 500만원 단위
     recovery_ratio = 1 - np.exp(-k * invest_units)
     _RNG_SIM = np.random.default_rng(0)
     noise = _RNG_SIM.uniform(0.85, 1.15, size=len(targets))
@@ -202,7 +202,7 @@ with result_col:
     c2.metric("총 사용 예산", f"{total_invested_won/1e8:.1f}억",
               delta=f"잔여 {(budget_won - total_invested_won) / 1e8:.1f}억")
     c3, c4 = st.columns(2)
-    c3.metric("평균 점수 변화", f"{avg_before:.1f} → {avg_after:.1f}",
+    c3.metric("평균 점수 변화", f"{avg_before:.1f} {avg_after:.1f}",
               delta=f"+{avg_after - avg_before:.1f}점")
     grade_up = int(((targets["after_score"] // 10) > (targets["before_score"] // 10)).sum())
     c4.metric("등급 상승 학교", f"{grade_up:,}개",
@@ -216,7 +216,7 @@ with result_col:
     _total_lift = (targets["after_score"] - targets["before_score"]).sum()
     roi = _total_lift / (total_invested_won / 1e8) if total_invested_won else 0
     st.caption(
-        f"💰 **ROI**: 예산 1억 원당 누적 점수 개선 약 **{roi:.1f}점·교** · "
+        f"**ROI**: 예산 1억 원당 누적 점수 개선 약 **{roi:.1f}점·교** · "
         f"전체 누적 개선 {_total_lift:.0f}점·교"
     )
 
@@ -251,21 +251,21 @@ cat_weight = _cat_weight_sum
 # 주: 값은 시연용이며 실제 조사로 대체 필요
 CAT_ABSENT_RATE_ESTIMATED = {
     "비상 대응": 0.42,
-    "환기·배기": 0.68,     # 흄후드 보급률이 낮음
+    "환기·배기": 0.68, # 흄후드 보급률이 낮음
     "보관·격리": 0.35,
     "감지·경보": 0.28,
     "개인보호구": 0.52,
     "안내·표지": 0.38,
-    "시설·전기": 0.45,     # 절연 콘센트·창문 안전 가드 보급률 낮음
+    "시설·전기": 0.45, # 절연 콘센트·창문 안전 가드 보급률 낮음
 }
 
 priority_rows = []
 for c in CATEGORIES:
     absent = CAT_ABSENT_RATE_ESTIMATED[c]
     weight = cat_weight[c]
-    unit_cost_mw = CATEGORY_UNIT_COST[c]  # 만원
+    unit_cost_mw = CATEGORY_UNIT_COST[c] # 만원
     # 효과/비용 = 가중치 × 부재율 ÷ 단가 (높을수록 비용 대비 효과 큼)
-    priority_score = (weight * absent) / unit_cost_mw * 100  # 스케일 조정
+    priority_score = (weight * absent) / unit_cost_mw * 100 # 스케일 조정
     priority_rows.append({
         "카테고리": c,
         "법령 가중치": weight,

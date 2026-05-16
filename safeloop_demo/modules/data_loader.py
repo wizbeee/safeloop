@@ -2,12 +2,12 @@
 데이터 로더 — CSV 캐싱·학교 검색·익명화.
 
 검색 API:
-- search_schools_by_name(query)           이름 부분 일치
-- list_sido()                             시도 목록
-- list_sigungu(sido)                      시군구 목록
-- list_schools(sido, sigungu)             학교 리스트
-- get_school_by_code(code)                식별자 조회
-- anonymize_code(code)                    해시 익명화
+- search_schools_by_name(query) 이름 부분 일치
+- list_sido() 시도 목록
+- list_sigungu(sido) 시군구 목록
+- list_schools(sido, sigungu) 학교 리스트
+- get_school_by_code(code) 식별자 조회
+- anonymize_code(code) 해시 익명화
 """
 from __future__ import annotations
 
@@ -104,12 +104,12 @@ def get_sido_edu_email(sido: str | None) -> str | None:
 def estimated_national_safety_score() -> dict:
     """전국 평균 안전 점수 추정.
 
-    high_risk 의 위험도_점수를 0~100 안전 점수로 변환 (위험도 ↑ → 안전 ↓).
+    high_risk 의 위험도_점수를 0~100 안전 점수로 변환 (위험도 안전 ).
     반환:
       {
         "mean": 전국 평균 안전 점수(0~100),
         "sido_means": {시도교육청명: 평균 안전 점수},
-        "school_score": {학교코드: 안전 점수}  # 학교별 빠른 조회용
+        "school_score": {학교코드: 안전 점수} # 학교별 빠른 조회용
       }
     """
     df = load_high_risk()
@@ -162,7 +162,7 @@ def list_sigungu(sido: str) -> list[str]:
 
 
 def _extract_sigungu(region: str) -> str:
-    """'서울특별시 강남구' → '강남구' 추출."""
+    """'서울특별시 강남구' '강남구' 추출."""
     if not isinstance(region, str):
         return ""
     parts = region.strip().split()

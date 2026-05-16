@@ -1,7 +1,7 @@
 """
 Step 3~5 — 사진 촬영 + AI 3단계 파이프라인 + 설비 사용자 확정 + 현장 점검.
 
-촬영 UI — 샷별 카드 (명칭 → 가이드 문구 → 카메라 → 촬영 결과):
+촬영 UI — 샷별 카드 (명칭 가이드 문구 카메라 촬영 결과):
 공간 무관 공통 6샷. 각 샷마다 독립된 카메라 위젯. 최소 3샷 이상 확보 시 AI 분석 활성화.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ render_sidebar(active_key="ai")
 
 school = require_school()
 if not school:
-    if st.button("← 학교 찾기로", key="ai_noschool_back",
+    if st.button("학교 찾기로", key="ai_noschool_back",
                   width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
@@ -42,7 +42,7 @@ if not school:
 space = st.session_state.get("active_space")
 if not space:
     st.warning("점검할 공간이 선택되지 않았습니다.")
-    if st.button("← 공간 선택으로", key="ai_nospace_back",
+    if st.button("공간 선택으로", key="ai_nospace_back",
                   width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
@@ -102,28 +102,28 @@ SHOTS: list[dict] = [
     {
         "key": "center_window",
         "no": "03",
-        "title": "공간 중앙 → 창문쪽",
+        "title": "공간 중앙 창문쪽",
         "guide": "공간 한가운데에 서서 창문 방향을 촬영하세요.",
         "required": True,
     },
     {
         "key": "center_corridor",
         "no": "04",
-        "title": "공간 중앙 → 복도쪽",
+        "title": "공간 중앙 복도쪽",
         "guide": "공간 한가운데에서 복도(반대편 벽) 방향을 촬영하세요.",
         "required": True,
     },
     {
         "key": "center_front_door",
         "no": "05",
-        "title": "공간 중앙 → 앞문쪽",
+        "title": "공간 중앙 앞문쪽",
         "guide": "공간 한가운데에서 앞문 방향을 촬영하세요.",
         "required": True,
     },
     {
         "key": "center_back_door",
         "no": "06",
-        "title": "공간 중앙 → 뒷문쪽",
+        "title": "공간 중앙 뒷문쪽",
         "guide": "공간 한가운데에서 뒷문(또는 후면 벽) 방향을 촬영하세요.",
         "required": True,
     },
@@ -164,7 +164,7 @@ def _shots_dict() -> dict:
     return {s["key"]: [] for s in SHOTS}
 
 
-# 세션 초기화 + 구 스키마 마이그레이션 (dict → list)
+# 세션 초기화 + 구 스키마 마이그레이션 (dict list)
 if "shots" not in st.session_state:
     st.session_state["shots"] = _shots_dict()
 else:
@@ -201,9 +201,9 @@ def _persist_draft() -> None:
         save_draft_shots(school_code, shots_state, space_id)
     except (OSError, IOError, PermissionError) as e:
         # 디스크/권한 문제 — 사용자에게 명시
-        st.toast(f"⚠ 드래프트 자동 백업 실패: {e.__class__.__name__}", icon="⚠️")
-    except Exception as e:  # noqa: BLE001 — 그 외는 토스트만, 흐름 유지
-        st.toast(f"⚠ 드래프트 백업 중 예외: {e.__class__.__name__}", icon="⚠️")
+        st.toast(f"드래프트 자동 백업 실패: {e.__class__.__name__}", icon=None)
+    except Exception as e: # noqa: BLE001 — 그 외는 토스트만, 흐름 유지
+        st.toast(f"드래프트 백업 중 예외: {e.__class__.__name__}", icon=None)
 
 
 empty_now = sum(len(v) for v in shots_state.values()) == 0
@@ -211,12 +211,12 @@ has_stale_results = empty_now and any(
     st.session_state.get(k) for k in ["stage1_result", "stage2_result", "stage3_result"]
 )
 if has_stale_results and not st.session_state.get("_draft_restored"):
-    # 사진 없는데 이전 AI 결과만 남은 경우 → 확실히 초기화
+    # 사진 없는데 이전 AI 결과만 남은 경우 확실히 초기화
     for _k in ["stage1_result", "stage2_result", "stage2_confirmed",
                 "stage3_result", "item_scores",
                 "score_result", "recommendations"]:
         st.session_state[_k] = None
-    st.toast("이전 분석 결과를 정리했습니다 (사진이 비어있음)", icon="ℹ️")
+    st.toast("이전 분석 결과를 정리했습니다 (사진이 비어있음)", icon="")
 
 if empty_now and has_draft(school_code, space_id) and not st.session_state.get("_draft_restored"):
     summary = draft_summary(school_code, space_id) or {}
@@ -257,17 +257,17 @@ required_total = sum(1 for s in SHOTS if s["required"])
 # 위저드 상태 (한 구도씩 한 화면) — 7~8컷 + 보완
 # ─────────────────────────────────────────
 WIZARD_STEPS = [
-    ("shoot_1", "01 입구 대각선",  "entrance_diag"),
-    ("shoot_2", "02 앞 정면",       "front_view"),
-    ("shoot_3", "03 창문쪽",        "center_window"),
-    ("shoot_4", "04 복도쪽",        "center_corridor"),
-    ("shoot_5", "05 앞문쪽",        "center_front_door"),
-    ("shoot_6", "06 뒷문쪽",        "center_back_door"),
-    ("shoot_7", "07 천장",          "ceiling"),
-    ("shoot_8", "08 뒷문 대각선",   "back_door_diag"),    # 선택
-    ("ai_run",  "AI 분석",          None),
-    ("supplement", "보완",          "close_supplement"),
-    ("review",  "결과",             None),
+    ("shoot_1", "01 입구 대각선", "entrance_diag"),
+    ("shoot_2", "02 앞 정면", "front_view"),
+    ("shoot_3", "03 창문쪽", "center_window"),
+    ("shoot_4", "04 복도쪽", "center_corridor"),
+    ("shoot_5", "05 앞문쪽", "center_front_door"),
+    ("shoot_6", "06 뒷문쪽", "center_back_door"),
+    ("shoot_7", "07 천장", "ceiling"),
+    ("shoot_8", "08 뒷문 대각선", "back_door_diag"), # 선택
+    ("ai_run", "AI 분석", None),
+    ("supplement", "보완", "close_supplement"),
+    ("review", "결과", None),
 ]
 _STEP_KEYS = [s[0] for s in WIZARD_STEPS]
 _SHOT_OF_STEP = {s[0]: s[2] for s in WIZARD_STEPS}
@@ -278,14 +278,14 @@ if "wizard_step" not in st.session_state:
 if st.session_state["wizard_step"] not in _STEP_KEYS:
     st.session_state["wizard_step"] = "shoot_1"
 
-# 🎬 자동재생 진입 — 필수 컷 중 일정 비율 이상 채워지면 ai_run 스텝으로 점프
+# 자동재생 진입 — 필수 컷 중 일정 비율 이상 채워지면 ai_run 스텝으로 점프
 # 샘플 폴더에 7컷 전체가 없는 경우(시연용)도 진행 가능하도록 임계 80%.
 #
 # 주의(2026-04-26): 새 시연 흐름에서는 app.py 가 시연 시작 시 stage2/3 합성 응답을
 # 직접 주입하고 _autoplay_consumed=True + wizard_step="supplement" 로 설정하므로
 # 아래 블록은 보통 skip 됩니다. 다음 환경에서만 실행됨:
-#   - 외부에서 _autoplay 만 켜고 _autoplay_consumed 안 켠 경우
-#   - 또는 새 흐름으로 마이그레이션 안 된 진입점에서 호출 시 fallback
+# - 외부에서 _autoplay 만 켜고 _autoplay_consumed 안 켠 경우
+# - 또는 새 흐름으로 마이그레이션 안 된 진입점에서 호출 시 fallback
 # 죽은 코드 같지만 fallback 안전망으로 유지.
 if st.session_state.get("_autoplay") and not st.session_state.get("_autoplay_consumed"):
     _required_keys_auto = [
@@ -294,13 +294,13 @@ if st.session_state.get("_autoplay") and not st.session_state.get("_autoplay_con
     ]
     _filled = sum(1 for k in _required_keys_auto
                   if st.session_state.get("shots", {}).get(k))
-    if _filled >= 5:  # 7개 중 5개 이상 = 71% 이상이면 진행 (3장 광각 + 천장만 있어도 가능)
+    if _filled >= 5: # 7개 중 5개 이상 = 71% 이상이면 진행 (3장 광각 + 천장만 있어도 가능)
         st.session_state["wizard_step"] = "ai_run"
         st.session_state["_autoplay_consumed"] = True
 
 # 모드 토글은 고급 옵션 — 기본은 위저드(한 구도씩 단계별).
 # 모드 이중성 노출이 사용자 혼란 원인이므로 expander 안으로 숨김.
-with st.expander("⚙ 화면 모드 변경 (선택)", expanded=False):
+with st.expander("화면 모드 변경 (선택)", expanded=False):
     st.caption(
         "기본은 **위저드 모드** (한 구도씩 단계별로 안내). "
         "PC 큰 화면에서 모든 구도를 한 번에 보고 싶으면 클래식 모드로 전환할 수 있습니다."
@@ -315,7 +315,7 @@ with st.expander("⚙ 화면 모드 변경 (선택)", expanded=False):
 # 모드 전환 감지 — 위저드로 돌아올 때 현재 진행에 맞춰 wizard_step 자동 재계산
 _prev_classic = st.session_state.get("_prev_classic_mode")
 if _prev_classic is not None and _prev_classic != classic_mode and not classic_mode:
-    # 클래식 → 위저드 전환 시점만 처리 (위저드 → 클래식은 단계 무관)
+    # 클래식 위저드 전환 시점만 처리 (위저드 클래식은 단계 무관)
     if st.session_state.get("score_result"):
         st.session_state["wizard_step"] = "review"
     elif st.session_state.get("stage2_result"):
@@ -365,14 +365,14 @@ def _render_shot_card(s: dict) -> None:
     photos = shots_state.setdefault(key, [])
     count = len(photos)
     if count:
-        status_html = f"<span class='sl-status-ok'>● {count}장 촬영됨</span>"
+        status_html = f"<span class='sl-status-ok'>{count}장 촬영됨</span>"
     elif s["required"]:
         status_html = (
             "<span class='sl-status-empty' "
-            "style='color:#D50000;font-weight:600;'>○ 촬영 필요 (필수)</span>"
+            "style='color:#D50000;font-weight:600;'>촬영 필요 (필수)</span>"
         )
     else:
-        status_html = "<span class='sl-status-empty'>○ 촬영 대기 (선택)</span>"
+        status_html = "<span class='sl-status-empty'>촬영 대기 (선택)</span>"
     required_label = "필수" if s["required"] else "선택"
     required_pill_class = "sl-pill-red" if s["required"] else "sl-pill"
 
@@ -411,7 +411,7 @@ def _render_shot_card(s: dict) -> None:
         # 두 입력 방식 — 카메라 직접 촬영 + 갤러리·파일 업로드
         # 사용자는 모바일에서는 카메라, PC 에서는 파일 업로드 선택
         cam_tab, upload_tab = st.tabs([
-            "📷 카메라로 직접 촬영", "🖼 갤러리·파일에서 업로드",
+            "카메라로 직접 촬영", "갤러리·파일에서 업로드",
         ])
 
         new_photos: list = []
@@ -419,7 +419,7 @@ def _render_shot_card(s: dict) -> None:
         with cam_tab:
             st.markdown(
                 "<div style='font-size:12px;color:#6B6B70;margin-bottom:4px;'>"
-                "<b>📷 촬영 시작</b> 버튼을 누르면 카메라가 바로 실행됩니다 "
+                "<b>촬영 시작</b> 버튼을 누르면 카메라가 바로 실행됩니다 "
                 "(허용 후 사용 가능 · 모바일에서 가장 편함)."
                 "</div>",
                 unsafe_allow_html=True,
@@ -436,7 +436,7 @@ def _render_shot_card(s: dict) -> None:
         with upload_tab:
             st.markdown(
                 "<div style='font-size:12px;color:#6B6B70;margin-bottom:4px;'>"
-                "<b>📁 파일 선택</b> 버튼을 누르면 갤러리·파일 탐색기가 열립니다 "
+                "<b>파일 선택</b> 버튼을 누르면 갤러리·파일 탐색기가 열립니다 "
                 "(여러 사진 동시 선택 가능)."
                 "</div>",
                 unsafe_allow_html=True,
@@ -455,9 +455,9 @@ def _render_shot_card(s: dict) -> None:
                     # HEIC (iPhone 기본 포맷) 안내 — 일부 PC 브라우저에서 미리보기 미지원
                     if fname_lower.endswith(".heic") and not heic_warned:
                         st.warning(
-                            "📱 **HEIC 파일 안내** — iPhone 기본 카메라 포맷입니다. "
+                            "**HEIC 파일 안내** — iPhone 기본 카메라 포맷입니다. "
                             "AI 분석은 가능하나 일부 PC 브라우저에서 미리보기가 안 보일 수 있습니다. "
-                            "iPhone 설정 → 카메라 → 형식 → **'호환성 우선'**(JPEG) 으로 바꾸면 PC에서도 즉시 미리보기 가능."
+                            "iPhone 설정 카메라 형식 **'호환성 우선'**(JPEG) 으로 바꾸면 PC에서도 즉시 미리보기 가능."
                         )
                         heic_warned = True
                     new_photos.append((f"{key}_{len(photos)+1}.jpg", f.getvalue()))
@@ -480,7 +480,7 @@ def _render_shot_card(s: dict) -> None:
             if rejected:
                 st.toast(
                     f"중복 사진 {rejected}장은 건너뜀 (같은 바이트)",
-                    icon="ℹ️",
+                    icon="",
                 )
             if added:
                 st.session_state[counter_key] += 1
@@ -501,14 +501,14 @@ def _render_shot_card(s: dict) -> None:
 
 
 def _render_wizard_nav(prev_step: str | None, next_step: str | None,
-                        next_label: str = "다음 →", next_disabled: bool = False,
+                        next_label: str = "다음 ", next_disabled: bool = False,
                         next_type: str = "primary") -> None:
     """하단 이전/다음 버튼."""
     st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
     c_prev, c_spacer, c_next = st.columns([1, 2, 1])
     with c_prev:
         if prev_step:
-            if st.button("← 이전", key=f"nav_prev_{step}", width="stretch"):
+            if st.button("이전", key=f"nav_prev_{step}", width="stretch"):
                 _go_to_step(prev_step)
     with c_next:
         if next_step:
@@ -531,7 +531,7 @@ if classic_mode:
     st.markdown(
         "<div style='font-size:13px; color:#6B6B70; margin-bottom:12px; line-height:1.65;'>"
         "<b style='color:#0A0A0B;'>기본 7~8컷</b>으로 공간 전체와 천장까지 한 번에 담습니다. "
-        "입구 대각선 → 앞 정면 → 중앙 4방향(창문/복도/앞문/뒷문) → 천장 → (뒷문 대각선, 있을 때) 순. "
+        "입구 대각선 앞 정면 중앙 4방향(창문/복도/앞문/뒷문) 천장 (뒷문 대각선, 있을 때) 순. "
         "AI 가 이 다각도 사진들로 <b>공간 레이아웃 + 안전 장비 위치</b>를 동시에 식별합니다. "
         "AI가 모호 판정한 항목만 맨 아래 <b>보완 촬영(선택)</b> 을 사용하세요."
         "</div>",
@@ -539,7 +539,7 @@ if classic_mode:
     )
     # 모바일 카메라 작동 안내 (iPhone Safari 는 HTTPS 환경에서만 카메라 가능)
     st.info(
-        "📱 **모바일 사용 시** — 촬영 버튼이 카메라 앱을 열지 않으면 다음을 확인하세요:\n\n"
+        "**모바일 사용 시** — 촬영 버튼이 카메라 앱을 열지 않으면 다음을 확인하세요:\n\n"
         "- **iPhone Safari**: HTTPS 환경(https://...) 으로 접속해야 카메라 호출됨\n"
         "- **Android Chrome**: 첫 진입 시 카메라 권한 허용 필요\n"
         "- 그래도 안 되면 갤러리에서 사진 선택으로 대체 가능 (동일 기능)"
@@ -549,7 +549,7 @@ else:
 
 # 시연 모드 — 더미 이미지 일괄 채움 (실 사진 사용 X)
 if st.session_state.get("demo_mode"):
-    with st.expander("🎬 시연 모드 · 더미 이미지 일괄 채움", expanded=True):
+    with st.expander("시연 모드 · 더미 이미지 일괄 채움", expanded=True):
         DEMO_SPACE_OPTIONS = [
             "일반교실", "화학실", "물리실", "생명과학실", "지구과학실",
             "기술실", "가정실", "음악실", "미술실",
@@ -576,7 +576,7 @@ if st.session_state.get("demo_mode"):
             for k in ["stage1_result", "stage2_result", "stage2_confirmed", "stage3_result"]:
                 st.session_state[k] = None
             _persist_draft()
-            st.toast(f"🎬 {sample_choice} 더미 이미지 7컷 채움 완료", icon="🎬")
+            st.toast(f"{sample_choice} 더미 이미지 7컷 채움 완료", icon=None)
             st.rerun()
 
 def _reset_all() -> None:
@@ -624,15 +624,15 @@ else:
         # 마지막 촬영 단계 다음은 ai_run
         next_step = SHOOT_STEPS[idx + 1] if idx < len(SHOOT_STEPS) - 1 else "ai_run"
 
-        is_last_required = (step == "shoot_7")  # 7번까지 필수, 8번(뒷문 대각선) 은 선택
+        is_last_required = (step == "shoot_7") # 7번까지 필수, 8번(뒷문 대각선) 은 선택
         next_label = (
-            "다음 구도 →" if step != "shoot_8" else
-            "AI 분석 단계로 →"
+            "다음 구도 " if step != "shoot_8" else
+            "AI 분석 단계로 "
         )
         # 8번 (뒷문 대각선) 은 선택이므로 미촬영이어도 진행 허용
         if step == "shoot_8":
             next_step = "ai_run"
-            next_label = "AI 분석 단계로 →"
+            next_label = "AI 분석 단계로 "
 
         _render_wizard_nav(
             prev_step=prev_step,
@@ -643,7 +643,7 @@ else:
 
         if step == "shoot_7" and shot_done:
             st.caption(
-                "💡 **뒷문이 있다면** 다음 단계(08 뒷문 대각선)에서 한 장 더 찍어주세요. "
+                "**뒷문이 있다면** 다음 단계(08 뒷문 대각선)에서 한 장 더 찍어주세요. "
                 "뒷문이 없으면 바로 'AI 분석 단계로' 진행하셔도 됩니다."
             )
         elif step == "shoot_8":
@@ -692,7 +692,7 @@ else:
         _render_wizard_nav(
             prev_step="shoot_8",
             next_step=None,
-        )  # 다음은 AI 실행 버튼이 대신함
+        ) # 다음은 AI 실행 버튼이 대신함
 
     elif step == "supplement":
         # AI 결과 요약 + 보완 촬영 카드 + 재분석
@@ -725,7 +725,7 @@ else:
         if supplement_photos:
             if needs_reanalysis:
                 st.error(
-                    "⚠ **보완 사진이 추가되었지만 아직 재분석하지 않았습니다.** "
+                    "**보완 사진이 추가되었지만 아직 재분석하지 않았습니다.** "
                     "지금 결과 단계로 넘어가면 보완 사진이 점수·점검표에 반영되지 않습니다. "
                     "아래 **'보완 사진으로 AI 재분석'** 을 먼저 눌러주세요."
                 )
@@ -741,7 +741,7 @@ else:
         _render_wizard_nav(
             prev_step="ai_run",
             next_step="review",
-            next_label="결과 단계로 →",
+            next_label="결과 단계로 ",
         )
         if not supplement_photos:
             st.caption("보완 촬영이 필요 없다면 그대로 '결과 단계로' 진행해도 됩니다.")
@@ -758,8 +758,8 @@ else:
 
 # ─────────────────────────────────────────
 # (B) AI 3단계 파이프라인
-#     위저드에서는 `ai_run` 스텝에서만 실행 UI를 노출.
-#     실행 완료 시 자동으로 `supplement` 스텝으로 이동.
+# 위저드에서는 `ai_run` 스텝에서만 실행 UI를 노출.
+# 실행 완료 시 자동으로 `supplement` 스텝으로 이동.
 # ─────────────────────────────────────────
 
 # 공통 헬퍼 — 모든 샷을 평탄화 (실행·결과 모두 필요)
@@ -793,7 +793,7 @@ if _show_ai_run:
     )
 
     key_ok = api_key_available()
-    # Stage 1 호출 제거 후 → Stage 2 캐시(`{img_hash}_{space_type}`) 정확 매칭 검사
+    # Stage 1 호출 제거 후 Stage 2 캐시(`{img_hash}_{space_type}`) 정확 매칭 검사
     _opt_all = (
         [analyze_and_optimize(b).optimized_bytes for b in all_photos]
         if all_photos else []
@@ -813,7 +813,7 @@ if _show_ai_run:
             provider_id, "API_KEY"
         )
         hint_cache = (
-            "\n\n💡 이전에 분석한 샘플 캐시가 남아 있습니다 — "
+            "\n\n이전에 분석한 샘플 캐시가 남아 있습니다 — "
             "**샘플 사진(화학실/물리실)을 그대로 불러오면** 즉시 재현됩니다."
             if cached_possible else ""
         )
@@ -821,13 +821,13 @@ if _show_ai_run:
             f"**AI 키가 감지되지 않았습니다** ({provider_id})\n\n"
             f"세 가지 방법 중 하나로 해결할 수 있습니다:\n"
             f"- `safeloop_demo/.env` 에 `{env_var}=sk-...` 추가\n"
-            f"- 사이드바 **설정 → AI 공급자** 에서 키 입력\n"
+            f"- 사이드바 **설정 AI 공급자** 에서 키 입력\n"
             f"- 시연 모드: 샘플 사진을 한 번 분석해두면 다음부턴 캐시로 즉시 재현"
             + hint_cache
         )
     elif not key_ok and cached_demo:
         st.info(
-            "🎬 **시연 모드 — 캐시 폴백 활성화**\n\n"
+            "**시연 모드 — 캐시 폴백 활성화**\n\n"
             "현재 업로드된 사진이 이전에 분석된 캐시와 일치합니다. "
             "API 호출 없이 즉시 결과를 재현합니다."
         )
@@ -838,26 +838,26 @@ if _show_ai_run:
                                      help="동일 사진 재분석 시 API 호출 생략.")
         # 보완 재분석 트리거 자동 처리
         triggered_by_supplement = st.session_state.pop("_trigger_rerun_supplement", False)
-        # 🎬 시연 자동 재생 트리거 (홈에서 넘어온 경우) — 1회만
+        # 시연 자동 재생 트리거 (홈에서 넘어온 경우) — 1회만
         triggered_by_autoplay = (
             st.session_state.pop("_autoplay_run_ai", False)
             and analysis_ready
             and not st.session_state.get("stage3_result")
         )
         if triggered_by_autoplay:
-            st.info("🎬 시연 시작 — 더미 이미지로 AI 분석을 즉시 실행합니다...")
+            st.info("시연 시작 — 더미 이미지로 AI 분석을 즉시 실행합니다...")
         # 누락된 필수 컷 안내 — 어느 구도가 비었는지 명시
         missing_required = [s for s in SHOTS if s["required"] and not shots_state.get(s["key"])]
         if missing_required:
             missing_titles = " / ".join(f"{s['no']} {s['title']}" for s in missing_required)
             st.warning(
-                f"⚠ **필수 컷 {len(missing_required)}건 누락** — {missing_titles}\n\n"
+                f"**필수 컷 {len(missing_required)}건 누락** — {missing_titles}\n\n"
                 f"필수 사진은 안전 점검의 정확도를 보장하기 위해 권장됩니다. "
                 f"가능한 한 7컷 모두 촬영해주세요."
             )
         with col_b:
             run_disabled = not analysis_ready
-            btn_label = ("▶  AI 분석 시작 (설비 탐지 → 맞춤 점검표 생성)"
+            btn_label = (" AI 분석 시작 (설비 탐지 맞춤 점검표 생성)"
                          if analysis_ready else f"필수 {_MIN_REQUIRED_FILLED}컷 이상 촬영 후 활성화")
             user_clicked = st.button(btn_label, type="primary", width="stretch",
                                       disabled=run_disabled, key="run_ai_btn")
@@ -879,7 +879,7 @@ if _show_ai_run:
                         st.session_state["stage2_result"] = cached_pipeline["stage2"]
                         st.session_state["stage2_confirmed"] = None
                         st.session_state["stage3_result"] = cached_pipeline["stage3"]
-                        st.toast("시연 모드: 캐시된 결과로 재현 완료", icon="🎬")
+                        st.toast("시연 모드: 캐시된 결과로 재현 완료", icon=None)
                         if not classic_mode:
                             _go_to_step("supplement")
                         st.rerun()
@@ -891,7 +891,7 @@ if _show_ai_run:
                         st.stop()
 
                 st.info(
-                    f"⏱ 예상 소요 시간 약 **{est_total}초** "
+                    f"예상 소요 시간 약 **{est_total}초** "
                     f"(사진 {n_imgs}장 · 캐시 적중 시 즉시). "
                     f"공급자: {current_provider_label()}"
                 )
@@ -982,7 +982,7 @@ if s1 and _show_stage1:
                 "<div style='padding:14px 18px;background:#FAFAFA;"
                 "border:1px solid #E5E5E8;border-left:3px solid #4CAF50;"
                 "border-radius:6px;font-size:13px;line-height:1.7;'>"
-                "<b style='color:#4CAF50;'>✓ 담당자 등록 정보</b><br>"
+                "<b style='color:#4CAF50;'>담당자 등록 정보</b><br>"
                 "점검 시작 페이지에서 담당자가 직접 선택한 공간 유형입니다. "
                 "AI 가 사진으로 공간을 다시 추정하지 않고 등록 정보를 그대로 사용합니다."
                 "</div>",
@@ -1018,7 +1018,7 @@ if s2 and _show_stage2_confirm:
             "<div style='padding:10px 14px;background:#FFF8E1;border:1px solid #FFE082;"
             "border-left:4px solid #F57C00;border-radius:6px;font-size:12px;color:#6B4500;"
             "line-height:1.6;margin-bottom:10px;'>"
-            "🎬 <b>시연 합성 응답</b> — 이 결과는 <b>실제 AI 호출이 아닌</b>, "
+            "<b>시연 합성 응답</b> — 이 결과는 <b>실제 AI 호출이 아닌</b>, "
             "법령 표준 설비 목록(LAW_BASIS)에 기반한 자동 합성 응답입니다. "
             "더미 이미지의 SHA 해시가 캐시 적중하지 않아 실 API 호출 시 결과가 달라질 수 있어, "
             "시연용 풍부한 응답을 즉석 합성합니다.<br>"
@@ -1032,12 +1032,12 @@ if s2 and _show_stage2_confirm:
     ambiguous = s2.get("ambiguous_items", []) or []
 
     # 사용자 마킹 상태 (체크해도 항목은 유지)
-    # detected → "remove" (제거 표시) / 부재 → "actually_exists" / 모호 → 라디오 선택
+    # detected "remove" (제거 표시) / 부재 "actually_exists" / 모호 라디오 선택
     if "stage2_user_marks" not in st.session_state:
         st.session_state["stage2_user_marks"] = {
-            "detected_remove": {},   # {idx: bool}
-            "absent_exists": {},     # {idx: bool}
-            "ambig_decision": {},    # {idx: str}
+            "detected_remove": {}, # {idx: bool}
+            "absent_exists": {}, # {idx: bool}
+            "ambig_decision": {}, # {idx: str}
         }
     marks = st.session_state["stage2_user_marks"]
 
@@ -1047,7 +1047,7 @@ if s2 and _show_stage2_confirm:
 
     with tab_d:
         st.caption(
-            "AI 가 사진에서 실제로 확인한 설비입니다. **잘못 탐지된 것** 만 체크하세요 → "
+            "AI 가 사진에서 실제로 확인한 설비입니다. **잘못 탐지된 것** 만 체크하세요 "
             "'반영하기' 클릭 시 점검표에서 제거됩니다."
         )
         for i, item in enumerate(detected):
@@ -1065,7 +1065,7 @@ if s2 and _show_stage2_confirm:
                     label_visibility="collapsed",
                 )
             with col_info:
-                loc_html = f" · 📍 {loc}" if loc else ""
+                loc_html = f" · {loc}" if loc else ""
                 st.markdown(
                     f"<div style='padding:6px 8px;font-size:13.5px;'>"
                     f"<b>{name}</b> "
@@ -1079,7 +1079,7 @@ if s2 and _show_stage2_confirm:
 
     with tab_a:
         st.caption(
-            "AI 가 '없다' 고 판정한 설비입니다. **실제로 존재한다면** 체크하세요 → "
+            "AI 가 '없다' 고 판정한 설비입니다. **실제로 존재한다면** 체크하세요 "
             "'반영하기' 클릭 시 탐지됨으로 이동합니다."
         )
         for i, item in enumerate(absent):
@@ -1137,7 +1137,7 @@ if s2 and _show_stage2_confirm:
             st.markdown(
                 f"<div style='padding:8px 14px;background:#FFF6F6;"
                 f"border:1px solid #F8D0D0;border-radius:6px;font-size:13px;'>"
-                f"⚠ <b>아직 반영되지 않은 수정 {pending_changes}건</b> — "
+                f"<b>아직 반영되지 않은 수정 {pending_changes}건</b> — "
                 f"우측 '반영하기' 버튼을 눌러야 점검표에 적용됩니다."
                 f"</div>",
                 unsafe_allow_html=True,
@@ -1149,7 +1149,7 @@ if s2 and _show_stage2_confirm:
                 st.markdown(
                     f"<div style='padding:8px 14px;background:#F0F7F0;"
                     f"border:1px solid #C8E6C9;border-radius:6px;font-size:13px;'>"
-                    f"✓ 사용자 수정 <b>{n_done}건</b> 반영 완료"
+                    f"사용자 수정 <b>{n_done}건</b> 반영 완료"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -1158,7 +1158,7 @@ if s2 and _show_stage2_confirm:
     with apply_col2:
         # 변경 0건이면 disabled 대신 "변경 없이 다음 단계" 라벨로 변경 — 사용자가
         # 라디오를 안 건드리고 클릭했을 때 무반응 대신 명확한 안내가 가도록.
-        _btn_label = "반영하기" if pending_changes else "변경 없음 → 다음 단계"
+        _btn_label = "반영하기" if pending_changes else "변경 없음 다음 단계"
         _btn_help = (
             "왼쪽 '부재' 카드의 항목을 '존재확인'으로 바꾸거나 '모호' 카드에서 "
             "판정을 정한 뒤 누르세요." if pending_changes == 0 else None
@@ -1176,11 +1176,11 @@ if s2 and _show_stage2_confirm:
                     ],
                     "user_corrections": [],
                 }
-                st.toast("AI 결과 그대로 적용", icon="✅")
+                st.toast("AI 결과 그대로 적용", icon=None)
                 st.rerun()
                 # 아래 변경 적용 블록은 실행되지 않음 (rerun 으로 종료)
             # ── 변경 있는 경우: 기존 적용 로직 ──
-            # 적용: detected 에서 제거 표시된 것 빼기, 부재 → 탐지 이동, 모호 분류
+            # 적용: detected 에서 제거 표시된 것 빼기, 부재 탐지 이동, 모호 분류
             new_detected = []
             user_corrections = []
             for i, item in enumerate(detected):
@@ -1195,7 +1195,7 @@ if s2 and _show_stage2_confirm:
                         "category": item.get("category", ""),
                         "name": item.get("name", ""),
                         "status": "존재확인(사용자 수정)",
-                        "note": "사용자가 부재→탐지로 수정",
+                        "note": "사용자가 부재탐지로 수정",
                     })
                     user_corrections.append({"type": "absent_to_detected", "item": item})
                 else:
@@ -1216,7 +1216,7 @@ if s2 and _show_stage2_confirm:
                 "ambiguous_resolutions": resolved,
                 "user_corrections": user_corrections,
             }
-            st.toast(f"반영 완료 — 사용자 수정 {len(user_corrections)}건", icon="✅")
+            st.toast(f"반영 완료 — 사용자 수정 {len(user_corrections)}건", icon=None)
             st.rerun()
 
 # 단계 3 결과
@@ -1256,18 +1256,18 @@ if s3 and _show_checklist_and_score:
         _bullets = []
         if _removed:
             _bullets.append(
-                f"- ❌ **AI 오탐 정정** ({len(_removed)}건): "
-                f"{', '.join(_removed)} → 관련 점검 항목은 무시해도 됩니다"
+                f"- **AI 오탐 정정** ({len(_removed)}건): "
+                f"{', '.join(_removed)} 관련 점검 항목은 무시해도 됩니다"
             )
         if _added:
             _bullets.append(
-                f"- ✓ **AI 누락 정정** ({len(_added)}건): "
-                f"{', '.join(_added)} → 점검표에서 '📷 사진 기반' 배지로 표시됩니다"
+                f"- **AI 누락 정정** ({len(_added)}건): "
+                f"{', '.join(_added)} 점검표에서 '사진 기반' 배지로 표시됩니다"
             )
         if _ambig:
-            _bullets.append(f"- 🔍 **모호 항목 판정** ({len(_ambig)}건)")
+            _bullets.append(f"- **모호 항목 판정** ({len(_ambig)}건)")
         st.success(
-            "**✓ 사용자 정정 사항이 점검표에 반영되었습니다**\n\n"
+            "**사용자 정정 사항이 점검표에 반영되었습니다**\n\n"
             + "\n".join(_bullets)
         )
 
@@ -1279,7 +1279,7 @@ if s3 and _show_checklist_and_score:
 
     if items:
         # 가로 스크롤 없는 컴팩트 테이블 (요약만)
-        with st.expander(f"📋 점검표 미리보기 (전체 {len(items)}개 — 카테고리별 정리)",
+        with st.expander(f"점검표 미리보기 (전체 {len(items)}개 — 카테고리별 정리)",
                           expanded=False):
             summary_rows = []
             for cat, cat_items in by_cat.items():
@@ -1294,7 +1294,7 @@ if s3 and _show_checklist_and_score:
             st.dataframe(pd.DataFrame(summary_rows), width="stretch",
                           hide_index=True)
             st.caption(
-                "💡 **사진 기반** = AI 가 사진에서 실제로 인식한 설비를 점검 / "
+                "**사진 기반** = AI 가 사진에서 실제로 인식한 설비를 점검 / "
                 "**표준 권장** = 해당 공간에 법령상 필요해 AI 가 권장한 점검"
             )
 
@@ -1309,10 +1309,10 @@ if s3 and _show_checklist_and_score:
     if (st.session_state.get("demo_mode")
             and not st.session_state.get("score_result")):
         st.info(
-            "🎬 **시연 진행 안내** — 다음 순서로 진행하세요:\n\n"
-            "1️⃣ 아래 **'전체 \"양호\"로 채우기'** 클릭 (또는 카테고리별 직접 입력)\n"
-            "2️⃣ 페이지 하단의 **'안전 점수 계산 · 추천 생성'** 버튼 클릭\n"
-            "3️⃣ 사이드바 **'결과 저장'** 으로 이동 → 결과 저장 + 다운로드"
+            "**시연 진행 안내** — 다음 순서로 진행하세요:\n\n"
+            "1⃣ 아래 **'전체 \"양호\"로 채우기'** 클릭 (또는 카테고리별 직접 입력)\n"
+            "2⃣ 페이지 하단의 **'안전 점수 계산 · 추천 생성'** 버튼 클릭\n"
+            "3⃣ 사이드바 **'결과 저장'** 으로 이동 결과 저장 + 다운로드"
         )
 
     if st.session_state.get("demo_mode"):
@@ -1333,15 +1333,37 @@ if s3 and _show_checklist_and_score:
 
     scores: dict[str, float] = dict(st.session_state.get("item_scores") or {})
 
-    # 카테고리별 expander — 카테고리당 입력 진행률 표시
+    # 점검표 UI — 카드 + 좌측 색상 띠 + 상태 배지 + 방법·기준·근거 expander
+    # 점검자 시점 개선 사항:
+    #  1. 카테고리 펼치면 progress bar 로 진행률 한눈에
+    #  2. 각 항목이 카드 (테두리) — 항목 간 구분 명확
+    #  3. 좌측 색상 띠 + 우측 상태 배지로 현재 상태 즉시 인식 (양호=초록·불량=주황·부재=빨강)
+    #  4. 항목명 큰 글씨 + 위치 정보 굵게 (점검자가 어디 가야 하는지)
+    #  5. 점검 방법·기준·법령 근거는 [점검 방법 보기] expander 로 접어 시각 위계 강화
+    #  6. 미입력 항목은 점선 회색 배지로 명확히 표시 (누락 방지)
+    _STATUS_COLORS = {
+        1.0: "#2E7D32",   # 양호 - 초록
+        0.5: "#F59E0B",   # 불량 - 주황
+        0.0: "#D50000",   # 부재 - 빨강
+        -1.0: "#9A9A9F",  # 해당 없음 - 회색
+    }
+    _STATUS_LABELS = {1.0: "양호", 0.5: "불량", 0.0: "부재", -1.0: "해당 없음"}
+    _OPTS = [1.0, 0.5, 0.0, -1.0]
+
     for cat, cat_items in by_cat.items():
         cat_filled = sum(1 for itm in cat_items
                          if str(itm.get("no")) in scores)
         cat_total = len(cat_items)
+        cat_progress = cat_filled / cat_total if cat_total else 0.0
+
         with st.expander(
-            f"**{cat}** — {cat_filled}/{cat_total} 입력",
+            f"**{cat}** — {cat_filled} / {cat_total} 입력  ({int(cat_progress*100)}%)",
             expanded=(cat_filled < cat_total),
         ):
+            # 카테고리 진행률 바
+            st.progress(cat_progress)
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+
             for itm in cat_items:
                 no = str(itm.get("no"))
                 title = itm.get("title", "")
@@ -1351,49 +1373,107 @@ if s3 and _show_checklist_and_score:
                 criterion = itm.get("criterion", "")
                 photo_based = _is_photo_based(title, itm.get("category", ""))
 
-                badge = (
-                    "<span style='background:#E8F5E9;color:#2E7D32;padding:1px 6px;"
-                    "border-radius:999px;font-size:10px;font-weight:600;margin-left:6px;'>"
-                    "📷 사진 기반</span>"
-                    if photo_based else
-                    "<span style='background:#FAFAFA;color:#6B6B70;padding:1px 6px;"
-                    "border-radius:999px;font-size:10px;font-weight:500;margin-left:6px;'>"
-                    "표준 권장</span>"
-                )
-                loc_html = (f"<div style='color:#9A9A9F;font-size:11px;margin-top:2px;'>"
-                            f"📍 위치: {location}</div>") if location else ""
-                method_html = (f"<div style='color:#6B6B70;font-size:11px;margin-top:2px;'>"
-                               f"방법: {method}</div>") if method else ""
-                criterion_html = (f"<div style='color:#6B6B70;font-size:11px;margin-top:2px;'>"
-                                  f"기준: {criterion}</div>") if criterion else ""
-                basis_html = (f"<div style='color:#9A9A9F;font-size:11px;margin-top:2px;'>"
-                              f"근거: {basis}</div>") if basis else ""
-
-                st.markdown(
-                    f"<div style='padding:10px 0 2px 0;'>"
-                    f"<b style='color:#D50000'>{itm.get('no')}.</b> {title} {badge}"
-                    f"{loc_html}{method_html}{criterion_html}{basis_html}</div>",
-                    unsafe_allow_html=True,
-                )
+                # 현재 상태 파싱 — 미입력은 None
+                current_raw = scores.get(no)
                 try:
-                    current = float(scores.get(no, 1.0))
+                    current = float(current_raw) if current_raw is not None else None
                 except (TypeError, ValueError):
-                    current = 1.0
-                # -1.0 = "해당 없음" sentinel — 점수 계산에서 제외
-                _OPTS = [1.0, 0.5, 0.0, -1.0]
-                _LABELS = {1.0: "양호", 0.5: "불량", 0.0: "부재",
-                            -1.0: "해당 없음"}
-                idx = _OPTS.index(current) if current in _OPTS else 0
-                val = st.radio(
-                    "충족도",
-                    options=_OPTS,
-                    format_func=lambda x: _LABELS[x],
-                    index=idx, horizontal=True, key=f"score_{no}",
-                    label_visibility="collapsed",
-                    help="**해당 없음**: 이 공간에 실제로 존재하지 않는 설비 "
-                          "(예: 일반교실의 시약장). 점수 계산에서 제외됩니다.",
-                )
-                scores[no] = val
+                    current = None
+
+                # 상태에 따른 색상 + 배지 HTML
+                if current is None:
+                    band_color = "#E5E5E8"
+                    status_html = (
+                        "<span style='background:#FAFAFA;color:#9A9A9F;"
+                        "padding:3px 12px;border-radius:999px;"
+                        "font-size:11px;font-weight:600;"
+                        "border:1px dashed #C8C8C8;'>미입력</span>"
+                    )
+                else:
+                    band_color = _STATUS_COLORS.get(current, "#E5E5E8")
+                    label = _STATUS_LABELS.get(current, "")
+                    status_html = (
+                        f"<span style='background:{band_color};color:white;"
+                        f"padding:3px 12px;border-radius:999px;"
+                        f"font-size:11px;font-weight:700;'>{label}</span>"
+                    )
+
+                # 사진 기반 / 표준 권장 라벨
+                if photo_based:
+                    kind_html = (
+                        "<span style='background:#E8F5E9;color:#2E7D32;"
+                        "padding:2px 7px;border-radius:999px;font-size:10px;"
+                        "font-weight:600;margin-left:6px;'>사진 기반</span>"
+                    )
+                else:
+                    kind_html = (
+                        "<span style='background:#FAFAFA;color:#6B6B70;"
+                        "padding:2px 7px;border-radius:999px;font-size:10px;"
+                        "font-weight:500;margin-left:6px;'>표준 권장</span>"
+                    )
+
+                # 항목 카드 — 테두리 + 좌측 색상 띠
+                with st.container(border=True):
+                    # 상단: 번호 + 제목 (좌측 색상 띠) + 상태 배지 (우측)
+                    col_title, col_status = st.columns([5, 2])
+                    with col_title:
+                        st.markdown(
+                            f"<div style='border-left:4px solid {band_color};"
+                            f"padding:2px 0 2px 12px;'>"
+                            f"<span style='color:#D50000;font-weight:700;"
+                            f"font-size:13px;'>{itm.get('no')}.</span> "
+                            f"<span style='font-size:15.5px;font-weight:600;"
+                            f"color:#0A0A0B;'>{title}</span>"
+                            f"{kind_html}</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with col_status:
+                        st.markdown(
+                            f"<div style='text-align:right;padding-top:4px;'>"
+                            f"{status_html}</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    # 위치 정보 — 점검자가 가야 할 곳 (강조)
+                    if location:
+                        st.markdown(
+                            f"<div style='color:#0A0A0B;font-size:13px;"
+                            f"margin-top:8px;padding-left:16px;"
+                            f"border-left:4px solid transparent;'>"
+                            f"위치: <b>{location}</b></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    # 라디오 (충족도) — 미입력 시 index=None
+                    st.markdown("<div style='height:6px'></div>",
+                                unsafe_allow_html=True)
+                    idx = _OPTS.index(current) if current in _OPTS else None
+                    val = st.radio(
+                        "충족도",
+                        options=_OPTS,
+                        format_func=lambda x: _STATUS_LABELS[x],
+                        index=idx, horizontal=True, key=f"score_{no}",
+                        label_visibility="collapsed",
+                        help="**해당 없음**: 이 공간에 실제로 존재하지 않는 설비 "
+                              "(예: 일반교실의 시약장). 점수 계산에서 제외됩니다.",
+                    )
+                    if val is not None:
+                        scores[no] = val
+
+                    # 점검 방법·기준·법령 근거 — expander (펴서 확인, 시각 위계 강화)
+                    if method or criterion or basis:
+                        with st.expander("점검 방법·기준·근거 보기",
+                                          expanded=False):
+                            if method:
+                                st.markdown(f"- **점검 방법**: {method}")
+                            if criterion:
+                                st.markdown(f"- **합격 기준**: {criterion}")
+                            if basis:
+                                st.markdown(f"- **법령 근거**: {basis}")
+
+                # 카드 간 간격
+                st.markdown("<div style='height:6px'></div>",
+                            unsafe_allow_html=True)
     st.session_state["item_scores"] = scores
 
     # (E) 점수 계산
@@ -1404,7 +1484,7 @@ if s3 and _show_checklist_and_score:
     from modules.laws import STANDARD_ITEMS, find_std_match
 
     def _map_items_to_std(items_list: list[dict]) -> tuple[dict, list[str]]:
-        """AI 점검표 항목 → 표준 항목 매핑 + 매핑 실패 목록 반환."""
+        """AI 점검표 항목 표준 항목 매핑 + 매핑 실패 목록 반환."""
         t2s = {}
         unmapped_items = []
         for itm in items_list:
@@ -1422,13 +1502,13 @@ if s3 and _show_checklist_and_score:
     mapped_ratio = (len(auto_map) / total_items) if total_items else 0
 
     # 매핑이란? — 사용자에게 친절하게 설명
-    with st.expander("ℹ️ 자동 매핑 / 수동 매핑이 무엇인가요?", expanded=False):
+    with st.expander("자동 매핑 / 수동 매핑이 무엇인가요?", expanded=False):
         st.markdown(
             "**자동 매핑** — AI 가 생성한 점검표(예: '흄후드 작동 상태 점검')를 "
             "법령에 정의된 **표준 설비**(예: '흄후드') 목록과 자동으로 연결하는 작업입니다. "
             "이름 매칭으로 진행되어, AI 가 다른 표현을 쓰면(예: '국소배기 시스템') 자동 연결이 안 될 수 있습니다.\n\n"
             "**수동 매핑** — 자동 매핑이 못 찾은 항목을 사용자가 직접 표준 설비와 연결하는 작업입니다. "
-            "예: AI 항목 '실험대 하단 배기' → 표준 설비 '국소배기장치' 로 연결.\n\n"
+            "예: AI 항목 '실험대 하단 배기' 표준 설비 '국소배기장치' 로 연결.\n\n"
             "**왜 매핑이 필요한가?** — 점수 계산은 표준 설비 가중치 기반으로 산정됩니다. "
             "매핑이 안 된 항목은 점수 계산에서 제외(부재 처리)되므로, 수동 매핑을 추가하면 점수 정확도가 올라갑니다."
         )
@@ -1437,7 +1517,7 @@ if s3 and _show_checklist_and_score:
     if total_items and (mapped_ratio < 0.7 or unmapped):
         pct = int(mapped_ratio * 100)
         st.warning(
-            f"⚠ 자동 매핑 결과: **{len(auto_map)}/{total_items}** 항목만 표준 설비에 자동 연결되었습니다 "
+            f"자동 매핑 결과: **{len(auto_map)}/{total_items}** 항목만 표준 설비에 자동 연결되었습니다 "
             f"({pct}%). 미매핑 항목을 수동으로 지정하면 점수·추천 정확도가 향상됩니다."
         )
         with st.expander(f"수동 매핑 · 미매핑 {len(unmapped)}건 지정", expanded=False):
@@ -1482,13 +1562,13 @@ if s3 and _show_checklist_and_score:
 
     if self_good_but_absent:
         st.error(
-            f"⚠ **자기보고 vs AI 탐지 불일치 — {len(self_good_but_absent)}건**\n\n"
+            f"**자기보고 vs AI 탐지 불일치 — {len(self_good_but_absent)}건**\n\n"
             "AI 는 사진에서 **부재** 로 분류했는데 사용자는 **양호** 로 답한 항목입니다. "
             "이 상태로 점수를 계산하면 실제 안전 상태와 다른 결과가 나올 수 있습니다.\n\n"
             "**조치 권장**:\n"
-            "- 해당 설비가 실제로 있다면 → 보완 사진 추가 (사진 기반 재분석)\n"
-            "- 사진엔 안 보이지만 다른 곳에 있다면 → 위 STAGE 2 카드의 '존재확인' 으로 수정 후 '반영하기'\n"
-            "- 실제로 없다면 → 해당 항목을 '미흡'(0.5) 또는 '없음'(0.0) 으로 변경\n\n"
+            "- 해당 설비가 실제로 있다면 보완 사진 추가 (사진 기반 재분석)\n"
+            "- 사진엔 안 보이지만 다른 곳에 있다면 위 STAGE 2 카드의 '존재확인' 으로 수정 후 '반영하기'\n"
+            "- 실제로 없다면 해당 항목을 '미흡'(0.5) 또는 '없음'(0.0) 으로 변경\n\n"
             f"**불일치 항목**: {', '.join(self_good_but_absent[:5])}"
             + (f" 외 {len(self_good_but_absent)-5}건" if len(self_good_but_absent) > 5 else "")
         )
@@ -1511,7 +1591,7 @@ if s3 and _show_checklist_and_score:
                 std_scores[std] = val
         if excluded_count:
             st.info(
-                f"💡 '해당 없음'으로 지정된 {excluded_count}개 항목은 "
+                f"'해당 없음'으로 지정된 {excluded_count}개 항목은 "
                 f"점수 계산에서 제외되었습니다."
             )
 
@@ -1523,7 +1603,7 @@ if s3 and _show_checklist_and_score:
         _unmapped_user = _filled_count - _mapped_count - excluded_count
         if _unmapped_user > 0:
             st.warning(
-                f"⚠ **점수 반영 항목: {_mapped_count}개 / 입력 항목: {_filled_count}개**\n\n"
+                f"**점수 반영 항목: {_mapped_count}개 / 입력 항목: {_filled_count}개**\n\n"
                 f"입력하신 {_filled_count}개 항목 중 **{_mapped_count}개만** 표준 설비와 "
                 f"매핑되어 점수에 반영되고, 나머지 **{_unmapped_user}개는 미매핑**이라 "
                 f"점수 계산에서 제외됩니다.\n\n"
@@ -1572,7 +1652,7 @@ if sr and _show_checklist_and_score:
     # 커버리지가 낮으면 경고 — 점수가 높아도 일부만 점검한 것
     if _cov_ratio < 70 and _cov.get("applicable", 0) > 0:
         st.warning(
-            f"⚠ **점검 커버리지가 낮습니다** ({_cov_ratio:.0f}%). "
+            f"**점검 커버리지가 낮습니다** ({_cov_ratio:.0f}%). "
             f"이 공간에 적용되는 표준 설비 **{_cov.get('applicable', 0)}개** 중 "
             f"**{_cov.get('checked', 0)}개만 점검**되었습니다. "
             f"나머지 **{_cov.get('applicable', 0) - _cov.get('checked', 0)}개**는 "
@@ -1639,5 +1719,5 @@ if sr and _show_checklist_and_score:
             st.session_state["shots"] = _shots_dict()
             st.switch_page("pages/1_점검시작.py")
     with colR:
-        if st.button("결과 저장·발송으로 →", type="primary", width="stretch"):
+        if st.button("결과 저장·발송으로 ", type="primary", width="stretch"):
             st.switch_page("pages/3_결과저장.py")

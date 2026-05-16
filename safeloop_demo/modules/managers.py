@@ -45,7 +45,7 @@ STORAGE_DIR = ROOT / "school_storage"
 
 _PIN_HASH_SALT = "SAFELOOP-MANAGER-PIN-v1"
 _PIN_LENGTH = 6
-_MAX_REISSUE_ATTEMPTS = 10  # 충돌 회피 (실제로는 1회 안에 거의 다 성공)
+_MAX_REISSUE_ATTEMPTS = 10 # 충돌 회피 (실제로는 1회 안에 거의 다 성공)
 
 
 # ─────────────────────────────────────────
@@ -59,7 +59,7 @@ def _managers_path(school_code: str) -> Path:
 
 
 def _hash_pin(pin: str) -> str:
-    """PIN → SHA-256 해시 (16진수 64자)."""
+    """PIN SHA-256 해시 (16진수 64자)."""
     return hashlib.sha256(
         f"{_PIN_HASH_SALT}|{pin}".encode("utf-8")
     ).hexdigest()
@@ -107,7 +107,7 @@ def _save_raw(school_code: str, data: dict) -> None:
 
 
 def _next_manager_id(managers: list[dict]) -> str:
-    """다음 manager_id 자동 생성. M001 → M002 → ..."""
+    """다음 manager_id 자동 생성. M001 M002 ..."""
     max_num = 0
     for m in managers:
         mid = str(m.get("manager_id", ""))
@@ -327,7 +327,7 @@ def ensure_demo_manager(
 
     - 이미 활성 매니저가 있으면 첫 매니저 정보 반환 (assigned_space_ids 만 갱신)
     - 없으면 새로 추가하되 PIN 을 DEMO_PIN("000000") 으로 고정 (시연 편의)
-      → 사용자가 화면에서 PIN 입력 시 헷갈리지 않도록
+      사용자가 화면에서 PIN 입력 시 헷갈리지 않도록
 
     Returns: 공개 사본 dict (pin_hash 미포함)
     """
@@ -361,7 +361,7 @@ def ensure_demo_manager(
         "created_at": now,
         "updated_at": now,
         "last_login_at": None,
-        "_demo": True,  # 시연용 매니저임을 표시 (운영 데이터와 구분)
+        "_demo": True, # 시연용 매니저임을 표시 (운영 데이터와 구분)
     }
     data.setdefault("managers", []).append(new_record)
     _save_raw(school_code, data)

@@ -2,9 +2,9 @@
 수합·검토 페이지 — 학교 담당자 전용.
 
 본교의 실 담당자들이 제출한 점검을 한눈에 보고 처리:
-- ✅ 승인  (교육청 발송 대상으로 확정)
-- ⛔ 반려  (사유 입력 → 실 담당자에게 재점검 요청)
-- ✏️ 직접 수정 (학교 담당자가 점수·항목을 바로 보정)
+- 승인 (교육청 발송 대상으로 확정)
+- 반려 (사유 입력 실 담당자에게 재점검 요청)
+- 직접 수정 (학교 담당자가 점수·항목을 바로 보정)
 
 검토 결과는 master.json 의 status + status_history 에 누적 기록.
 """
@@ -44,29 +44,29 @@ render_sidebar(active_key="review")
 _role = st.session_state.get("role", "학교")
 if _role == "교육청":
     st.warning(
-        "🏛 **교육청 담당자 모드** — 본 페이지는 학교 담당자가 우리 학교의 "
+        "**교육청 담당자 모드** — 본 페이지는 학교 담당자가 우리 학교의 "
         "실 담당자 제출본을 검토하는 화면입니다. 교육청 입장에서는 "
         "**교육청 수신함**을 사용하세요."
     )
-    if st.button("→ 교육청 수신함", type="primary", width="stretch",
+    if st.button("교육청 수신함", type="primary", width="stretch",
                   key="review_to_inbox"):
         st.switch_page("pages/7_교육청수신함.py")
     st.stop()
 
 if _role == "실":
     st.warning(
-        "👤 **실 담당자 모드** — 본 페이지는 학교 담당자(안전관리 책임자)가 "
+        "**실 담당자 모드** — 본 페이지는 학교 담당자(안전관리 책임자)가 "
         "실 담당자 제출본을 검토하는 화면입니다. 실 담당자는 자기 점검을 "
         "[점검 시작] 에서 진행하세요."
     )
-    if st.button("→ 내 점검 시작", type="primary", width="stretch",
+    if st.button("내 점검 시작", type="primary", width="stretch",
                   key="review_to_inspect"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 
 school = require_school()
 if not school:
-    if st.button("← 학교 찾기로", key="review_noschool_back", width="stretch"):
+    if st.button("학교 찾기로", key="review_noschool_back", width="stretch"):
         st.switch_page("pages/1_점검시작.py")
     st.stop()
 
@@ -85,7 +85,7 @@ st.markdown(
     <div class='sl-mobile-hint' style='display:none;padding:8px 12px;
     background:#FFF6F6;border:1px solid #F8D0D0;border-radius:6px;
     font-size:12.5px;color:#0A0A0B;margin-bottom:10px;line-height:1.55;'>
-    📱 <b>모바일에서 보고 계시네요.</b> 이 화면은 표가 많아 PC·태블릿 가로 화면에서
+    <b>모바일에서 보고 계시네요.</b> 이 화면은 표가 많아 PC·태블릿 가로 화면에서
     더 보기 편합니다. 모바일에선 가로 스크롤이나 화면 회전을 활용하세요.
     </div>
     <style>
@@ -116,11 +116,11 @@ if not all_subs:
     empty_state(
         title=f"{school_name} 에 제출된 점검이 없습니다",
         description=(
-            "실 담당자가 [점검 시작] → [AI 점검] → [결과 저장] 까지 진행하면 "
+            "실 담당자가 [점검 시작] [AI 점검] [결과 저장] 까지 진행하면 "
             "이 화면에 검토 대기 항목이 나타납니다.\n\n"
-            "💡 학교 담당자 본인이 직접 점검한 경우는 자동으로 **승인 상태**로 "
+            "학교 담당자 본인이 직접 점검한 경우는 자동으로 **승인 상태**로 "
             "저장됩니다 (별도 검토 절차 없음).\n\n"
-            "**실 담당자가 아직 명부에 없다면** → [설정] 페이지의 "
+            "**실 담당자가 아직 명부에 없다면** [설정] 페이지의 "
             "**실 담당자 명부 관리**에서 먼저 등록하세요."
         ),
         action_label="실 담당자 명부 등록",
@@ -130,10 +130,10 @@ if not all_subs:
 
 # KPI 카드 4개
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("⏳ 검토 대기", submitted_n, help="실 담당자가 제출 후 학교 담당자 검토 대기 중")
-k2.metric("✅ 승인 완료", approved_n, help="검토 통과 — 교육청 발송 후보")
-k3.metric("⛔ 반려", returned_n, help="수정 후 재제출 요청됨")
-k4.metric("📤 통합·발송 완료", consolidated_n, help="교육청 통합 보고서에 포함되어 발송됨")
+k1.metric("검토 대기", submitted_n, help="실 담당자가 제출 후 학교 담당자 검토 대기 중")
+k2.metric("승인 완료", approved_n, help="검토 통과 — 교육청 발송 후보")
+k3.metric("반려", returned_n, help="수정 후 재제출 요청됨")
+k4.metric("통합·발송 완료", consolidated_n, help="교육청 통합 보고서에 포함되어 발송됨")
 
 # ─────────────────────────────────────────
 # 필터
@@ -148,7 +148,7 @@ with filter_col1:
         "상태",
         ["전체", "검토 대기 (submitted)", "승인 (approved)",
          "반려 (returned)", "통합 완료 (consolidated)"],
-        index=1 if submitted_n > 0 else 0,  # 대기 있으면 우선 표시
+        index=1 if submitted_n > 0 else 0, # 대기 있으면 우선 표시
         key="_review_filter_status",
     )
 
@@ -215,7 +215,7 @@ if status_filter == "submitted" and visible:
     _bulk_col1, _bulk_col2 = st.columns([1, 3])
     with _bulk_col1:
         if st.button(
-            f"✅ {len(visible)}건 모두 승인",
+            f"{len(visible)}건 모두 승인",
             key="_bulk_approve",
             type="primary",
             width="stretch",
@@ -233,19 +233,19 @@ if status_filter == "submitted" and visible:
                     note="일괄 승인",
                 ):
                     _ok += 1
-            st.toast(f"{_ok}건 일괄 승인 완료", icon="✅")
+            st.toast(f"{_ok}건 일괄 승인 완료", icon=None)
             st.rerun()
     with _bulk_col2:
-        st.caption("⚠ 일괄 승인은 되돌릴 수 없습니다. 개별 확인 후 사용 권장.")
+        st.caption("일괄 승인은 되돌릴 수 없습니다. 개별 확인 후 사용 권장.")
 
 # ─────────────────────────────────────────
 # 각 항목 카드
 # ─────────────────────────────────────────
 STATUS_BADGE = {
-    "submitted": ("⏳", "#FF9800", "검토 대기"),
-    "approved": ("✅", "#10B981", "승인"),
-    "returned": ("⛔", "#EF4444", "반려"),
-    "consolidated": ("📤", "#1E2761", "통합 완료"),
+    "submitted": ("", "#FF9800", "검토 대기"),
+    "approved": ("", "#10B981", "승인"),
+    "returned": ("", "#EF4444", "반려"),
+    "consolidated": ("", "#1E2761", "통합 완료"),
 }
 
 
@@ -318,7 +318,7 @@ for sub in visible:
         stage3 = ((master.get("ai_pipeline") or {}).get("stage3") or {})
         items_list = stage3.get("items") or []
         if items_list:
-            with st.expander(f"📋 AI 점검표 ({len(items_list)} 항목)", expanded=False):
+            with st.expander(f"AI 점검표 ({len(items_list)} 항목)", expanded=False):
                 table_rows = []
                 item_scores = ((master.get("inspection") or {}).get("item_scores") or {})
                 for it in items_list:
@@ -342,7 +342,7 @@ for sub in visible:
         # 3. 상태 변경 이력
         history = master.get("status_history") or []
         if history:
-            with st.expander(f"📜 상태 변경 이력 ({len(history)}건)", expanded=False):
+            with st.expander(f"상태 변경 이력 ({len(history)}건)", expanded=False):
                 for h in history:
                     st.markdown(
                         f"- **{h.get('status')}** · "
@@ -366,7 +366,7 @@ for sub in visible:
         with action_col1:
             can_approve = status in ("submitted", "returned")
             if st.button(
-                "✅ 승인",
+                "승인",
                 key=f"approve_{sid}",
                 type="primary",
                 width="stretch",
@@ -378,14 +378,14 @@ for sub in visible:
                     school_code, sid, "approved",
                     by=approver_id, by_role="학교", note="검토 후 승인",
                 ):
-                    st.toast(f"{space_disp} 승인 완료", icon="✅")
+                    st.toast(f"{space_disp} 승인 완료", icon=None)
                     st.rerun()
 
         # 4-2. 반려
         with action_col2:
             can_return = status == "submitted"
             if st.button(
-                "⛔ 반려",
+                "반려",
                 key=f"return_{sid}",
                 width="stretch",
                 disabled=not can_return,
@@ -398,7 +398,7 @@ for sub in visible:
         # 4-3. 직접 수정
         with action_col3:
             if st.button(
-                "✏️ 직접 수정",
+                "직접 수정",
                 key=f"edit_{sid}",
                 width="stretch",
                 disabled=status == "consolidated",
@@ -412,7 +412,7 @@ for sub in visible:
         with action_col4:
             can_revert = status in ("approved", "returned")
             if st.button(
-                "↩ 검토 대기로",
+                "검토 대기로",
                 key=f"revert_{sid}",
                 width="stretch",
                 disabled=not can_revert,
@@ -423,7 +423,7 @@ for sub in visible:
                     by=approver_id, by_role="학교",
                     note="검토 결과 되돌림 (재검토 대기)",
                 ):
-                    st.toast(f"{space_disp} 검토 대기로 되돌림", icon="↩")
+                    st.toast(f"{space_disp} 검토 대기로 되돌림", icon=None)
                     st.rerun()
 
         # 반려 사유 입력 폼 (이 항목이 타겟인 경우)
@@ -446,7 +446,7 @@ for sub in visible:
                         note=f"반려 사유: {reason.strip()}",
                     ):
                         st.session_state.pop("_return_target_sid", None)
-                        st.toast(f"{space_disp} 반려 완료", icon="⛔")
+                        st.toast(f"{space_disp} 반려 완료", icon=None)
                         st.rerun()
                 if rb2.button("취소", key=f"_return_cancel_{sid}",
                                width="stretch"):
@@ -473,7 +473,7 @@ for sub in visible:
                 if not _items:
                     st.warning("AI 점검표 항목이 없어 점수 수정이 불가합니다.")
                 else:
-                    for _it in _items[:30]:  # 안전상 30개 제한 (UI 부담)
+                    for _it in _items[:30]: # 안전상 30개 제한 (UI 부담)
                         _no = _it.get("no")
                         _title = _it.get("title", f"항목 {_no}")
                         # 기존 점수 키 후보 (다양한 저장 패턴 호환)
@@ -525,7 +525,7 @@ for sub in visible:
                             st.toast(
                                 f"{space_disp} 수정 완료 — 새 점수 "
                                 f"{_calc.get('score', '-')}",
-                                icon="✅",
+                                icon=None,
                             )
                             st.rerun()
                     except Exception as e:
@@ -557,7 +557,7 @@ _dispatchable = list_consolidatable(school_code)
 
 if not _dispatchable:
     st.info(
-        "📤 교육청에 발송할 **승인 완료된 점검이 없습니다**. "
+        "교육청에 발송할 **승인 완료된 점검이 없습니다**. "
         "위에서 실 담당자 제출본을 승인하거나, 본인이 직접 점검·저장한 항목이 "
         "있어야 통합 보고서에 포함할 수 있습니다."
     )
@@ -592,7 +592,7 @@ else:
                 help="이번 통합 보고서에 포함",
                 default=True,
             ),
-            "session_id": None,  # 숨김 (key 용)
+            "session_id": None, # 숨김 (key 용)
         },
         disabled=["공간", "점수", "등급", "제출자", "역할"],
         key="_dispatch_selector",
@@ -610,7 +610,7 @@ else:
         _bp1, _bp2 = st.columns([1, 1])
         with _bp1:
             if st.button(
-                f"📊 통합 보고서 미리보기 ({len(_selected_sids)}개)",
+                f"통합 보고서 미리보기 ({len(_selected_sids)}개)",
                 key="_dispatch_preview",
                 type="primary",
                 width="stretch",
@@ -627,7 +627,7 @@ else:
                 st.rerun()
         with _bp2:
             if _preview_active and st.button(
-                "✖ 미리보기 닫기",
+                "미리보기 닫기",
                 key="_dispatch_close",
                 width="stretch",
             ):
@@ -647,7 +647,7 @@ else:
             )
 
             with st.container(border=True):
-                st.markdown("### 📋 통합 보고서 미리보기")
+                st.markdown("### 통합 보고서 미리보기")
 
                 # KPI
                 _pk1, _pk2, _pk3 = st.columns(3)
@@ -693,7 +693,7 @@ else:
 
                     with _dl1:
                         st.download_button(
-                            "📄 PDF (결재·인쇄용)",
+                            "PDF (결재·인쇄용)",
                             _pdf_bytes,
                             file_name=f"{_file_base}.pdf",
                             mime="application/pdf",
@@ -702,7 +702,7 @@ else:
                         )
                     with _dl2:
                         st.download_button(
-                            "📊 Excel (KEIIS 입력용)",
+                            "Excel (KEIIS 입력용)",
                             _xlsx_bytes,
                             file_name=f"{_file_base}.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -711,7 +711,7 @@ else:
                         )
                     with _dl3:
                         st.download_button(
-                            "🗂 JSON (시스템 연동)",
+                            "JSON (시스템 연동)",
                             _json_bytes,
                             file_name=f"{_file_base}.json",
                             mime="application/json",
@@ -733,12 +733,12 @@ else:
                 _send_col1, _send_col2 = st.columns([2, 1])
                 with _send_col1:
                     _confirm = st.checkbox(
-                        "✅ 위 산출물을 교육청에 발송했고, 이제 상태를 통합 완료로 처리합니다",
+                        "위 산출물을 교육청에 발송했고, 이제 상태를 통합 완료로 처리합니다",
                         key="_dispatch_confirm",
                     )
                 with _send_col2:
                     if st.button(
-                        "📤 통합 완료 처리",
+                        "통합 완료 처리",
                         key="_dispatch_finalize",
                         type="primary",
                         width="stretch",
@@ -761,6 +761,6 @@ else:
                             st.session_state.pop(_k, None)
                         st.toast(
                             f"{_ok}건 통합 완료 처리 — 교육청 발송 기록 저장됨",
-                            icon="📤",
+                            icon=None,
                         )
                         st.rerun()

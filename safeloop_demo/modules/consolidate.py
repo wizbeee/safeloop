@@ -14,7 +14,7 @@
 1. 학교 담당자가 [수합·검토] 페이지에서 실 담당자 제출들 검토·승인
 2. 같은 페이지 하단 [본교 통합 발송] 섹션에서 승인된 항목들 선택
 3. 통합 PDF + Excel + JSON 미리보기·다운로드
-4. 교육청 발송 (이메일 또는 다이렉트) → 상태 일괄 consolidated 로
+4. 교육청 발송 (이메일 또는 다이렉트) 상태 일괄 consolidated 로
 """
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ def build_consolidated_record(
         approved_at = None
         for h in (master.get("status_history") or []):
             if h.get("status") == "approved":
-                approved_at = h.get("at")  # 최신값으로 덮어씀 — loop 끝에서 가장 최근
+                approved_at = h.get("at") # 최신값으로 덮어씀 — loop 끝에서 가장 최근
 
         items_count = len(
             ((master.get("ai_pipeline") or {}).get("stage3") or {}).get("items")
@@ -216,7 +216,7 @@ def build_consolidated_excel(consolidated: dict) -> bytes:
 
             if rows:
                 df = pd.DataFrame(rows)
-                # Excel 시트명은 31자 + 일부 문자 제한 → 안전화
+                # Excel 시트명은 31자 + 일부 문자 제한 안전화
                 sheet_label = f"{i+1}.{space_type}"
                 if space_nick:
                     sheet_label += f"_{space_nick}"
