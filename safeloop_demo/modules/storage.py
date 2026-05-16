@@ -635,8 +635,15 @@ def save_uploaded_edu_inbox(file_bytes: bytes, file_name: str) -> dict:
 
 
 def list_edu_inbox(sido: str | None = None) -> list[dict]:
-    """교육청 수신함 리스트."""
+    """교육청 수신함 리스트.
+
+    record_type 별 분기:
+    - safeloop_edu_submission: 단일 점검 (학교 X · 화학실 · 78점)
+    - safeloop_consolidated_submission: 학교 단위 통합 (학교 X · 5개 공간 · 평균 82점)
+    """
     items = []
+    if not EDU_RECEIPT_DIR.exists():
+        return items
     roots = [EDU_RECEIPT_DIR / sido] if sido else list(EDU_RECEIPT_DIR.iterdir())
     for root in roots:
         if not root.exists() or not root.is_dir():
@@ -646,19 +653,148 @@ def list_edu_inbox(sido: str | None = None) -> list[dict]:
                 data = json.loads(p.read_text(encoding="utf-8"))
             except Exception:
                 continue
-            items.append({
+            record_type = data.get("record_type") or "safeloop_edu_submission"
+            base = {
                 "file": p.name,
                 "sido": root.name,
                 "path": str(p),
-                "school": (data.get("school_identified") or {}).get("name"),
-                "school_code": (data.get("school_identified") or {}).get("code"),
-                "space_type": (data.get("space") or {}).get("type"),
-                "space_nickname": (data.get("space") or {}).get("nickname"),
-                "score": data.get("safety_score"),
-                "grade": data.get("grade"),
+                "record_type": record_type,
                 "received_at": data.get("submission_timestamp"),
-            })
+            }
+            if record_type == "safeloop_consolidated_submission":
+                # 학교 단위 통합 보고서 — school + spaces 다수
+                school = data.get("school") or {}
+                base.update({
+                    "school": school.get("name") or school.get("학교명"),
+                    "school_code": school.get("code") or school.get("정보공시 학교코드"),
+                    "school_sido": school.get("sido") or school.get("시도교육청"),
+                    "spaces_count": data.get("spaces_count", 0),
+                    "average_score": data.get("average_score"),
+                    "school_admin": data.get("school_admin"),
+                    # 통합본은 단일 공간이 없음 — 표시용 placeholder
+                    "space_type": f"통합 {data.get('spaces_count', 0)}개 공간",
+                    "space_nickname": None,
+                    "score": data.get("average_score"),
+                    "grade": None,
+                })
+            else:
+                # 단일 점검 (기존 호환)
+                school = data.get("school_identified") or data.get("school") or {}
+                base.update({
+                    "school": school.get("name") or school.get("학교명"),
+                    "school_code": school.get("code") or school.get("정보공시 학교코드"),
+                    "school_sido": school.get("sido") or school.get("시도교육청"),
+                    "space_type": (data.get("space") or {}).get("type"),
+                    "space_nickname": (data.get("space") or {}).get("nickname"),
+                    "score": data.get("safety_score"),
+                    "grade": data.get("grade"),
+                })
+            items.append(base)
     return items
+
+
+# ─────────────────────────────────────────
+# 교육청 수신함 시연 데이터 자동 생성 — SAFELOOP_DEMO_MODE 전용
+# ─────────────────────────────────────────
+def ensure_demo_edu_inbox() -> int:
+    """시연 모드에서 교육청 수신함이 비어있으면 데모 데이터 자동 생성.
+
+    학교가 발송한 가상의 데이터 2건 (단일 점검 1건 + 통합 보고서 1건)을
+    수신함에 넣어 교육청 시연 흐름이 빈 화면에서 막히지 않도록 한다.
+
+    Returns: 생성된 항목 수 (이미 있으면 0).
+    """
+    if not os.environ.get("SAFELOOP_DEMO_MODE") == "1":
+        return 0
+    existing = list_edu_inbox()
+    if existing:
+        return 0  # 이미 있으면 건들지 않음
+
+    demo_sido = "충청남도교육청"
+    target_dir = EDU_RECEIPT_DIR / demo_sido
+    target_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.datetime.now()
+    created = 0
+
+    # 1. 단일 점검 데모 — 화학실 1건
+    single = {
+        "schema_version": "1.1",
+        "record_type": "safeloop_edu_submission",
+        "submission_timestamp": (now - datetime.timedelta(days=2)).isoformat(),
+        "basis_law": "교육시설법 제10조 제3항 — 안전·유지관리기준 자체 점검",
+        "school_identified": {
+            "code": "DEMO-S001",
+            "name": "시연중학교 (데모)",
+            "sido": demo_sido,
+            "region": "천안시",
+            "level": "중",
+            "establishment": "공립",
+        },
+        "space": {"id": "demo_chem_a", "type": "화학실", "nickname": "3층 A"},
+        "safety_score": 78.5,
+        "grade": "B",
+        "category_scores": {
+            "비상 대응": {"score": 85, "weight_sum": 52},
+            "환기·배기": {"score": 70, "weight_sum": 27},
+            "보관·격리": {"score": 80, "weight_sum": 29},
+            "감지·경보": {"score": 90, "weight_sum": 37},
+            "개인보호구": {"score": 65, "weight_sum": 33},
+            "안내·표지": {"score": 75, "weight_sum": 21},
+        },
+        "detected_equipment": [], "absent_equipment": [],
+        "checklist_items": [], "recommendations": [],
+    }
+    ts1 = (now - datetime.timedelta(days=2)).strftime("%Y%m%d-%H%M%S")
+    (target_dir / f"{ts1}_DEMO-S001_시연_화학실.json").write_text(
+        json.dumps(single, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    created += 1
+
+    # 2. 학교 단위 통합 보고서 데모 — 5개 공간
+    consolidated = {
+        "schema_version": "1.0",
+        "record_type": "safeloop_consolidated_submission",
+        "basis_law": (
+            "교육시설법 제10조 제3항 — 안전·유지관리기준 자체 점검 "
+            "(학교 단위 통합 보고)"
+        ),
+        "submission_timestamp": (now - datetime.timedelta(days=1)).isoformat(),
+        "school": {
+            "code": "DEMO-S002",
+            "name": "시연고등학교 (데모)",
+            "sido": demo_sido,
+            "region": "아산시",
+            "level": "고",
+            "establishment": "공립",
+        },
+        "school_admin": "안전관리 책임자",
+        "spaces_count": 5,
+        "average_score": 82.4,
+        "spaces": [
+            {"space_type": "화학실", "space_nickname": "3층 A",
+             "score": 85.0, "grade": "B", "submitter_name": "화학실 담당교사",
+             "submitter_role": "실"},
+            {"space_type": "물리실", "space_nickname": "3층 B",
+             "score": 88.5, "grade": "B", "submitter_name": "물리실 담당교사",
+             "submitter_role": "실"},
+            {"space_type": "음악실", "space_nickname": "2층",
+             "score": 78.0, "grade": "C", "submitter_name": "음악실 담당교사",
+             "submitter_role": "실"},
+            {"space_type": "미술실", "space_nickname": "2층",
+             "score": 80.5, "grade": "B", "submitter_name": "미술실 담당교사",
+             "submitter_role": "실"},
+            {"space_type": "디자인실", "space_nickname": "4층",
+             "score": 80.0, "grade": "B", "submitter_name": "디자인실 담당교사",
+             "submitter_role": "실"},
+        ],
+    }
+    ts2 = (now - datetime.timedelta(days=1)).strftime("%Y%m%d-%H%M%S")
+    (target_dir / f"{ts2}_DEMO-S002_시연_통합보고서.json").write_text(
+        json.dumps(consolidated, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    created += 1
+
+    return created
 
 
 def delete_edu_inbox_item(sido: str, file_name: str) -> bool:

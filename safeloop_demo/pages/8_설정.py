@@ -271,6 +271,37 @@ else:
             "메모해서 본인에게 전달하세요. 분실 시 [PIN 재발급] 으로 "
             "새로 발급 가능하지만 이전 PIN 은 즉시 무효화됩니다."
         )
+        # PIN 백업 다운로드 — 화면 잠시 떠나도 분실 방지
+        import datetime as _dt_pin
+        _pin_txt = (
+            f"SafeLoop 실 담당자 인증 정보\n"
+            f"=================================\n"
+            f"학교: {school.get('학교명', '-')}\n"
+            f"학교 코드: {school.get('정보공시 학교코드', '-')}\n"
+            f"---------------------------------\n"
+            f"이름: {_newly_issued['name']}\n"
+            f"매니저 ID: {_newly_issued['manager_id']}\n"
+            f"PIN (6자리): {_newly_issued['pin']}\n"
+            f"---------------------------------\n"
+            f"발급일시: {_dt_pin.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"이 정보를 본인에게 안전하게 전달하세요.\n"
+            f"PIN 분실 시 학교 담당자가 [PIN 재발급] 으로 새 PIN 을 만들 수 있으나,\n"
+            f"이전 PIN 은 즉시 무효화됩니다.\n"
+        )
+        _pin_fn = (
+            f"SafeLoop_PIN_{_newly_issued['manager_id']}_"
+            f"{_newly_issued['name']}_"
+            f"{_dt_pin.datetime.now().strftime('%Y%m%d-%H%M')}.txt"
+        )
+        st.download_button(
+            "PIN 정보 다운로드 (TXT 백업)",
+            data=_pin_txt.encode("utf-8"),
+            file_name=_pin_fn,
+            mime="text/plain",
+            key=f"dl_pin_{_newly_issued['manager_id']}",
+            width="stretch",
+            help="화면을 떠나기 전 다운로드 본인에게 전달 (메모 + 보안 폐기).",
+        )
 
     # ── 현재 명부 ──
     _all_managers = list_managers(_mgr_school_code, include_inactive=True)
