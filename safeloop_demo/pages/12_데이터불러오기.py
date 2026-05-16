@@ -26,6 +26,30 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="load")
 
+# 역할 가드 — '데이터 불러오기' 는 학교 담당자가 본교 점검 결과(.safeloop)
+# 를 PC 로 옮겨와 미리보기·다운로드하는 화면. 교육청·실 담당자는 권한 밖.
+if st.session_state.get("role") == "교육청":
+    st.warning(
+        "**교육청 담당자 모드** — '데이터 불러오기' 는 학교 담당자가 본교 "
+        "점검 데이터를 PC 로 동기화하는 화면입니다. 학교가 발송한 데이터는 "
+        "'교육청 수신함'에서 자동으로 받습니다."
+    )
+    if st.button("교육청 수신함으로 이동", key="load_guard_inbox",
+                  type="primary", width="stretch"):
+        st.switch_page("pages/7_교육청수신함.py")
+    st.stop()
+
+if st.session_state.get("role") == "실":
+    st.warning(
+        "**실 담당자 모드** — '데이터 불러오기' 는 학교 담당자가 본교 "
+        "데이터를 PC 로 옮겨오는 화면입니다. 실 담당자는 본인 점검 흐름을 "
+        "사용하세요."
+    )
+    if st.button("내 점검 시작", key="load_guard_space",
+                  type="primary", width="stretch"):
+        st.switch_page("pages/1_점검시작.py")
+    st.stop()
+
 hero("LOAD", "데이터 불러오기",
      "모바일 PC 동기화 + 받은 파일 상세 보기 + 결재용 PDF 즉시 다운로드.")
 

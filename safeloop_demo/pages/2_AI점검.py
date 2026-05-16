@@ -1573,7 +1573,32 @@ if s3 and _show_checklist_and_score:
             + (f" 외 {len(self_good_but_absent)-5}건" if len(self_good_but_absent) > 5 else "")
         )
 
-    if st.button("안전 점수 계산 · 추천 생성", type="primary", width="stretch"):
+    # 미입력 항목 경고 — 점수 계산 전 누락 방지 안내
+    # 새 점검표 UI(index=None 기본)로 인해 미입력 시 scores 에 키 자체가 없음.
+    # 점수 계산에선 미입력 = 0.0(부재) 로 처리되므로 사용자가 의도 없이
+    # 점수가 낮게 나오는 혼란 방지용 안내. 강제 차단 X — 진행은 가능.
+    _missing_items = [itm for itm in items if str(itm.get("no")) not in scores]
+    _missing_count = len(_missing_items)
+    if _missing_count > 0:
+        _sample_titles = [itm.get("title", "") for itm in _missing_items[:3]]
+        _sample_txt = ", ".join(_sample_titles)
+        if _missing_count > 3:
+            _sample_txt += f" 외 {_missing_count - 3}개"
+        st.warning(
+            f"**미입력 {_missing_count}개 항목** — 점수 계산 시 **부재(0점)** 로 "
+            f"처리됩니다.\n\n"
+            f"위 카테고리를 펼쳐 미입력 항목(점선 회색 배지)을 확인하거나, "
+            f"실제로 해당 설비가 없으면 **'해당 없음'** 으로 명시하면 점수에서 "
+            f"제외됩니다. 의도된 부재라면 그대로 진행해도 됩니다.\n\n"
+            f"미입력 예시: {_sample_txt}"
+        )
+        _btn_label = (
+            f"안전 점수 계산 · 추천 생성  (미입력 {_missing_count}개 부재 처리)"
+        )
+    else:
+        _btn_label = "안전 점수 계산 · 추천 생성"
+
+    if st.button(_btn_label, type="primary", width="stretch"):
         title_to_std = dict(auto_map)
         # 수동 매핑 오버라이드 (사용자 지정이 자동 매핑을 덮어씀)
         for k, v in (st.session_state.get("_manual_std_map") or {}).items():

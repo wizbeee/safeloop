@@ -36,6 +36,16 @@ if st.session_state.get("role") == "교육청":
         st.switch_page("pages/7_교육청수신함.py")
     st.stop()
 
+if st.session_state.get("role") == "실":
+    st.warning(
+        "**실 담당자 모드** — '점검 이력' 은 학교 단위 시계열 통계로 "
+        "학교 담당자 전용입니다. 실 담당자는 본인 점검 흐름을 사용하세요."
+    )
+    if st.button("내 점검 시작", key="history_guard_space",
+                  type="primary", width="stretch"):
+        st.switch_page("pages/1_점검시작.py")
+    st.stop()
+
 hero("HISTORY", "점검 이력",
      "로컬 저장소에 누적된 모든 점검 결과를 시계열·공간별로 추적합니다.")
 

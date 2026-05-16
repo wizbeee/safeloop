@@ -34,6 +34,19 @@ apply_theme()
 ensure_state()
 render_sidebar(active_key="inspect")
 
+# 역할 가드 — '점검 시작' 은 학교·실 담당자가 본교 점검을 시작하는 페이지.
+# 교육청 담당자는 본인이 직접 점검하지 않으므로 수신함으로 유도.
+if st.session_state.get("role") == "교육청":
+    st.warning(
+        "**교육청 담당자 모드** — '점검 시작' 은 학교·실 담당자가 본교 점검을 "
+        "수행하는 화면입니다. 교육청 관점에서는 학교가 제출한 점검 결과를 "
+        "'교육청 수신함' 에서 확인·검증하세요."
+    )
+    if st.button("교육청 수신함으로 이동", key="inspect_guard_inbox",
+                  type="primary", width="stretch"):
+        st.switch_page("pages/7_교육청수신함.py")
+    st.stop()
+
 hero("단계 1 — 점검 시작", "점검 시작", "학교를 찾아 인증한 뒤, 점검할 공간을 선택하세요.")
 
 # 미저장 점검 작업 알림 — 다른 페이지에서 점검 진행 중에 여기 들어왔다면 사용자 의식 환기
