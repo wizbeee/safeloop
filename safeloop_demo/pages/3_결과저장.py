@@ -456,7 +456,7 @@ if st.session_state.get("edu_package_ready"):
                 "다운로드", report_bytes,
                 file_name=f"점검결과보고서_{sid}.pdf",
                 mime="application/pdf",
-                key="dl_report_only", width="stretch",
+                key="dl_report_only_no_letter", width="stretch",
             )
             st.caption(
                 "공문(품의서) PDF 를 함께 받으려면 위 [결재 정보 기록 (선택)] "

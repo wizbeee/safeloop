@@ -1315,10 +1315,16 @@ if s3 and _show_checklist_and_score:
             "3⃣ 사이드바 **'결과 저장'** 으로 이동 결과 저장 + 다운로드"
         )
 
+    # 라디오 위젯 카운터 — 시연 모드 일괄 채우기 버튼이 작동하려면 라디오 key 도
+    # 카운터로 동적 변경해야 함 (Streamlit 은 같은 key 위젯의 사용자 선택값을 보존).
+    # 카운터 +1 시 모든 점검표 라디오가 새 위젯으로 재생성되어 index= 가 적용됨.
+    _radio_counter = st.session_state.get("_radio_counter", 0)
+
     if st.session_state.get("demo_mode"):
         col_a, col_b, col_c = st.columns(3)
         if col_a.button("전체 '양호'로 채우기", width="stretch"):
             st.session_state["item_scores"] = {str(itm.get("no")): 1.0 for itm in items}
+            st.session_state["_radio_counter"] = _radio_counter + 1
             st.rerun()
         if col_b.button("무작위 샘플 채우기", width="stretch"):
             import random
@@ -1326,9 +1332,11 @@ if s3 and _show_checklist_and_score:
             st.session_state["item_scores"] = {
                 str(itm.get("no")): random.choice([1.0, 1.0, 0.5, 0.0]) for itm in items
             }
+            st.session_state["_radio_counter"] = _radio_counter + 1
             st.rerun()
         if col_c.button("입력 초기화", width="stretch"):
             st.session_state["item_scores"] = {}
+            st.session_state["_radio_counter"] = _radio_counter + 1
             st.rerun()
 
     scores: dict[str, float] = dict(st.session_state.get("item_scores") or {})
@@ -1452,7 +1460,8 @@ if s3 and _show_checklist_and_score:
                         "충족도",
                         options=_OPTS,
                         format_func=lambda x: _STATUS_LABELS[x],
-                        index=idx, horizontal=True, key=f"score_{no}",
+                        index=idx, horizontal=True,
+                        key=f"score_{no}_v{_radio_counter}",
                         label_visibility="collapsed",
                         help="**해당 없음**: 이 공간에 실제로 존재하지 않는 설비 "
                               "(예: 일반교실의 시약장). 점수 계산에서 제외됩니다.",
