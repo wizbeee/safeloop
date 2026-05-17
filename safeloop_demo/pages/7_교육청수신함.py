@@ -34,7 +34,10 @@ from modules.storage import (
     save_uploaded_edu_inbox,
     toggle_edu_inbox_star,
 )
-from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
+from modules.ui import (
+    apply_theme, divider, empty_state, hero, mobile_pc_hint,
+    render_sidebar, section,
+)
 
 st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="auto")
@@ -54,10 +57,29 @@ if not is_authenticated_session("edu"):
         st.switch_page("app.py")
     st.stop()
 
-st.session_state["role"] = "교육청"
+# 역할 일관성 가드 (P0 — role hijack 방지).
+# 학교/실 담당자 모드로 작업 중인 사용자가 URL 직접 진입 시 자동으로 role 을
+# "교육청"으로 바꾸지 않는다. 명시적으로 [설정]에서 역할 변경하거나, 진행 중인
+# 학교 컨텍스트를 정리한 뒤 진입하도록 안내.
+_current_role = st.session_state.get("role", "학교")
+if _current_role != "교육청":
+    st.warning(
+        f"현재 **{_current_role} 담당자 모드**입니다. 교육청 수신함은 "
+        "교육청 담당자 화면입니다. 역할을 변경하시려면 [설정] 페이지에서 "
+        "명시적으로 전환해 주세요."
+    )
+    _g1, _g2 = st.columns(2)
+    if _g1.button("설정으로 이동 (역할 변경)", type="primary",
+                    width="stretch", key="edu_inbox_role_settings"):
+        st.switch_page("pages/8_설정.py")
+    if _g2.button("홈으로", width="stretch", key="edu_inbox_role_home"):
+        st.switch_page("app.py")
+    st.stop()
 
 hero("EDU OFFICE", "교육청 담당자 수신함",
      "메일·카톡·드라이브로 받은 .safeloop / .json 파일을 여기 업로드 자동 복호화·집계")
+
+mobile_pc_hint("수신 목록·필터·상세 카드가 함께 표시되어 PC·태블릿 가로 화면을 권장합니다")
 
 # ─────────────────────────────────────────
 # 업로드 흐름 안내 — 사용자가 헷갈리지 않도록 명시
@@ -161,7 +183,7 @@ st.markdown(
 )
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("총 수신", f"{len(inbox)}건")
-k2.metric("미검토 ", f"{unread_count}건",
+k2.metric("미검토", f"{unread_count}건",
           delta=("새 건 있음" if unread_count else "모두 검토"),
           delta_color=("inverse" if unread_count else "normal"))
 k3.metric("별표", f"{starred_count}건")
@@ -277,15 +299,17 @@ if sort_by.startswith("미검토·별표 우선"):
                    .replace("T", "").replace(".", "").replace(" ", "")[:14] or 0)),
         )
     )
-elif sort_by.startswith("수신일시 "):
-    filtered.sort(key=lambda x: x.get("received_at") or "", reverse=True)
-elif sort_by.startswith("수신일시 "):
+# P1-#15: 정렬 옵션 startswith 가 prefix 같아 "오래된순"/"낮은순" 도달 못 함.
+# "최근순"/"오래된순", "높은순"/"낮은순" 구별을 위해 in 매칭으로 변경.
+elif "수신일시" in sort_by and "오래된순" in sort_by:
     filtered.sort(key=lambda x: x.get("received_at") or "")
-elif sort_by.startswith("점수 "):
-    filtered.sort(key=lambda x: x.get("score") or 0, reverse=True)
-elif sort_by.startswith("점수 "):
+elif "수신일시" in sort_by:
+    filtered.sort(key=lambda x: x.get("received_at") or "", reverse=True)
+elif "점수" in sort_by and "낮은순" in sort_by:
     filtered.sort(key=lambda x: x.get("score") if x.get("score") is not None else 999)
-elif sort_by.startswith("학교명"):
+elif "점수" in sort_by:
+    filtered.sort(key=lambda x: x.get("score") or 0, reverse=True)
+elif "학교명" in sort_by:
     filtered.sort(key=lambda x: x.get("school") or "")
 
 st.caption(f"필터 결과: **{len(filtered)}건**")
@@ -369,7 +393,10 @@ def _type_label(x: dict) -> str:
 df = pd.DataFrame([
     {
         "선택": False,
-        "": "" if x.get("starred") else "",
+        # P0 (B2): 컬럼명·셀 값 모두 빈 문자열이라 별표 부착·미부착 시각
+        # 구분 불가했음. ★ 텍스트 기호로 부착 표시. 컬럼명은 헤더 라벨 "별표"
+        # 와 매칭하도록 의미 있는 키로 변경.
+        "별표": "★" if x.get("starred") else "",
         "상태": "미검토" if x.get("unread") else "검토",
         "유형": _type_label(x),
         "그룹": _time_bucket(x.get("received_at", "")),
@@ -391,7 +418,7 @@ edited = st.data_editor(
     hide_index=True,
     column_config={
         "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
-        "": st.column_config.TextColumn(
+        "별표": st.column_config.TextColumn(
             "별표", width="small",
             help="후속 조치 필요로 마킹한 건. 일괄 별표 토글로 부착·해제",
         ),
@@ -413,7 +440,7 @@ edited = st.data_editor(
     },
     key="edu_inbox_table",
     height=520,
-    disabled=["", "상태", "유형", "그룹", "수신일시", "시도",
+    disabled=["별표", "상태", "유형", "그룹", "수신일시", "시도",
               "학교명", "공간", "점수", "등급"],
 )
 
@@ -515,7 +542,9 @@ else:
     col_a, col_b = st.columns([3, 1])
     starred_now = is_edu_inbox_starred(sido_name, fname)
     with col_a:
-        star_icon=None if starred_now else ""
+        # P0 (B3): None 이면 f-string 에 "None 학교명" 으로 렌더링됨.
+        # 별표는 ★, 미부착은 빈 문자열로.
+        star_icon = "★ " if starred_now else ""
         st.markdown(
             f"<div style='padding:14px 18px;border:1px solid #E5E5E8;"
             f"border-left:4px solid #D50000;border-radius:6px;background:#FFF;'>"

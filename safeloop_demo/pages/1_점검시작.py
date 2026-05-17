@@ -135,8 +135,12 @@ if current:
         unsafe_allow_html=True,
     )
     if st.button("다른 학교 선택", key="change_school"):
+        # B6: 학교만 비우면 active_space.school_code 가 옛 학교를 가리켜
+        # 다음 페이지에서 잘못된 공간이 active 로 남는다. 공간·매니저도 정리.
         st.session_state["school"] = None
         st.session_state["school_auth_verified"] = False
+        st.session_state["active_space"] = None
+        st.session_state["space_manager"] = None
         st.rerun()
 
 if not current:
@@ -205,7 +209,7 @@ if not current:
                             unsafe_allow_html=True,
                         )
                     with nav_next:
-                        if st.button("다음 ", key=f"pg_next_{q}",
+                        if st.button("다음", key=f"pg_next_{q}",
                                       disabled=(cur_page >= total_pages),
                                       width="stretch"):
                             st.session_state[page_key] = cur_page + 1
@@ -414,11 +418,15 @@ if (_role == "실" and st.session_state.get("school")
     # 학교에 이미 등록된 공간이 있으면 모두 데모 매니저에게 자동 할당.
     # 학교에 공간이 0개라면 (사용자가 [실 담당자]로 처음 진입) 데모 공간
     # 1개를 자동 등록해 흐름이 막히지 않도록 한다.
+    #
+    # P1-#13: 자동 등록 후 사용자에게 1회 정보성 안내 (실 학교 사용 시
+    # "내가 만들지 않은 공간이 왜 등록됐지?" 혼란 방지).
     if st.session_state.get("demo_mode"):
         try:
             registered = st.session_state.setdefault("registered_spaces", [])
             here = [s for s in registered if s.get("school_code") == school_code]
-            # 학교에 공간 0개 데모 화학실 1개 자동 등록 (시연 흐름 보장)
+            _newly_added_demo = False
+            # 학교에 공간 0개 → 데모 화학실 1개 자동 등록 (시연 흐름 보장)
             if not here:
                 _demo_space = {
                     "space_id": uuid.uuid4().hex[:10],
@@ -429,12 +437,23 @@ if (_role == "실" and st.session_state.get("school")
                 }
                 registered.append(_demo_space)
                 here = [_demo_space]
+                _newly_added_demo = True
             demo_space_ids = [s.get("space_id") for s in here if s.get("space_id")]
             ensure_demo_manager(
                 school_code,
                 name="시연 담당교사",
                 assigned_space_ids=demo_space_ids,
             )
+            # 1회 안내 — 이 학교에서 첫 데모 등록일 때만.
+            _notice_key = f"_demo_notice_shown_{school_code}"
+            if _newly_added_demo and not st.session_state.get(_notice_key):
+                st.info(
+                    "**시연 모드 안내** — 화학실 시연용 공간 1개 + 시연 담당교사 "
+                    "1명을 자동 등록했습니다. [설정] 페이지에서 시연 종료 시 "
+                    "함께 삭제 가능합니다. 실 사용 시 본인 공간·매니저를 "
+                    "별도 등록해 주세요."
+                )
+                st.session_state[_notice_key] = True
         except Exception:
             pass
 
@@ -732,6 +751,33 @@ if _is_auth_role():
     if _is_space_role:
         section("03", "내 담당 공간 선택",
                 f"{_space_mgr.get('name', '실 담당자')} 님이 담당하는 공간만 표시됩니다.")
+        # P1-#9: 실 담당자에게 본인 반려 점검 알림.
+        # 학교 담당자가 반려해도 실 담당자는 알 방법이 없어 재점검 누락되던 문제.
+        try:
+            from modules.storage import list_school_submissions
+            _my_mid = _space_mgr.get("manager_id")
+            _school_code = st.session_state["school"].get("정보공시 학교코드")
+            _returned = [
+                s for s in list_school_submissions(
+                    _school_code, status_filter="returned",
+                )
+                if s.get("submitter_manager_id") == _my_mid
+            ]
+            if _returned:
+                _r_n = len(_returned)
+                _space_list = ", ".join(
+                    (r.get("space_type") or "공간") for r in _returned[:3]
+                )
+                if _r_n > 3:
+                    _space_list += f" 외 {_r_n - 3}건"
+                st.warning(
+                    f"**반려된 점검 {_r_n}건** — 학교 담당자가 수정 요청한 "
+                    f"점검이 있습니다 ({_space_list}). 해당 공간을 다시 "
+                    f"선택해 재점검 후 제출해 주세요. 반려 사유는 결과 "
+                    f"저장 페이지의 상태 변경 이력에서 확인 가능합니다."
+                )
+        except Exception:
+            pass
     else:
         section("03", "점검할 공간 선택")
 

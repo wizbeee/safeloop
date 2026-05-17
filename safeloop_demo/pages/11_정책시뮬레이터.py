@@ -42,7 +42,21 @@ if not is_authenticated_session("edu"):
         st.switch_page("app.py")
     st.stop()
 
-st.session_state["role"] = "교육청"
+# 역할 일관성 가드 (P0 — role hijack 방지). 7_교육청수신함과 동일 정책.
+_current_role = st.session_state.get("role", "학교")
+if _current_role != "교육청":
+    st.warning(
+        f"현재 **{_current_role} 담당자 모드**입니다. 정책 시뮬레이터는 "
+        "교육청 담당자 화면입니다. 역할을 변경하시려면 [설정] 페이지에서 "
+        "명시적으로 전환해 주세요."
+    )
+    _g1, _g2 = st.columns(2)
+    if _g1.button("설정으로 이동 (역할 변경)", type="primary",
+                    width="stretch", key="policy_role_settings"):
+        st.switch_page("pages/8_설정.py")
+    if _g2.button("홈으로", width="stretch", key="policy_role_home"):
+        st.switch_page("app.py")
+    st.stop()
 
 hero("STAGE 04 EXTENSION", "정책 시뮬레이터",
      "위험군에 예산을 투입했을 때 안전도 변화 추정 · 실무 단가 기준 로그 감쇠 모델")

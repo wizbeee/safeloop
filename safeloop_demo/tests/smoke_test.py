@@ -589,9 +589,10 @@ try:
                   if len(xlsx_bytes) > 500 else
                   (_ for _ in ()).throw(AssertionError(f"XLSX 크기 부적합: {len(xlsx_bytes)}")))
 
-    # 15-5. mark_consolidated 일괄 처리
-    n_marked = _consol.mark_consolidated(_TS, _sids, by="테스트교장",
-                                          note="스모크 통합 발송")
+    # 15-5. mark_consolidated 일괄 처리 (반환 형식 dict — count + submit + errors)
+    _mark_result = _consol.mark_consolidated(_TS, _sids, by="테스트교장",
+                                              note="스모크 통합 발송")
+    n_marked = _mark_result.get("count") if isinstance(_mark_result, dict) else _mark_result
     check("consolidate/mark",
           lambda: f"{n_marked}건 통합 완료 처리"
                   if n_marked == 2 else

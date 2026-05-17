@@ -68,8 +68,11 @@ def _pin_codes() -> dict[str, str]:
     return {"edu": _resolve_edu_pin()}
 
 
-# 호환성 — 이전 코드가 import 하는 PIN_CODES (지연 초기화는 함수 사용 권장)
-PIN_CODES: dict[str, str] = {"edu": _DEMO_EDU_PIN}
+# 보안 — PIN_CODES 정적 상수는 환경변수 SAFELOOP_EDU_PIN 반영 안 됨.
+# 운영 PIN 설정 시 자동 로그인 토큰 검증이 demo PIN 으로 떨어져 운영 인증
+# 우회 가능했다 (P0). 모든 토큰 산출·검증은 _pin_codes() 동적 함수 사용.
+# 이 상수는 ROLE 키 목록 용도로만 유지. 값은 절대 직접 사용 금지.
+_ROLE_KEYS: tuple[str, ...] = ("edu",)
 
 ROLE_LABEL: dict[str, str] = {
     "edu": "교육청 담당자",
@@ -143,7 +146,7 @@ def is_authenticated(role_key: str) -> bool:
         token = None
     if not token:
         return False
-    expected_token = _hash_pin(role_key, PIN_CODES[role_key])
+    expected_token = _hash_pin(role_key, _pin_codes()[role_key])
     if token == expected_token:
         st.session_state[f"_auth_{role_key}"] = True
         return True
@@ -161,7 +164,7 @@ def set_authenticated(role_key: str, remember: bool = False) -> None:
             try:
                 cm.set(
                     COOKIE_NAME,
-                    _hash_pin(role_key, PIN_CODES[role_key]),
+                    _hash_pin(role_key, _pin_codes()[role_key]),
                     expires_at=datetime.now() + timedelta(days=AUTOLOGIN_DAYS),
                     key=f"set_cookie_{role_key}",
                 )
@@ -171,7 +174,7 @@ def set_authenticated(role_key: str, remember: bool = False) -> None:
 
 def clear_authentication(role_key: str | None = None) -> None:
     """로그아웃. role_key=None 이면 모든 역할 인증 해제."""
-    keys = [role_key] if role_key else list(PIN_CODES.keys())
+    keys = [role_key] if role_key else list(_ROLE_KEYS)
     for k in keys:
         st.session_state[f"_auth_{k}"] = False
     cm = get_cookie_manager()
@@ -379,9 +382,12 @@ def render_pin_gate(
     st.caption(
         "상급기관(교육부/도교육청 또는 교육청)으로부터 발급받은 인증번호를 입력하세요."
     )
-    if st.session_state.get("demo_mode", True):
+    # 시연 안내는 demo_mode 일 때만 + 운영 PIN(환경변수) 사용 중에는 숨김.
+    # 운영 PIN 이 떠 있는 환경에서 demo PIN 을 표시하면 혼란·우회 시도 위험.
+    if (st.session_state.get("demo_mode", False)
+            and not os.environ.get("SAFELOOP_EDU_PIN", "").strip()):
         st.info(
-            f"**시연용 인증번호**: `{PIN_CODES[role_key]}` \n"
+            f"**시연용 인증번호**: `{_pin_codes()[role_key]}` \n"
             f"실 출시 시 GPKI(행정전자서명) 또는 KEIIS SSO 로 대체됩니다."
         )
 

@@ -23,13 +23,20 @@ def recommend_from_scores(item_scores: dict[str, float],
     """항목별 점수를 받아 불량·부재 항목에 대한 추천 리스트 반환.
 
     space_type 이 주어지면 해당 공간에 적용되는 항목만 추천 대상.
+
+    정책 (P1-#11): calculate_safety_score 와 일관. **점검 안 한(키 없는) 항목은
+    추천하지 않는다.** 이전 코드는 미점검 = 부재(0.0) 처리해 "S=100점인데
+    추천 19건" 같은 모순이 발생. 명시적으로 부재(0.0)·불량(0.5)로 입력된
+    항목만 추천.
     """
     applicable = set(items_for_space(space_type, floor)) if space_type else set(LAW_BASIS.keys())
     recs: list[dict] = []
     for name, info in LAW_BASIS.items():
         if name not in applicable:
             continue
-        s = float(item_scores.get(name, 0.0))
+        if name not in item_scores:
+            continue  # 미점검 항목은 score 와 동일하게 분모에서 제외
+        s = float(item_scores[name])
         if s >= 1.0:
             continue # 양호는 추천 불필요
         stars, action = _priority_label(info["weight"])

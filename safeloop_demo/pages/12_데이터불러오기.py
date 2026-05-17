@@ -262,7 +262,12 @@ if st.button("이 데이터로 세션 복원 + 이동",
             "학교급": school_info.get("level", ""),
             "설립구분": school_info.get("establishment", ""),
         }
-        st.session_state["school_auth_verified"] = True
+        # 보안 — 업로드만으로는 학교 인증을 부여하지 않는다 (P0).
+        # 이전 코드는 `school_auth_verified=True` 를 무조건 set 해서
+        # 누구든 임의 학교 .safeloop/JSON 을 올리면 그 학교 명의로 발송·저장
+        # 가능했다. 학교 선택만 복원하고, 인증은 점검시작 페이지에서
+        # 인증번호 입력 또는 자동 로그인 쿠키로 정상 통과되도록 강제한다.
+        st.session_state["school_auth_verified"] = False
     if space_type != "(불명)":
         st.session_state["active_space"] = {
             "space_id": space_info.get("space_id", "loaded"),
@@ -330,6 +335,14 @@ if st.button("이 데이터로 세션 복원 + 이동",
 
     target_page = dest_label_to_page[dest_choice]
     st.toast("세션 복원 완료 — Stage 1/2/3 + 점수 + 추천 모두 적용", icon=None)
+    # 학교 인증은 별도 — 업로드만으로 인증 부여 X (보안 P0 수정).
+    # 본인 학교 데이터인지 인증번호로 확인 후 작업하도록 점검시작으로 안내.
+    if school_code != "(불명)":
+        st.info(
+            "**보안 안내** — 데이터는 복원됐지만 학교 인증은 별도입니다. "
+            "본인 학교 데이터가 맞다면 [점검 시작] 페이지에서 학교 인증번호를 "
+            "입력하거나 자동 로그인으로 인증을 완료해 주세요."
+        )
     if target_page:
         st.switch_page(target_page)
     else:

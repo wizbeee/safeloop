@@ -16,7 +16,10 @@ import streamlit as st
 
 from modules.session import ensure_state
 from modules.storage import list_recent_sessions
-from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
+from modules.ui import (
+    apply_theme, divider, empty_state, hero, mobile_pc_hint,
+    render_sidebar, section,
+)
 
 st.set_page_config(page_title="점검 이력 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="auto")
@@ -48,6 +51,8 @@ if st.session_state.get("role") == "실":
 
 hero("HISTORY", "점검 이력",
      "로컬 저장소에 누적된 모든 점검 결과를 시계열·공간별로 추적합니다.")
+
+mobile_pc_hint("시계열 차트와 표가 많아 PC·태블릿 가로 화면을 권장합니다")
 
 # ─────────────────────────────────────────
 # 전체 이력 로드

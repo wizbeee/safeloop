@@ -28,7 +28,10 @@ from modules.storage import (
     get_school_outbox, list_recent_sessions,
     submit_to_edu_inbox_direct,
 )
-from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
+from modules.ui import (
+    apply_theme, divider, empty_state, hero, mobile_pc_hint,
+    render_sidebar, section,
+)
 
 st.set_page_config(page_title="데이터 전송 · SafeLoop",
                    page_icon="static/icon-192.png",
@@ -62,6 +65,8 @@ if st.session_state.get("role") == "실":
 
 hero("SUBMISSION", "데이터 전송",
      "본교 점검 결과를 교육청 담당자에게 발송 + 발송 기록·수신 확인 추적")
+
+mobile_pc_hint("발송 대상 선택·발송 기록 표가 많아 PC·태블릿 가로 화면을 권장합니다")
 
 school = st.session_state.get("school")
 if not school:

@@ -505,45 +505,74 @@ def _prefill_item_scores_from_stage2(stage2_confirmed: dict,
                                       current_scores: dict) -> dict:
     """stage2_confirmed 의 detected/absent 정보를 점검표 라디오 기본값으로 매핑.
 
-    - detected_equipment 의 표준 매칭 항목 1.0 (양호) prefill
-    - likely_absent_equipment 의 표준 매칭 항목 0.0 (부재) prefill
-    - 이미 사용자가 입력한 항목은 보존 (덮어쓰지 않음)
+    Stage 2 status 별 점수 매핑 (P0 — 이전엔 status 무시했음):
+      - 존재확인 / 상태양호 → 1.0 (양호)
+      - 상태불량               → 0.5 (불량)
+      - likely_absent_equipment → 0.0 (부재)
 
-    이렇게 해야 사용자가 [반영하기] 누른 후 점검표로 가면 라디오가
-    AI 인식 결과 + 사용자 정정에 맞춰 자동으로 양호/부재로 미리 채워져 있음.
+    덮어쓰기 정책 (P1-#17):
+      - 사용자가 명시적으로 정정한 항목(stage2_confirmed.user_corrections 에
+        기록된 std)은 기존 점수가 있어도 덮어쓴다. 두 번째 [반영하기] 가
+        no-op 이 되지 않도록 함.
+      - 그 외 항목은 사용자 라디오 직접 입력 보존 (덮어쓰지 않음).
     """
     from modules.laws import find_std_match
 
-    detected_stds = set()
-    for eq in (stage2_confirmed.get("detected_equipment") or []):
-        name = eq.get("name", "") if isinstance(eq, dict) else str(eq)
-        std = find_std_match(name)
-        if std:
-            detected_stds.add(std)
+    # 표준 설비명 std_name → 점수(1.0/0.5/0.0) 매핑.
+    # 같은 std 가 여러 번 등장 시 더 낮은 점수가 이긴다 (안전 평가는 보수적).
+    std_to_score: dict[str, float] = {}
 
-    absent_stds = set()
+    def _record(std: str, score: float) -> None:
+        if std not in std_to_score or score < std_to_score[std]:
+            std_to_score[std] = score
+
+    for eq in (stage2_confirmed.get("detected_equipment") or []):
+        if not isinstance(eq, dict):
+            name, status = str(eq), "존재확인"
+        else:
+            name = eq.get("name", "")
+            status = eq.get("status", "존재확인")
+        std = find_std_match(name)
+        if not std:
+            continue
+        if status == "상태불량":
+            _record(std, 0.5)
+        else:
+            # 존재확인·상태양호·알 수 없는 값은 모두 양호로 (보수적 fallback).
+            _record(std, 1.0)
+
     for eq in (stage2_confirmed.get("likely_absent_equipment") or []):
         name = eq.get("name", "") if isinstance(eq, dict) else str(eq)
         std = find_std_match(name)
         if std:
-            absent_stds.add(std)
+            _record(std, 0.0)
+
+    # 사용자 명시 정정 — 두 번째 [반영하기] 에서도 덮어쓰기 강제.
+    forced_stds: set[str] = set()
+    for corr in (stage2_confirmed.get("user_corrections") or []):
+        item = corr.get("item") if isinstance(corr, dict) else None
+        name = (item.get("name") if isinstance(item, dict) else None) or ""
+        std = find_std_match(name)
+        if std:
+            forced_stds.add(std)
 
     new_scores = dict(current_scores or {})
     for itm in items:
         no = str(itm.get("no", ""))
-        if not no or no in new_scores:
-            continue  # 이미 입력된 항목 보존
+        if not no:
+            continue
         title = itm.get("title", "")
         std = find_std_match(title)
-        if std and std in detected_stds:
-            new_scores[no] = 1.0
-        elif std and std in absent_stds:
-            new_scores[no] = 0.0
+        if not std or std not in std_to_score:
+            continue
+        if no in new_scores and std not in forced_stds:
+            continue  # 기존 입력 보존 (단 사용자 정정 항목은 덮어쓰기)
+        new_scores[no] = std_to_score[std]
     return new_scores
 
 
 def _render_wizard_nav(prev_step: str | None, next_step: str | None,
-                        next_label: str = "다음 ", next_disabled: bool = False,
+                        next_label: str = "다음", next_disabled: bool = False,
                         next_type: str = "primary") -> None:
     """하단 이전/다음 버튼."""
     st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
@@ -668,13 +697,13 @@ else:
 
         is_last_required = (step == "shoot_7") # 7번까지 필수, 8번(뒷문 대각선) 은 선택
         next_label = (
-            "다음 구도 " if step != "shoot_8" else
-            "AI 분석 단계로 "
+            "다음 구도" if step != "shoot_8" else
+            "AI 분석 단계로"
         )
         # 8번 (뒷문 대각선) 은 선택이므로 미촬영이어도 진행 허용
         if step == "shoot_8":
             next_step = "ai_run"
-            next_label = "AI 분석 단계로 "
+            next_label = "AI 분석 단계로"
 
         _render_wizard_nav(
             prev_step=prev_step,
@@ -773,12 +802,16 @@ else:
                 )
             if st.button("보완 사진으로 AI 재분석 (즉시)", type="primary",
                          width="stretch", key="rerun_ai_supplement"):
-                # 재분석 트리거 + 카운트 갱신
+                # 재분석 트리거 + 카운트 갱신.
+                # P0 (B1): 트리거 소비는 ai_run 블록 안의 line 916 에서 일어남.
+                # supplement 단계에서 rerun 만 하면 step 이 그대로 supplement
+                # 라 트리거가 영영 안 소비됨 → 사용자가 버튼 눌러도 무반응.
+                # ai_run 으로 명시적으로 이동시켜 트리거가 소비되도록 함.
                 st.session_state["_trigger_rerun_supplement"] = True
                 st.session_state["_supplement_reanalyzed_count"] = (
                     len(supplement_photos)
                 )
-                st.rerun()
+                _go_to_step("ai_run")
 
         # supplement 단계의 [이전] 버튼은 여기서 (상단), [결과 단계로] 는
         # 페이지 가장 아래에 표시 (사용자가 결과 다 보고 마지막에 누르도록).
@@ -981,6 +1014,14 @@ if _show_ai_run:
                                     image_labels=labels)
                     st.session_state["stage2_result"] = s2
                     st.session_state["stage2_confirmed"] = None
+                    # B5: 재분석 시 detected/absent 항목 수가 변할 수 있어
+                    # 이전 stage2_user_marks 가 잘못된 항목에 매핑될 위험.
+                    # 사용자 정정은 초기화 — 새 결과로 다시 보도록.
+                    st.session_state.pop("stage2_user_marks", None)
+                    # 라디오 위젯도 재생성 (prefill 적용)
+                    st.session_state["_radio_counter"] = (
+                        st.session_state.get("_radio_counter", 0) + 1
+                    )
                     prog.progress(50, text=f"① 안전 설비 탐지 완료 · {s2.get('_elapsed_sec','?')}초")
 
                     prog.progress(60, text="② 맞춤 점검표 생성 중…")
@@ -1010,6 +1051,17 @@ if _show_ai_run:
 s1 = st.session_state.get("stage1_result")
 s2 = st.session_state.get("stage2_result")
 s3 = st.session_state.get("stage3_result")
+
+# P1-#16: Stage 3 응답이 max_tokens 한계로 잘려 _recover_truncated_json 으로
+# 부분 복구된 경우 사용자에게 명시. 안 알리면 27 항목 중 일부만 받고도
+# 정상 결과로 인식해 누락 항목이 무점검으로 발송될 위험.
+if isinstance(s3, dict) and s3.get("_truncated_recovered"):
+    _recovered_n = len((s3 or {}).get("items") or [])
+    st.warning(
+        f"**AI 응답이 길어 일부만 복구되었습니다** — 점검표 {_recovered_n}개 항목만 "
+        f"표시됩니다. 누락된 항목은 [전체 초기화] 후 재분석 또는 보완 촬영 후 "
+        f"재분석으로 다시 받을 수 있습니다. 결과 저장 전 누락 항목 확인 권장."
+    )
 
 # 스텝별 게이트
 _show_stage1 = classic_mode or step in ("ai_run", "supplement", "review")
@@ -1342,7 +1394,7 @@ if step == "supplement" and _show_stage2_confirm and s2:
                       width="stretch"):
             _go_to_step("ai_run")
     with _nav_r:
-        if st.button("결과 단계로 ", type="primary", width="stretch",
+        if st.button("결과 단계로", type="primary", width="stretch",
                       key="nav_to_review_bottom"):
             _go_to_step("review")
 
@@ -1449,11 +1501,14 @@ if s3 and _show_checklist_and_score:
 
     if st.session_state.get("demo_mode"):
         col_a, col_b, col_c = st.columns(3)
-        if col_a.button("전체 '양호'로 채우기", width="stretch"):
+        # B4: 라벨 가변 위젯 보호 위해 명시 key 부여.
+        if col_a.button("전체 '양호'로 채우기", width="stretch",
+                         key="demo_all_good"):
             st.session_state["item_scores"] = {str(itm.get("no")): 1.0 for itm in items}
             st.session_state["_radio_counter"] = _radio_counter + 1
             st.rerun()
-        if col_b.button("무작위 샘플 채우기", width="stretch"):
+        if col_b.button("무작위 샘플 채우기", width="stretch",
+                         key="demo_random"):
             import random
             random.seed(42)
             st.session_state["item_scores"] = {
@@ -1461,7 +1516,8 @@ if s3 and _show_checklist_and_score:
             }
             st.session_state["_radio_counter"] = _radio_counter + 1
             st.rerun()
-        if col_c.button("입력 초기화", width="stretch"):
+        if col_c.button("입력 초기화", width="stretch",
+                         key="demo_clear_scores"):
             st.session_state["item_scores"] = {}
             st.session_state["_radio_counter"] = _radio_counter + 1
             st.rerun()
@@ -1734,7 +1790,8 @@ if s3 and _show_checklist_and_score:
     else:
         _btn_label = "안전 점수 계산 · 추천 생성"
 
-    if st.button(_btn_label, type="primary", width="stretch"):
+    if st.button(_btn_label, type="primary", width="stretch",
+                  key="calc_safety_score"):
         title_to_std = dict(auto_map)
         # 수동 매핑 오버라이드 (사용자 지정이 자동 매핑을 덮어씀)
         for k, v in (st.session_state.get("_manual_std_map") or {}).items():
@@ -1874,11 +1931,13 @@ if sr and _show_checklist_and_score:
     divider()
     colL, colR = st.columns([1, 1])
     with colL:
-        if st.button("다른 공간 이어서 점검", width="stretch"):
+        if st.button("다른 공간 이어서 점검", width="stretch",
+                      key="goto_next_space"):
             from modules.session import reset_inspection
             reset_inspection()
             st.session_state["shots"] = _shots_dict()
             st.switch_page("pages/1_점검시작.py")
     with colR:
-        if st.button("결과 저장·발송으로 ", type="primary", width="stretch"):
+        if st.button("결과 저장·발송으로", type="primary", width="stretch",
+                      key="goto_save"):
             st.switch_page("pages/3_결과저장.py")

@@ -27,29 +27,23 @@ from typing import Any
 from .laws import LAW_BASIS
 
 
-# 공간별 설비 상태 분포 — "존재확인" 기본, 일부 "상태양호"/"주의"
-# 가중치(weight) 기준: 가중치 높은 설비는 거의 100% 보임, 낮은 설비는 일부 누락
+# 공간별 설비 상태 분포 — Stage 2 프롬프트 스키마(존재확인/상태양호/상태불량) 준수.
+# absent/ambig 분류는 synth_stage2_for_space 가 결정적으로 보장 (아래 forced_* 참고).
+# 가중치(weight) 기준: 높은 설비는 거의 양호, 낮은 설비는 일부 불량.
 def _status_for_weight(weight: int, idx: int) -> str:
-    """가중치·순서에 따라 결정적 상태 반환.
-
-    weight ≥ 9: 80% 존재확인, 20% 상태양호
-    weight 7-8: 60% 존재확인, 25% 상태양호, 15% 주의
-    weight ≤ 6: 50% 존재확인, 30% 상태양호, 15% 주의, 5% 누락(반환 안 됨)
-    """
+    """가중치·순서에 따라 결정적 상태 반환."""
     bucket = idx % 20  # 0..19
     if weight >= 9:
         return "상태양호" if bucket < 4 else "존재확인"
     if weight >= 7:
         if bucket < 3:
-            return "주의"
+            return "상태불량"
         if bucket < 8:
             return "상태양호"
         return "존재확인"
     # weight ≤ 6
-    if bucket == 0:
-        return "_skip"  # 누락 (반환 안 함)
     if bucket < 4:
-        return "주의"
+        return "상태불량"
     if bucket < 10:
         return "상태양호"
     return "존재확인"
@@ -92,9 +86,11 @@ _NOTE_TEMPLATES = {
 
 
 def synth_stage2_for_space(space_type: str) -> dict[str, Any]:
-    """LAW_BASIS 의 `applicable_spaces` 기준으로 detected_equipment 자동 합성.
+    """LAW_BASIS 기준으로 detected/absent/ambiguous 3분류 자동 합성.
 
-    Returns dict with keys: detected_equipment, summary, _synth_demo
+    Returns dict with keys:
+      detected_equipment, likely_absent_equipment, ambiguous_items,
+      summary, _synth_demo
     """
     # 해당 공간에 적용되는 표준 설비 추출 (가중치 내림차순)
     items: list[tuple[str, dict]] = []
@@ -104,26 +100,65 @@ def synth_stage2_for_space(space_type: str) -> dict[str, Any]:
     items.sort(key=lambda x: -x[1].get("weight", 0))
 
     detected: list[dict[str, Any]] = []
+    absent: list[dict[str, Any]] = []
+    ambiguous: list[dict[str, Any]] = []
+
+    # 시연 풍부함을 위해 absent 1건 + ambig 2건을 결정적으로 보장.
+    # 가장 가중치 낮은 항목들에서 선택 — 실제 학교도 보조 설비가 누락되기 쉬움.
+    # 항목 수가 작으면 보장 건수도 줄여 detected 가 0 되지 않도록 함.
+    n = len(items)
+    forced_absent_idx: set[int] = {n - 1} if n >= 5 else set()
+    forced_ambig_idx: set[int] = (
+        {n - 2, n - 3} if n >= 6
+        else ({n - 2} if n >= 4 else set())
+    )
+
     for idx, (name, meta) in enumerate(items):
-        status = _status_for_weight(meta.get("weight", 5), idx)
-        if status == "_skip":
+        ref_no = (idx % 7) + 1  # 7컷 분배
+        category = meta.get("category", "기타")
+
+        if idx in forced_absent_idx:
+            # "AI 가 탐지 못 함 → 사용자 정정 기회" 시연 시나리오의 핵심.
+            absent.append({
+                "category": category,
+                "name": name,
+                "image_ref": f"{ref_no:02d}-1",
+                "reason": (
+                    "사진 7컷 전수 검토 결과 미확인 — 설치 여부 추가 확인 필요"
+                ),
+            })
             continue
-        # 사진 참조는 7컷 중 결정적으로 분배 (01~07)
-        ref_no = (idx % 7) + 1
+        if idx in forced_ambig_idx:
+            # "탐지했으나 사진상 확신 어려움 → 사용자가 존재/부재 결정" 시나리오.
+            ambiguous.append({
+                "category": category,
+                "name": name,
+                "image_ref": f"{ref_no:02d}-1",
+                "reason": (
+                    f"{name} 추정 형태가 일부 보이나 각도·조명으로 확정 어려움"
+                ),
+            })
+            continue
+
+        status = _status_for_weight(meta.get("weight", 5), idx)
         detected.append({
-            "category": meta.get("category", "기타"),
+            "category": category,
             "name": name,
             "status": status,
             "image_ref": f"{ref_no:02d}-1",
-            "note": _NOTE_TEMPLATES.get(name, f"{name} 시연용 합성 관찰"),
+            "note": _NOTE_TEMPLATES.get(name, f"{name} 관찰"),
         })
 
+    # 요약은 평이한 관찰 문장 — 시연/시뮬레이션 표식은 `_synth_demo` 플래그로만.
+    # (이전 코드는 summary 에 "시뮬레이션" 문구를 박아 PDF·발송본까지 흘러갔음.)
     summary = (
-        f"{space_type} 시연용 합성 응답 — LAW_BASIS 기반 표준 설비 "
-        f"{len(detected)}개 자동 탐지. 실 AI 호출이 아닌 시뮬레이션."
+        f"{space_type} 사진 7컷 검토 — 표준 설비 {len(detected)}개 확인, "
+        f"{len(absent)}개 미확인, {len(ambiguous)}개 판정 모호."
     )
     return {
         "detected_equipment": detected,
+        "likely_absent_equipment": absent,
+        "ambiguous_items": ambiguous,
         "summary": summary,
         "_synth_demo": True,
     }

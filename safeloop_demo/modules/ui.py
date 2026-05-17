@@ -260,6 +260,37 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
 .sl-status-ok { color: #1B8A3A; font-weight: 600; font-size: 12px; }
 .sl-status-empty { color: #9A9A9F; font-weight: 500; font-size: 12px; }
 
+/* 수합·검토 제출 카드 — PC 한 줄, 모바일 2×2 그리드 */
+.sl-sub-card { padding: 2px 0 4px 0; }
+.sl-sub-head {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.sl-sub-badge {
+    font-size: 11px; letter-spacing: 0.16em; font-weight: 700;
+    padding: 2px 8px; border-radius: 4px;
+}
+.sl-sub-title { font-size: 14px; color: #0A0A0B; line-height: 1.35; }
+.sl-sub-meta {
+    display: flex; flex-wrap: wrap; gap: 4px 16px;
+    font-size: 12.5px; color: #6B6B70; line-height: 1.5;
+}
+.sl-sub-meta b { color: #0A0A0B; }
+.sl-meta-k {
+    color: #9A9A9F; font-size: 10.5px; letter-spacing: 0.06em;
+    margin-right: 3px; text-transform: uppercase; font-weight: 600;
+}
+@media (max-width: 600px) {
+    .sl-sub-meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 12px;
+        font-size: 12.5px;
+    }
+    .sl-sub-meta > span { min-width: 0; }
+    .sl-sub-title { font-size: 13.5px; }
+}
+
 /* ───────── 키보드 포커스 강화 ───────── */
 *:focus-visible {
     outline: 2px solid #D50000 !important;
@@ -364,15 +395,34 @@ def render_sidebar(active_key: str = "") -> None:
     school = st.session_state.get("school")
     space = st.session_state.get("active_space")
 
+    # 시연 모드 인디케이터 — 모든 페이지의 사이드바 상단에 상시 표시.
+    # 사용자가 어떤 페이지에 있든 "지금 시연 모드인가" 즉시 알 수 있게.
+    is_demo = bool(st.session_state.get("demo_mode"))
+
     with st.sidebar:
         # ── 헤더 ──
+        if is_demo:
+            demo_badge = (
+                "<span style='display:inline-block;margin-left:8px;"
+                "padding:1px 6px;font-size:9px;letter-spacing:0.18em;"
+                "font-weight:700;color:#FFFFFF;background:#D50000;"
+                "border-radius:3px;vertical-align:middle;'>DEMO</span>"
+            )
+            subtitle = (
+                "시연 모드 · 더미 데이터 · "
+                "<a href='/설정' style='color:#9A9A9F;text-decoration:underline;'>"
+                "종료</a>"
+            )
+        else:
+            demo_badge = ""
+            subtitle = "학교 안전 순환 시스템"
         st.markdown(
-            "<div style='padding:2px 4px 14px 4px;'>"
-            "<div style='font-size:10px; letter-spacing:0.4em; color:#D50000; "
-            "font-weight:700;'>SAFELOOP</div>"
-            "<div style='font-size:12px; color:#9A9A9F; margin-top:2px;'>"
-            "학교 안전 순환 시스템</div>"
-            "</div>",
+            f"<div style='padding:2px 4px 14px 4px;'>"
+            f"<div style='font-size:10px; letter-spacing:0.4em; color:#D50000; "
+            f"font-weight:700;'>SAFELOOP{demo_badge}</div>"
+            f"<div style='font-size:12px; color:#9A9A9F; margin-top:2px;'>"
+            f"{subtitle}</div>"
+            f"</div>",
             unsafe_allow_html=True,
         )
 
@@ -433,6 +483,25 @@ def render_sidebar(active_key: str = "") -> None:
             except Exception:
                 unread_inbox = 0
 
+        # 실 담당자 반려 배지 — [제출 이력] 옆에 표시
+        my_returned = 0
+        if is_space_mgr and school:
+            try:
+                from modules.storage import list_school_submissions
+                _mgr = st.session_state.get("space_manager") or {}
+                _mid = _mgr.get("manager_id")
+                if _mid:
+                    _ret = list_school_submissions(
+                        school.get("정보공시 학교코드", ""),
+                        status_filter="returned",
+                    )
+                    my_returned = sum(
+                        1 for s in _ret
+                        if s.get("submitter_manager_id") == _mid
+                    )
+            except Exception:
+                my_returned = 0
+
         if is_edu:
             # 교육청 담당자 — 수신·전국대시보드·정책시뮬
             groups = [
@@ -452,7 +521,9 @@ def render_sidebar(active_key: str = "") -> None:
                 ]),
             ]
         elif is_space_mgr:
-            # 실 담당자 — 본인 점검 흐름만 (학교 단위 통계·발송·매니저 등록 차단)
+            # 실 담당자 — 본인 점검 흐름 + 제출 이력 + 본인 이메일·역할 변경.
+            # 학교 단위 매니저 등록·결재 정책·공간 등록은 8_설정 내부에서
+            # 섹션별로 "학교 담당자 권한" 안내가 표시됨.
             groups = [
                 ("내 점검", [
                     ("app.py", "홈"),
@@ -460,12 +531,20 @@ def render_sidebar(active_key: str = "") -> None:
                     ("pages/2_AI점검.py", "AI 점검"),
                     ("pages/3_결과저장.py", "결과 제출"),
                 ]),
+                ("내 이력", [
+                    ("pages/13_내제출이력.py", "제출 이력"),
+                ]),
                 ("참고·정보", [
                     ("pages/9_프로젝트소개.py", "프로젝트 소개"),
                 ]),
+                ("시스템", [
+                    ("pages/8_설정.py", "내 설정"),
+                ]),
             ]
         else:
-            # 학교 담당자 — 점검 + 수합검토 + 본교조회 + 발송
+            # 학교 담당자 — 점검 + 수합검토 + 본교조회 + 발송.
+            # 전국 대시보드는 교육청 정책 의사결정 화면이라 학교 담당자에겐
+            # 의미가 모호 → 사이드바에서 제거 (본교 현황 4번으로 충분).
             groups = [
                 ("점검", [
                     ("app.py", "홈"),
@@ -485,7 +564,6 @@ def render_sidebar(active_key: str = "") -> None:
                     ("pages/6_데이터순환.py", "데이터 전송"),
                 ]),
                 ("참고·정보", [
-                    ("pages/5_전국대시보드.py", "전국 대시보드"),
                     ("pages/9_프로젝트소개.py", "프로젝트 소개"),
                 ]),
                 ("시스템", [
@@ -501,13 +579,16 @@ def render_sidebar(active_key: str = "") -> None:
                 unsafe_allow_html=True,
             )
             for target, label in items:
-                # 배지 부착 (수신함·수합검토)
+                # 배지 부착 (수신함·수합검토·내 제출이력 반려)
                 show_label = label
                 if is_edu and target == "pages/7_교육청수신함.py" and unread_inbox > 0:
                     show_label = f"{label} {unread_inbox}"
                 elif (not is_edu and not is_space_mgr
                       and target == "pages/0_수합검토.py" and pending_review > 0):
                     show_label = f"{label} {pending_review}"
+                elif (is_space_mgr
+                      and target == "pages/13_내제출이력.py" and my_returned > 0):
+                    show_label = f"{label} (반려 {my_returned})"
                 try:
                     st.page_link(target, label=show_label)
                 except Exception:
@@ -543,6 +624,31 @@ def render_sidebar(active_key: str = "") -> None:
 def desktop_columns(spec: list[float] | int = 2):
     """데스크톱에선 좌-우 분할, 모바일에선 자동 세로 스택."""
     return st.columns(spec)
+
+
+def mobile_pc_hint(reason: str = "표가 많아 PC·태블릿 가로 화면에서 더 보기 편합니다") -> None:
+    """모바일(≤768px) 사용자에게 PC 권장 안내 1회 표시.
+
+    여러 페이지에서 wide 레이아웃 + dataframe 을 쓰는데, 모바일에서는 가로
+    스크롤이 강제되어 가독성이 떨어진다. 페이지 상단(hero 직후)에 호출하면
+    모바일에서만 분홍 안내 박스가 뜬다.
+    """
+    st.markdown(
+        f"""
+        <div class='sl-mobile-hint' style='display:none;padding:8px 12px;
+        background:#FFF6F6;border:1px solid #F8D0D0;border-radius:6px;
+        font-size:12.5px;color:#0A0A0B;margin-bottom:10px;line-height:1.55;'>
+        <b>모바일에서 보고 계시네요.</b> {reason}. 모바일에선 가로 스크롤이나
+        화면 회전을 활용하세요.
+        </div>
+        <style>
+        @media (max-width: 768px) {{
+            .sl-mobile-hint {{ display: block !important; }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ─────────────────────────────────────────

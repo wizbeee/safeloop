@@ -13,7 +13,10 @@ import streamlit as st
 
 from modules.session import ensure_state
 from modules.storage import list_recent_sessions
-from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
+from modules.ui import (
+    apply_theme, divider, empty_state, hero, mobile_pc_hint,
+    render_sidebar, section,
+)
 
 st.set_page_config(page_title="본교 현황 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="auto")
@@ -54,6 +57,8 @@ if not school:
 hero("DASHBOARD · 내부용",
      "본교 현황",
      f"{school['학교명']} — 저장 즉시 반영 · 식별 유지 (관리자·교육청용)")
+
+mobile_pc_hint("표·차트가 많아 PC·태블릿 가로 화면에서 더 정확히 읽힙니다")
 
 sessions = [s for s in list_recent_sessions(limit=200)
             if s["school_code"] == school["정보공시 학교코드"]]
@@ -258,8 +263,7 @@ with cmp_col3:
         help="공공데이터 환원 분기 갱신 — 전국 평균 안전 점수",
     )
 
-# 시도 평균 막대 + 본교 강조
-import plotly.graph_objects as go
+# 시도 평균 막대 + 본교 강조 (go 는 파일 상단에 이미 import 됨)
 sido_means = _nat.get("sido_means", {})
 if sido_means:
     sido_df = pd.DataFrame(

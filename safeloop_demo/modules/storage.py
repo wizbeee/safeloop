@@ -694,18 +694,21 @@ def list_edu_inbox(sido: str | None = None) -> list[dict]:
 
 
 # ─────────────────────────────────────────
-# 교육청 수신함 시연 데이터 자동 생성 — SAFELOOP_DEMO_MODE 전용
+# 교육청 수신함 시연 데이터 자동 생성
+#
+# 호출 책임: 호출자가 시연 모드(`st.session_state.demo_mode` 또는
+# `SAFELOOP_DEMO_MODE=1`)임을 이미 확인한 뒤 부른다. 모듈 내부는 st 의존을
+# 피하고자 환경변수 가드를 두지 않는다 (이전 코드는 `import os` 누락 +
+# session_state demo_mode 시 환경변수 미존재 조합으로 항상 0 반환되던 버그).
 # ─────────────────────────────────────────
 def ensure_demo_edu_inbox() -> int:
-    """시연 모드에서 교육청 수신함이 비어있으면 데모 데이터 자동 생성.
+    """교육청 수신함이 비어있으면 시연용 데모 데이터 자동 생성.
 
     학교가 발송한 가상의 데이터 2건 (단일 점검 1건 + 통합 보고서 1건)을
     수신함에 넣어 교육청 시연 흐름이 빈 화면에서 막히지 않도록 한다.
 
     Returns: 생성된 항목 수 (이미 있으면 0).
     """
-    if not os.environ.get("SAFELOOP_DEMO_MODE") == "1":
-        return 0
     existing = list_edu_inbox()
     if existing:
         return 0  # 이미 있으면 건들지 않음
@@ -829,33 +832,49 @@ def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
     - 평문 JSON 으로 mock_edu_receipt/{sido}/ 에 저장
       (수신함 인덱싱·검색 효율 위해 평문 보관 — 디스크 권한으로 보호)
     - 학교 측 발송함(_outbox) 에도 발송 기록을 남겨 "전송 완료 / 수신 대기" 추적
+
+    통합 record(`safeloop_consolidated_submission`)도 동일 함수로 처리.
+    단일 점검은 `school_identified` 키, 통합은 `school` 키를 사용하므로
+    두 가지 모두 fallback 한다.
     """
-    school = edu_pkg.get("school_identified") or {}
+    # 단일 점검 (build_edu_package) → school_identified
+    # 통합 record (consolidate.build_consolidated_record) → school
+    school = edu_pkg.get("school_identified") or edu_pkg.get("school") or {}
     sido = school.get("sido") or "미상"
     school_code = school.get("code") or "UNKNOWN"
+    record_type = edu_pkg.get("record_type", "safeloop_single_submission")
     target_dir = EDU_RECEIPT_DIR / sido
     target_dir.mkdir(parents=True, exist_ok=True)
 
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    file_name = f"{school_code}_{ts}.json"
+    # 통합본은 `_consolidated_` 접미사로 파일명 구분 — 수신함 표시에 도움.
+    suffix = "_consolidated" if record_type == "safeloop_consolidated_submission" else ""
+    file_name = f"{school_code}_{ts}{suffix}.json"
     target = target_dir / file_name
     target.write_text(json.dumps(edu_pkg, ensure_ascii=False, indent=2),
                       encoding="utf-8")
 
-    # 학교 측 발송함 기록
+    # 학교 측 발송함 기록 — 통합본은 space_type 대신 spaces_count 사용.
     outbox_dir = STORAGE_DIR / str(school_code) / "_outbox"
     outbox_dir.mkdir(parents=True, exist_ok=True)
     submit_id = uuid.uuid4().hex[:10]
+    if record_type == "safeloop_consolidated_submission":
+        space_disp = f"통합 {edu_pkg.get('spaces_count', 0)}공간"
+        score_disp = edu_pkg.get("average_score")
+    else:
+        space_disp = (edu_pkg.get("space") or {}).get("type")
+        score_disp = edu_pkg.get("safety_score")
     record = {
         "submit_id": submit_id,
         "sido": sido,
         "school_code": school_code,
         "school_name": school.get("name", ""),
-        "space_type": (edu_pkg.get("space") or {}).get("type"),
+        "space_type": space_disp,
         "file_name": file_name,
         "submitted_at": datetime.datetime.now().isoformat(),
-        "score": edu_pkg.get("safety_score"),
+        "score": score_disp,
         "grade": edu_pkg.get("grade"),
+        "record_type": record_type,
         "channel": "safeloop_direct",
     }
     (outbox_dir / f"{submit_id}.json").write_text(
@@ -1284,6 +1303,84 @@ def cleanup_school_storage(days: int = 90) -> tuple[int, int]:
             except Exception:
                 continue
     return removed_sessions, bytes_freed
+
+
+def cleanup_demo_artifacts() -> dict[str, int]:
+    """시연 모드에서 생성된 데이터(매니저·교육청 수신함 파일·합성 캐시)를 일괄 삭제.
+
+    삭제 대상:
+      - 매니저: `_demo:True` 마커가 있는 매니저 (managers.py:ensure_demo_first 생성분)
+      - 교육청 수신함: 파일명에 `DEMO-` 또는 내용에 `_synth_demo:True` 가 있는 파일
+      - 합성 응답 캐시: `_ai_cache/stage2_*_synth_*.json`, `stage3_*_synth_*.json`
+        (현재 코드는 `_synth_demo` 마커만 사용해 파일명 분리는 없으므로
+        내용 마커로 식별)
+
+    Returns: 카테고리별 삭제 건수.
+    """
+    import shutil
+
+    counts = {"managers": 0, "edu_inbox": 0, "ai_cache": 0}
+
+    # 1) 매니저 _demo:True 정리 — school_storage/{code}/_managers.json
+    if STORAGE_DIR.exists():
+        for school_dir in STORAGE_DIR.iterdir():
+            if school_dir.name.startswith("_") or not school_dir.is_dir():
+                continue
+            mgr_file = school_dir / "_managers.json"
+            if not mgr_file.exists():
+                continue
+            try:
+                mgrs = json.loads(mgr_file.read_text(encoding="utf-8"))
+                if not isinstance(mgrs, list):
+                    continue
+                kept = [m for m in mgrs if not m.get("_demo")]
+                removed = len(mgrs) - len(kept)
+                if removed > 0:
+                    mgr_file.write_text(
+                        json.dumps(kept, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    counts["managers"] += removed
+            except Exception:
+                continue
+
+    # 2) 교육청 수신함 — _synth_demo:True 가 들어간 JSON 삭제
+    if EDU_RECEIPT_DIR.exists():
+        for sido_dir in EDU_RECEIPT_DIR.iterdir():
+            if not sido_dir.is_dir():
+                continue
+            for f in list(sido_dir.glob("*.json")):
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                # 단일 master 또는 통합 record 모두 _synth_demo 마커로 식별
+                is_demo = (
+                    data.get("_synth_demo") is True
+                    or (data.get("ai_pipeline", {})
+                        .get("stage2", {}).get("_synth_demo") is True)
+                    or f.name.startswith("DEMO-")
+                )
+                if is_demo:
+                    try:
+                        f.unlink()
+                        counts["edu_inbox"] += 1
+                    except Exception:
+                        continue
+
+    # 3) AI 캐시 — _synth_demo 마커가 든 파일 식별 후 삭제
+    cache_dir = STORAGE_DIR / "_ai_cache"
+    if cache_dir.exists():
+        for f in list(cache_dir.glob("stage*_*.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if data.get("_synth_demo") is True:
+                    f.unlink()
+                    counts["ai_cache"] += 1
+            except Exception:
+                continue
+
+    return counts
 
 
 def list_recent_sessions(limit: int = 20) -> list[dict]:

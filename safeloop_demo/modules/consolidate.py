@@ -361,23 +361,50 @@ def build_consolidated_pdf(consolidated: dict) -> bytes:
 
 
 # ─────────────────────────────────────────
-# 5. 상태 일괄 변경 (consolidated)
+# 5. 상태 일괄 변경 (consolidated) + 실제 교육청 수신함 전송
 # ─────────────────────────────────────────
 def mark_consolidated(
     school_code: str,
     session_ids: list[str],
     by: str,
     note: str = "통합 발송",
-) -> int:
-    """approved 제출본들을 consolidated 상태로 일괄 변경.
+    record: dict | None = None,
+) -> dict:
+    """approved 제출본들을 consolidated 상태로 일괄 변경 + 교육청 수신함 전송.
 
-    Returns: 성공한 개수
+    Args:
+        school_code: 학교 코드
+        session_ids: 통합 대상 세션 ID 리스트
+        by: 처리자(보통 학교 담당자 이름)
+        note: status_history 에 기록될 메모
+        record: 이미 생성된 통합 record(`build_consolidated_record` 결과).
+                있으면 mock_edu_receipt/{sido}/ 에 저장 + outbox 기록.
+                None 이면 상태만 변경 (옛 호환).
+
+    Returns: {"count": 상태 변경 성공 수, "submit": submit_to_edu_inbox_direct
+              결과 dict 또는 None, "errors": [...]}
     """
     n = 0
+    errors: list[str] = []
     for sid in session_ids:
         if update_submission_status(
             school_code, sid, "consolidated",
             by=by, by_role="학교", note=note,
         ):
             n += 1
-    return n
+        else:
+            errors.append(f"session {sid}: 상태 변경 실패")
+
+    # 통합 record 가 전달되면 실제 교육청 수신함에 자동 전송.
+    # 이전엔 학교 측이 "통합 완료 처리" 눌러도 mock_edu_receipt 에 파일이
+    # 안 가서 교육청 화면이 비어 있었다 (영역 3 D-1 P0).
+    submit_result: dict | None = None
+    if record is not None:
+        try:
+            from modules.storage import submit_to_edu_inbox_direct
+            submit_result = submit_to_edu_inbox_direct(record)
+        except Exception as e:
+            errors.append(f"교육청 수신함 전송 실패: {e}")
+            submit_result = {"ok": False, "error": str(e)}
+
+    return {"count": n, "submit": submit_result, "errors": errors}

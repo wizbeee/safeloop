@@ -25,7 +25,8 @@ from modules.storage import (
     update_submission_status,
 )
 from modules.ui import (
-    apply_theme, divider, empty_state, hero, render_sidebar, section,
+    apply_theme, divider, empty_state, hero, mobile_pc_hint,
+    render_sidebar, section,
 )
 
 st.set_page_config(
@@ -79,23 +80,7 @@ hero(
     f"{school_name} — 실 담당자 제출본을 검토하고 승인·반려·수정합니다.",
 )
 
-# 모바일 사용자 안내 — 본 페이지는 표·다중 컬럼이 많아 PC 권장
-st.markdown(
-    """
-    <div class='sl-mobile-hint' style='display:none;padding:8px 12px;
-    background:#FFF6F6;border:1px solid #F8D0D0;border-radius:6px;
-    font-size:12.5px;color:#0A0A0B;margin-bottom:10px;line-height:1.55;'>
-    <b>모바일에서 보고 계시네요.</b> 이 화면은 표가 많아 PC·태블릿 가로 화면에서
-    더 보기 편합니다. 모바일에선 가로 스크롤이나 화면 회전을 활용하세요.
-    </div>
-    <style>
-    @media (max-width: 768px) {
-        .sl-mobile-hint { display: block !important; }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+mobile_pc_hint("표·다중 컬럼이 많아 PC·태블릿 가로 화면에서 더 보기 편합니다")
 
 # ─────────────────────────────────────────
 # 데이터 로드 + KPI
@@ -270,18 +255,26 @@ for sub in visible:
     if sub.get("space_nickname"):
         space_disp += f" · {sub['space_nickname']}"
 
+    _submitter_name = sub.get("submitter_name", "-")
+    _submitter_role = sub.get("submitter_role") or "?"
+    _score_disp = score if score is not None else "-"
+    _ts_disp = _format_time(sub.get("timestamp"))
+
     title_html = (
-        f"<div style='display:flex;align-items:center;gap:12px;'>"
-        f"<span style='font-size:11px;letter-spacing:0.16em;color:{badge_color};"
-        f"font-weight:700;background:{badge_color}1A;padding:2px 8px;border-radius:4px;'>"
-        f"{badge_emoji} {badge_label.upper()}</span>"
-        f"<b style='font-size:14px;'>{space_disp}</b>"
-        f"<span style='color:#6B6B70;font-size:12.5px;'>"
-        f" · 점수 <b style='color:#0A0A0B;'>{score if score is not None else '-'}</b>"
-        f" · 등급 <b>{grade}</b>"
-        f" · 제출자 <b>{sub.get('submitter_name', '-')}</b> ({sub.get('submitter_role') or '?'})"
-        f" · {_format_time(sub.get('timestamp'))}"
-        f"</span></div>"
+        f"<div class='sl-sub-card'>"
+        f"<div class='sl-sub-head'>"
+        f"<span class='sl-sub-badge' style='color:{badge_color};"
+        f"background:{badge_color}1A;'>{badge_label.upper()}</span>"
+        f"<b class='sl-sub-title'>{space_disp}</b>"
+        f"</div>"
+        f"<div class='sl-sub-meta'>"
+        f"<span><span class='sl-meta-k'>점수</span><b>{_score_disp}</b></span>"
+        f"<span><span class='sl-meta-k'>등급</span><b>{grade}</b></span>"
+        f"<span><span class='sl-meta-k'>제출자</span>"
+        f"<b>{_submitter_name}</b> ({_submitter_role})</span>"
+        f"<span><span class='sl-meta-k'>제출</span>{_ts_disp}</span>"
+        f"</div>"
+        f"</div>"
     )
 
     with st.expander("　", expanded=False):
@@ -450,7 +443,10 @@ for sub in visible:
                         st.rerun()
                 if rb2.button("취소", key=f"_return_cancel_{sid}",
                                width="stretch"):
+                    # B9: 취소 시 사유 입력 widget state 도 정리 — 다음 반려
+                    # 시 이전 사유 잔존 방지.
                     st.session_state.pop("_return_target_sid", None)
+                    st.session_state.pop(f"_return_reason_{sid}", None)
                     st.rerun()
 
         # 직접 수정 폼 (이 항목이 타겟인 경우)
@@ -473,14 +469,20 @@ for sub in visible:
                 if not _items:
                     st.warning("AI 점검표 항목이 없어 점수 수정이 불가합니다.")
                 else:
-                    for _it in _items[:30]: # 안전상 30개 제한 (UI 부담)
+                    # P1-#8: 30 항목 컷오프 제거. 화학실 등 점검표가 풍부한
+                    # 공간(35+ 항목)도 모두 수정 가능. 사용자 부담은 expander
+                    # 카테고리 묶음으로 자연스럽게 줄어듦.
+                    from modules.laws import find_std_match
+                    for _it in _items:
                         _no = _it.get("no")
                         _title = _it.get("title", f"항목 {_no}")
-                        # 기존 점수 키 후보 (다양한 저장 패턴 호환)
+                        _std = find_std_match(_title)  # 표준 설비명 매칭
+                        # 기존 점수 키 후보 (저장 패턴 호환)
                         _existing = (
                             cur_item_scores.get(str(_no))
                             or cur_item_scores.get(_no)
                             or cur_item_scores.get(_title)
+                            or (cur_item_scores.get(_std) if _std else None)
                         )
                         try:
                             _existing_f = float(_existing) if _existing is not None else None
@@ -502,6 +504,11 @@ for sub in visible:
                         if _picked is not None:
                             edited_scores[str(_no)] = _picked
                             edited_scores[_title] = _picked
+                            # P1-#7: 표준 설비명 키 저장이 핵심.
+                            # calculate_safety_score 가 STANDARD_ITEMS 키만 인식
+                            # 하므로 매핑된 std 키로 저장해야 점수 재계산이 정확.
+                            if _std:
+                                edited_scores[_std] = _picked
 
                 eb1, eb2 = st.columns(2)
                 if eb1.button(
@@ -532,7 +539,13 @@ for sub in visible:
                         st.error(f"수정 실패: {e}")
                 if eb2.button("취소", key=f"_edit_cancel_{sid}",
                                width="stretch"):
+                    # B9: 취소 시 라디오 위젯 state 도 정리 — 다음 수정 시
+                    # 이전 점수 선택이 잘못 prefill 되지 않도록.
                     st.session_state.pop("_edit_target_sid", None)
+                    for _it_clean in (_items or []):
+                        st.session_state.pop(
+                            f"_edit_radio_{sid}_{_it_clean.get('no')}", None
+                        )
                     st.rerun()
 
 # ─────────────────────────────────────────
@@ -541,8 +554,16 @@ for sub in visible:
 divider()
 section(
     "DISPATCH",
-    "본교 통합 발송 — 교육청 보고",
-    "승인된 점검들을 한 묶음 보고서로 만들어 교육청에 발송합니다.",
+    "본교 통합 발송 — 교육청 수신함으로 자동 전송",
+    "승인된 점검들을 한 묶음 보고서로 만들어 같은 SafeLoop 인스턴스의 "
+    "교육청 담당자 수신함으로 즉시 전송합니다. "
+    "PDF·Excel·JSON 산출물도 함께 다운로드 가능 (보고서·결재용).",
+)
+st.info(
+    "**[통합 완료 처리] 클릭 시 자동으로 교육청 수신함에 도착합니다** — "
+    "별도 메일 발송 불필요. 교육청 담당자가 같은 SafeLoop 환경에 접속하면 "
+    "수신함에서 즉시 확인 가능합니다. PDF·Excel 은 결재·인쇄용으로 별도 "
+    "다운로드해 사용하세요."
 )
 
 from modules.consolidate import (
@@ -631,10 +652,13 @@ else:
                 key="_dispatch_close",
                 width="stretch",
             ):
+                # B8: _dispatch_confirm 체크박스 state 도 함께 정리 — 다음
+                # 미리보기에서 발송 버튼이 이전 체크 그대로 enable 되지 않도록.
                 for _k in (
                     "_dispatch_record",
                     "_dispatch_preview_active",
                     "_dispatch_session_ids",
+                    "_dispatch_confirm",
                 ):
                     st.session_state.pop(_k, None)
                 st.rerun()
@@ -722,34 +746,36 @@ else:
                     st.error(f"산출물 생성 실패: {_err}")
                     st.caption("디버그: " + str(type(_err).__name__))
 
-                # 교육청 발송 (상태 일괄 consolidated)
-                st.markdown("##### 교육청 발송 + 상태 처리")
+                # 교육청 수신함 자동 발송 + 상태 일괄 처리
+                st.markdown("##### 통합 완료 처리 — 교육청 수신함 자동 발송")
                 st.caption(
-                    "발송 처리 시 선택된 점검들의 상태가 일괄 **통합 완료(consolidated)** 로 변경됩니다. "
-                    "실제 교육청 이메일 발송은 위 PDF/Excel/JSON 을 첨부해 별도로 진행하세요. "
-                    "(다음 단계에서 자동 발송 통합 예정)"
+                    "버튼을 누르면 선택된 점검들이 **하나의 통합 보고서로 묶여 "
+                    "교육청 담당자 수신함에 즉시 도착**하고, 모든 점검의 상태가 "
+                    "**통합 완료(consolidated)** 로 변경되어 통합 대상 목록에서 빠집니다. "
+                    "별도 메일 발송이 필요 없습니다."
                 )
 
                 _send_col1, _send_col2 = st.columns([2, 1])
                 with _send_col1:
                     _confirm = st.checkbox(
-                        "위 산출물을 교육청에 발송했고, 이제 상태를 통합 완료로 처리합니다",
+                        "위 통합 보고서를 교육청 수신함으로 발송합니다.",
                         key="_dispatch_confirm",
                     )
                 with _send_col2:
                     if st.button(
-                        "통합 완료 처리",
+                        "교육청에 통합 발송",
                         key="_dispatch_finalize",
                         type="primary",
                         width="stretch",
                         disabled=not _confirm,
                     ):
                         _admin_label = school.get("학교명", "") + " 학교 담당자"
-                        _ok = mark_consolidated(
+                        _result = mark_consolidated(
                             school_code,
                             _selected_now,
                             by=_admin_label,
                             note=f"학교 단위 통합 발송 ({len(_selected_now)}건)",
+                            record=_record,  # 교육청 수신함 자동 전송용
                         )
                         # 세션 정리
                         for _k in (
@@ -759,8 +785,20 @@ else:
                             "_dispatch_confirm",
                         ):
                             st.session_state.pop(_k, None)
-                        st.toast(
-                            f"{_ok}건 통합 완료 처리 — 교육청 발송 기록 저장됨",
-                            icon=None,
-                        )
+                        _cnt = _result.get("count", 0)
+                        _submit = _result.get("submit") or {}
+                        _errs = _result.get("errors") or []
+                        if _submit.get("ok"):
+                            st.success(
+                                f"교육청 수신함 도착 완료 — {_cnt}건 통합 발송. "
+                                f"파일: `{_submit.get('file_name')}` "
+                                f"(시도: {_submit.get('sido')})"
+                            )
+                        else:
+                            st.warning(
+                                f"{_cnt}건 통합 완료 상태 표시 — 교육청 수신함 "
+                                f"전송에 문제가 있어 별도 다운로드 후 발송 권장."
+                            )
+                        for _err in _errs:
+                            st.caption(f"[오류] {_err}")
                         st.rerun()

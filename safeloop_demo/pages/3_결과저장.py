@@ -675,12 +675,13 @@ else:
                         f"발송 시각: {already_sent.get('submitted_at','')[:16].replace('T',' ')} · "
                         f"발송 ID: `{already_sent.get('submit_id','-')}`"
                     )
-                if st.button("다시 발송 (수정본)", key="resubmit_direct",
-                              width="stretch"):
-                    pass # 아래 발송 버튼 흐름으로 떨어짐
-                else:
-                    # 같은 날짜 발송 기록이 있으면 추가 발송 차단 (사용자가 다시 발송 클릭 시 재전송)
-                    pass
+                # B7: 이전 버전은 클릭 시 `pass` 만 실행해 빈 동작이었음.
+                # 명시적 안내 caption 으로 변경 — 사용자가 아래 발송 버튼을
+                # 누르면 수정본이 재전송됨을 알림. 라벨 버튼 자체 제거.
+                st.caption(
+                    "수정본을 다시 보내려면 아래 **[SafeLoop 수신함으로 "
+                    "다이렉트 전송]** 버튼을 누르세요."
+                )
 
             # 발송 버튼
             if st.button("SafeLoop 수신함으로 다이렉트 전송",

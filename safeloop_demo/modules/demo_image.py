@@ -1,14 +1,15 @@
 """
-시연용 더미 이미지 생성 — PIL 로 즉석 생성.
+시연용 이미지 생성/로드.
 
-시연(데모)에서 실제 학교 사진을 사용하지 않고, "DEMO" 워터마크와 공간/위치
-정보가 텍스트로 박힌 회색 카드 이미지를 생성한다.
+전략:
+- 충남삼성고 본교 촬영 사진이 있는 5공간(화학실·물리실·음악실·미술실·디자인실)
+  은 sample_images/ 의 실 사진을 사용 — 시연 가치 ↑, 캐시 적중률 ↑.
+- 나머지 공간은 PIL 로 "DEMO" 워터마크가 박힌 가공 이미지를 즉석 생성.
 
 장점:
-- 사용자가 학교 사진을 촬영해 제공할 필요 없음
-- 시연용 가공 데이터임이 화면에 명시됨 (저작권·프라이버시 우려 없음)
-- 9개 공간 × 7컷 = 63장을 즉석 생성 가능
-- AI 분석 결과는 캐시된 진짜 결과(또는 실제 호출)이므로 흐름은 100% 진짜
+- 사진 35장으로 실 사용 톤의 시연 가능 (음악실·미술실·디자인실 풍부)
+- 사진 없는 공간도 PIL 폴백으로 흐름은 막힘 없음
+- 사이드바 DEMO 인디케이터 + 시연 안내 카피로 시연임은 항상 명시
 """
 from __future__ import annotations
 
@@ -126,11 +127,41 @@ def make_demo_image(
     return buf.getvalue()
 
 
-def make_all_demo_shots(space_type: str) -> dict[str, list[dict]]:
-    """7컷 모두에 대한 더미 이미지를 생성.
+# 실 사진 보유 공간 → sample_images/ 하위 폴더명 매핑.
+# 충남삼성고 본교 촬영본 5공간 × 6~10장 = 35장.
+_SPACE_TO_SAMPLE_DIR: dict[str, str] = {
+    "화학실": "chemistry_lab",
+    "물리실": "physics_lab",
+    "음악실": "music_room",
+    "미술실": "art_room",
+    "디자인실": "design_room",
+}
 
-    반환 형식: {shot_key: [{name, bytes, source}], ...} (선택 슬롯도 빈 리스트로 포함).
+
+def make_all_demo_shots(space_type: str) -> dict[str, list[dict]]:
+    """7컷 시연 이미지 묶음을 반환.
+
+    실 사진 보유 5공간(화학실·물리실·음악실·미술실·디자인실)은 sample_images
+    의 실제 사진을 sample_dispatch 의 키워드 매핑(흄후드→뒷벽, 싱크→창가 등)
+    으로 의미 기반 분배. 나머지 공간은 PIL "DEMO" 카드 즉석 생성.
+
+    반환 형식: {shot_key: [{name, bytes, source}], ...} (선택 슬롯도 포함).
     """
+    folder_name = _SPACE_TO_SAMPLE_DIR.get(space_type)
+    if folder_name:
+        base = (
+            Path(__file__).resolve().parent.parent / "sample_images" / folder_name
+        )
+        if base.exists():
+            files = sorted(base.glob("*.jpg"))
+            if files:
+                try:
+                    from .sample_dispatch import dispatch_samples_to_shots
+                    return dispatch_samples_to_shots(files)
+                except Exception:
+                    pass  # 디스패치 실패 시 PIL 폴백
+
+    # PIL 합성 카드 (실 사진 없는 공간 또는 로드/디스패치 실패)
     result: dict[str, list[dict]] = {
         k: [] for k in REQUIRED_KEYS + ["back_door_diag", "close_supplement"]
     }
