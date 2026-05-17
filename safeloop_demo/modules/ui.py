@@ -260,6 +260,30 @@ div[role="radiogroup"] > label { padding: 6px 14px; border: 1px solid transparen
 .sl-status-ok { color: #1B8A3A; font-weight: 600; font-size: 12px; }
 .sl-status-empty { color: #9A9A9F; font-weight: 500; font-size: 12px; }
 
+/* PC 표 ↔ 모바일 카드 자동 분기 — 768px 기준 */
+.sl-table-mobile { display: none; }
+.sl-table-pc { display: block; }
+@media (max-width: 768px) {
+    .sl-table-mobile { display: block; }
+    .sl-table-pc { display: none; }
+}
+
+/* 점검 이력 모바일 카드 */
+.sl-hist-card {
+    border: 1px solid #E5E5E8; border-left: 3px solid #D50000;
+    border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;
+    background: #FFFFFF;
+}
+.sl-hist-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 4px; font-size: 13.5px; color: #0A0A0B;
+}
+.sl-hist-score {
+    font-size: 12px; font-weight: 700; color: #D50000;
+    background: #FFF2F2; padding: 1px 8px; border-radius: 4px;
+}
+.sl-hist-meta { font-size: 12px; color: #6B6B70; }
+
 /* 수합·검토 제출 카드 — PC 한 줄, 모바일 2×2 그리드 */
 .sl-sub-card { padding: 2px 0 4px 0; }
 .sl-sub-head {

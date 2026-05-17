@@ -14,6 +14,15 @@ import json
 import uuid
 from pathlib import Path
 
+
+# 한국 표준시 — 외부 클라우드(UTC) 배포에서도 시각이 어긋나지 않게.
+KST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def _now() -> datetime.datetime:
+    """현재 KST datetime (timezone-aware)."""
+    return datetime.datetime.now(KST)
+
 import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -88,7 +97,7 @@ def session_dir(school_code: str, session_id: str) -> Path:
 
 
 def new_session_id() -> str:
-    return datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
+    return _now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
 
 
 # ─────────────────────────────────────────
@@ -135,7 +144,7 @@ def build_master_record(session: dict, prior_history: list | None = None) -> dic
         # 학교 담당자가 직접 점검·저장 자체 승인 상태 (스프린트 1 호환)
         status = "approved"
 
-    now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+    now_iso = _now().isoformat(timespec="seconds")
     new_history_entry = {
         "status": status,
         "by": submitter.get("manager_id") or submitter.get("name") or "(unknown)",
@@ -156,7 +165,7 @@ def build_master_record(session: dict, prior_history: list | None = None) -> dic
         "schema_version": "1.1",
         "record_type": "safeloop_inspection_master",
         "session_id": session.get("session_id"),
-        "timestamp": datetime.datetime.now().isoformat(),
+        "timestamp": _now().isoformat(),
         "school": {
             "code": school.get("정보공시 학교코드"),
             "name": school.get("학교명"),
@@ -220,7 +229,7 @@ def build_edu_package(master: dict) -> dict:
     return {
         "schema_version": "1.1",
         "record_type": "safeloop_edu_submission",
-        "submission_timestamp": datetime.datetime.now().isoformat(),
+        "submission_timestamp": _now().isoformat(),
         "basis_law": "교육시설법 제10조 제3항 — 안전·유지관리기준 자체 점검",
         "school_identified": master.get("school"),
         "space": master.get("space"),
@@ -245,7 +254,7 @@ def build_opendata_package(master: dict) -> dict:
     return {
         "schema_version": "1.0",
         "record_type": "opendata_anonymous_inspection",
-        "release_timestamp": datetime.datetime.now().isoformat(),
+        "release_timestamp": _now().isoformat(),
         "basis_law": "공공데이터법 — 업무 부산물 개방",
         "school_anonymous_id": anonymize_code(school.get("code") or ""),
         "sido": school.get("sido"),
@@ -373,7 +382,7 @@ def build_pdf_report(master: dict) -> bytes:
         flow.append(Spacer(1, 3 * mm))
     flow.append(Paragraph("학교 안전 점검 결과 보고서", h_style))
     flow.append(Paragraph(
-        f"세이프루프(SafeLoop) · 교육시설법 제10조 3항 자체 점검 · 생성일 {datetime.datetime.now():%Y-%m-%d}",
+        f"세이프루프(SafeLoop) · 교육시설법 제10조 3항 자체 점검 · 생성일 {_now():%Y-%m-%d}",
         body))
     flow.append(Spacer(1, 6 * mm))
 
@@ -571,7 +580,8 @@ def save_inspection(session: dict) -> dict:
     open_pkg = build_opendata_package(master)
 
     # Machine-readable
-    (out_dir / "master.json").write_text(
+    master_path = out_dir / "master.json"
+    master_path.write_text(
         json.dumps(master, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (out_dir / "edu_package.json").write_text(
@@ -580,6 +590,14 @@ def save_inspection(session: dict) -> dict:
     (out_dir / "opendata_package.json").write_text(
         json.dumps(open_pkg, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+    # SQLite 인덱스 자동 갱신 — list_school_submissions / 사이드바 배지 등
+    # 빠른 조회 + 다학교·다세션 확장 대비. 실패해도 master.json 은 이미 저장됨.
+    try:
+        from modules.db import upsert_inspection_index
+        upsert_inspection_index(school_code, session_id, master, master_path)
+    except Exception:
+        pass
 
     # Human-readable
     (out_dir / "점검결과.csv").write_bytes(build_csv(master))
@@ -617,7 +635,7 @@ def save_uploaded_edu_inbox(file_bytes: bytes, file_name: str) -> dict:
 
     target_dir = EDU_RECEIPT_DIR / sido
     target_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = _now().strftime("%Y%m%d-%H%M%S")
     # 확장자를 .json 으로 통일 — 수신함은 복호화된 평문 보관 (빠른 검색·필터)
     base = file_name.replace("/", "_").replace("\\", "_")
     if base.endswith(".safeloop"):
@@ -716,7 +734,7 @@ def ensure_demo_edu_inbox() -> int:
     demo_sido = "충청남도교육청"
     target_dir = EDU_RECEIPT_DIR / demo_sido
     target_dir.mkdir(parents=True, exist_ok=True)
-    now = datetime.datetime.now()
+    now = _now()
     created = 0
 
     # 1. 단일 점검 데모 — 화학실 1건
@@ -846,7 +864,7 @@ def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
     target_dir = EDU_RECEIPT_DIR / sido
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    ts = _now().strftime("%Y%m%d-%H%M%S")
     # 통합본은 `_consolidated_` 접미사로 파일명 구분 — 수신함 표시에 도움.
     suffix = "_consolidated" if record_type == "safeloop_consolidated_submission" else ""
     file_name = f"{school_code}_{ts}{suffix}.json"
@@ -871,7 +889,7 @@ def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
         "school_name": school.get("name", ""),
         "space_type": space_disp,
         "file_name": file_name,
-        "submitted_at": datetime.datetime.now().isoformat(),
+        "submitted_at": _now().isoformat(),
         "score": score_disp,
         "grade": edu_pkg.get("grade"),
         "record_type": record_type,
@@ -907,7 +925,7 @@ def mark_edu_inbox_read(sido: str, file_name: str) -> bool:
             json.dumps({
                 "sido": sido,
                 "file_name": file_name,
-                "read_at": datetime.datetime.now().isoformat(),
+                "read_at": _now().isoformat(),
             }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -952,7 +970,7 @@ def toggle_edu_inbox_star(sido: str, file_name: str) -> bool:
         except Exception:
             return True
     try:
-        p.write_text(datetime.datetime.now().isoformat(), encoding="utf-8")
+        p.write_text(_now().isoformat(), encoding="utf-8")
         return True
     except Exception:
         return False
@@ -1057,7 +1075,7 @@ def save_draft_shots(school_code: str, shots: dict, space_id: str = "") -> None:
                 continue
     (d / "_meta.json").write_text(
         json.dumps({
-            "updated_at": datetime.datetime.now().isoformat(),
+            "updated_at": _now().isoformat(),
             "files": metadata,
         }, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -1144,7 +1162,7 @@ def save_school_profile(school_code: str, profile: dict) -> None:
     except Exception:
         existing = {}
     existing.update(profile)
-    existing["updated_at"] = datetime.datetime.now().isoformat()
+    existing["updated_at"] = _now().isoformat()
     _profile_path(school_code).write_text(
         json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -1252,7 +1270,7 @@ def cleanup_old_cache(days: int = 30) -> tuple[int, int]:
     cache = STORAGE_DIR / "_ai_cache"
     if not cache.exists():
         return 0, 0
-    cutoff = datetime.datetime.now().timestamp() - days * 86400
+    cutoff = _now().timestamp() - days * 86400
     removed = 0
     bytes_freed = 0
     for p in cache.rglob("*"):
@@ -1279,7 +1297,7 @@ def cleanup_school_storage(days: int = 90) -> tuple[int, int]:
     """
     if not STORAGE_DIR.exists():
         return 0, 0
-    cutoff = datetime.datetime.now().timestamp() - days * 86400
+    cutoff = _now().timestamp() - days * 86400
     removed_sessions = 0
     bytes_freed = 0
     for school_dir in STORAGE_DIR.iterdir():
@@ -1520,7 +1538,7 @@ def update_submission_status(
         "status": new_status,
         "by": by or "(unknown)",
         "by_role": by_role,
-        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "at": _now().isoformat(timespec="seconds"),
         "note": note or "",
     })
     data["status_history"] = history
@@ -1532,6 +1550,11 @@ def update_submission_status(
             json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        try:
+            from modules.db import upsert_inspection_index
+            upsert_inspection_index(school_code, session_id, data, master_path)
+        except Exception:
+            pass
         return True
     except Exception:
         return False
@@ -1564,7 +1587,7 @@ def update_submission_scores(
         "status": data.get("status"),
         "by": by or "(unknown)",
         "by_role": "학교",
-        "at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "at": _now().isoformat(timespec="seconds"),
         "note": note or "학교 담당자 직접 수정",
     })
     data["status_history"] = history
@@ -1575,6 +1598,11 @@ def update_submission_scores(
             json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        try:
+            from modules.db import upsert_inspection_index
+            upsert_inspection_index(school_code, session_id, data, master_path)
+        except Exception:
+            pass
         return True
     except Exception:
         return False

@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 import datetime
+
+KST = datetime.timezone(datetime.timedelta(hours=9))
 import io
 from typing import Any
 
@@ -132,7 +134,7 @@ def build_consolidated_record(
             "교육시설법 제10조 제3항 — 안전·유지관리기준 자체 점검 "
             "(학교 단위 통합 보고)"
         ),
-        "submission_timestamp": datetime.datetime.now().isoformat(),
+        "submission_timestamp": datetime.datetime.now(KST).isoformat(),
         "school": school_info,
         "school_admin": school_admin_name,
         "spaces_count": len(spaces),

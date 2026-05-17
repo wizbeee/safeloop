@@ -6,9 +6,30 @@ Streamlit 세션 상태 헬퍼.
 """
 from __future__ import annotations
 
+import datetime
 from typing import Any
 
 import streamlit as st
+
+
+# ─────────────────────────────────────────
+# 한국 표준시(KST, UTC+9) 헬퍼
+#
+# 외부 클라우드(예: Streamlit Cloud) 배포 시 서버가 UTC 라 `datetime.now()`
+# 가 9시간 어긋난다. 모든 timestamp 는 KST 기준으로 일관 처리한다.
+# 새 코드는 now_kst() 사용. 기존 datetime.datetime.now() 호출도 점진 치환.
+# ─────────────────────────────────────────
+KST = datetime.timezone(datetime.timedelta(hours=9))
+
+
+def now_kst() -> datetime.datetime:
+    """현재 한국 시각 (timezone-aware datetime)."""
+    return datetime.datetime.now(KST)
+
+
+def now_kst_iso() -> str:
+    """현재 한국 시각의 ISO 8601 문자열."""
+    return now_kst().isoformat()
 
 DEFAULT_STATE = {
     # 학교 식별 (Step 1)
@@ -92,6 +113,66 @@ def ensure_state() -> None:
             st.session_state["demo_mode"] = True
         st.session_state["_demo_mode_resolved"] = True
 
+    # 자동 로그인 1회 시도 — 어느 페이지에 직진입해도 학교·매니저 컨텍스트가
+    # 복원되도록. 이전엔 1_점검시작.py 안에서만 시도해 URL 직진입 사용자는
+    # 학교가 안 잡혀 막혔다. cookie_manager IFrame 깜빡임 방지 위해 1회만.
+    if not st.session_state.get("_auto_login_attempted"):
+        st.session_state["_auto_login_attempted"] = True
+        try:
+            _try_auto_login_school()
+            _try_auto_login_manager()
+        except Exception:
+            pass  # 자동 로그인 실패는 silent — 사용자가 수동 인증 가능
+
+
+def _try_auto_login_school() -> None:
+    """학교 자동 로그인 — 쿠키에 저장된 학교 코드 + 인증번호로 학교 컨텍스트 복원.
+
+    1_점검시작.py 와 동일한 패턴: issue_auth_code(코드) 로 기대 인증번호 생성 후
+    쿠키 토큰과 일치 검증.
+    """
+    if st.session_state.get("school") and st.session_state.get("school_auth_verified"):
+        return
+    from modules.auth import get_remembered_school, verify_school_token
+    from modules.data_loader import get_school_by_code
+    from modules.storage import issue_auth_code
+    code = get_remembered_school()
+    if not code:
+        return
+    school = get_school_by_code(code)
+    if not school:
+        return
+    expected = issue_auth_code(code)
+    if not expected or not verify_school_token(code, expected):
+        return
+    st.session_state["school"] = school
+    st.session_state["school_auth_verified"] = True
+
+
+def _try_auto_login_manager() -> None:
+    """매니저(실 담당자) 자동 로그인 — 쿠키 (school_code, manager_id) 로 복원."""
+    if st.session_state.get("space_manager"):
+        return
+    from modules.auth import get_remembered_manager
+    from modules.managers import get_manager
+    info = get_remembered_manager()
+    if not info:
+        return
+    code, mid = info
+    # 학교 컨텍스트가 비어 있으면 같이 채움 (URL 직진입 사용자 보호).
+    if not st.session_state.get("school"):
+        from modules.data_loader import get_school_by_code
+        school = get_school_by_code(code)
+        if school:
+            st.session_state["school"] = school
+    # 학교가 매니저 쿠키의 학교와 다르면 자동 로그인 안 함 (보안).
+    school_code = (st.session_state.get("school") or {}).get("정보공시 학교코드")
+    if code != school_code:
+        return
+    mgr = get_manager(school_code, mid)
+    if mgr and mgr.get("active", True):
+        st.session_state["space_manager"] = mgr
+
 
 def has_unsaved_inspection_work() -> bool:
     """현재 세션에 저장되지 않은 점검 작업이 있는지 검사.
@@ -162,19 +243,21 @@ def get(key: str, default: Any = None) -> Any:
 
 
 def stamp_activity() -> None:
-    """페이지 진입마다 호출. 마지막 활동 시각 기록."""
-    import datetime
-    st.session_state["_last_activity"] = datetime.datetime.now().isoformat()
+    """페이지 진입마다 호출. 마지막 활동 시각 기록 (KST)."""
+    st.session_state["_last_activity"] = now_kst_iso()
 
 
 def session_age_minutes() -> float:
-    """마지막 활동 이후 경과 분 (분)."""
-    import datetime
+    """마지막 활동 이후 경과 분 (분). 기존 naive 저장본도 안전 처리."""
     last = st.session_state.get("_last_activity")
     if not last:
         return 0.0
     try:
-        delta = datetime.datetime.now() - datetime.datetime.fromisoformat(last)
+        last_dt = datetime.datetime.fromisoformat(last)
+        if last_dt.tzinfo is None:
+            # 옛 naive 저장본 — KST 로 가정 (서버 변경 전 데이터 호환).
+            last_dt = last_dt.replace(tzinfo=KST)
+        delta = now_kst() - last_dt
         return delta.total_seconds() / 60.0
     except Exception:
         return 0.0

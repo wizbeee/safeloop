@@ -746,14 +746,49 @@ else:
                     st.error(f"산출물 생성 실패: {_err}")
                     st.caption("디버그: " + str(type(_err).__name__))
 
-                # 교육청 수신함 자동 발송 + 상태 일괄 처리
+                # 교육청 수신함 자동 발송 + 상태 일괄 처리 + SMTP 옵션
                 st.markdown("##### 통합 완료 처리 — 교육청 수신함 자동 발송")
                 st.caption(
                     "버튼을 누르면 선택된 점검들이 **하나의 통합 보고서로 묶여 "
                     "교육청 담당자 수신함에 즉시 도착**하고, 모든 점검의 상태가 "
-                    "**통합 완료(consolidated)** 로 변경되어 통합 대상 목록에서 빠집니다. "
-                    "별도 메일 발송이 필요 없습니다."
+                    "**통합 완료(consolidated)** 로 변경되어 통합 대상 목록에서 빠집니다."
                 )
+
+                # SMTP 자동 메일 발송 옵션 — SMTP 설정 + 교육청 이메일이 모두
+                # 있을 때만 노출. 학교·교육청이 분리된 환경(다른 서버)에서도
+                # 보고서가 도착하도록.
+                _send_email = False
+                _send_email_disabled_reason: str | None = None
+                try:
+                    from modules.mailer import smtp_configured
+                    _smtp_ok = smtp_configured()
+                except Exception:
+                    _smtp_ok = False
+                _edu_email = (st.session_state.get("edu_office_email") or "").strip()
+                _is_demo = bool(st.session_state.get("demo_mode"))
+                if _is_demo:
+                    _send_email_disabled_reason = (
+                        "시연 모드 — 실제 메일은 발송하지 않습니다."
+                    )
+                elif not _smtp_ok:
+                    _send_email_disabled_reason = (
+                        "SMTP 미설정 — `.env` 에 SMTP_USER/SMTP_PASS 등록 시 "
+                        "이메일 발송 옵션이 활성화됩니다. "
+                        "([설정] → 운영 모드 → 'SMTP 연결 시험')"
+                    )
+                elif not _edu_email or "@" not in _edu_email:
+                    _send_email_disabled_reason = (
+                        "교육청 담당자 이메일 미등록 — [설정] → 이메일 등록 에서 추가."
+                    )
+                if _send_email_disabled_reason:
+                    st.caption(f"메일 자동 발송: 비활성 ({_send_email_disabled_reason})")
+                else:
+                    _send_email = st.checkbox(
+                        f"교육청 ({_edu_email}) 에게 메일도 함께 발송 — "
+                        f"PDF + Excel + JSON 첨부",
+                        value=True,
+                        key="_dispatch_send_email",
+                    )
 
                 _send_col1, _send_col2 = st.columns([2, 1])
                 with _send_col1:
@@ -799,6 +834,68 @@ else:
                                 f"{_cnt}건 통합 완료 상태 표시 — 교육청 수신함 "
                                 f"전송에 문제가 있어 별도 다운로드 후 발송 권장."
                             )
+                        # SMTP 메일 발송 (옵션) — 다른 서버 환경에서도 보고서 도착.
+                        if _send_email:
+                            try:
+                                from modules.mailer import send_inspection_email
+                                _ts_now = datetime.datetime.now().strftime(
+                                    "%Y-%m-%d"
+                                )
+                                _subj = (
+                                    f"[SafeLoop] {school.get('학교명', '')} "
+                                    f"통합 안전 점검 보고서 ({_ts_now}, "
+                                    f"{_cnt}개 공간)"
+                                )
+                                _body = (
+                                    f"{school.get('학교명', '')}에서 발송한 "
+                                    f"안전 점검 통합 보고서입니다.\n\n"
+                                    f"- 포함 공간: {_cnt}개\n"
+                                    f"- 평균 점수: "
+                                    f"{_record.get('average_score', '-')}\n"
+                                    f"- 학교 담당자: {_admin_label}\n\n"
+                                    f"첨부 파일:\n"
+                                    f"- PDF (결재·인쇄용)\n"
+                                    f"- Excel (KEIIS 입력용)\n"
+                                    f"- JSON (시스템 연동용)\n\n"
+                                    f"본 메일은 SafeLoop 에서 자동 발송되었습니다."
+                                )
+                                _my_email = (
+                                    st.session_state.get("my_email") or ""
+                                ).strip() or None
+                                _mail_res = send_inspection_email(
+                                    to_email=_edu_email,
+                                    subject=_subj,
+                                    body_text=_body,
+                                    attachments=[
+                                        (
+                                            f"{_file_base}.pdf",
+                                            _pdf_bytes,
+                                            "application/pdf",
+                                        ),
+                                        (
+                                            f"{_file_base}.xlsx",
+                                            _xlsx_bytes,
+                                            "application/vnd.openxmlformats-"
+                                            "officedocument.spreadsheetml.sheet",
+                                        ),
+                                        (
+                                            f"{_file_base}.json",
+                                            _json_bytes,
+                                            "application/json",
+                                        ),
+                                    ],
+                                    cc=[_my_email] if _my_email else None,
+                                )
+                                if _mail_res.get("ok"):
+                                    st.success(
+                                        f"메일 발송 완료 — 수신자: {_edu_email}"
+                                    )
+                                else:
+                                    st.warning(
+                                        f"메일 발송 실패 — {_mail_res.get('error')}"
+                                    )
+                            except Exception as _me:
+                                st.warning(f"메일 발송 중 오류: {_me}")
                         for _err in _errs:
                             st.caption(f"[오류] {_err}")
                         st.rerun()

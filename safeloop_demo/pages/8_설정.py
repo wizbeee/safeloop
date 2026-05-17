@@ -88,6 +88,66 @@ else:
         )
         st.switch_page("app.py")
 
+# ─────────────────────────────────────────
+# SQLite 인덱스 — 점검 데이터 빠른 검색·집계
+# ─────────────────────────────────────────
+st.markdown("---")
+from modules.db import get_index_stats, rebuild_index
+from modules.storage import STORAGE_DIR as _STORAGE_DIR
+_idx1, _idx2 = st.columns([3, 1])
+with _idx1:
+    _stats = get_index_stats()
+    st.markdown(
+        f"**SQLite 인덱스**: {_stats['inspections']}건 등록 · "
+        f"마지막 재구축 {_stats['last_rebuild'] or '없음'}"
+    )
+    st.caption(
+        "점검 저장 시 자동 갱신. 외부 도구로 master.json 직접 추가했거나 "
+        "인덱스가 손상된 경우 [재구축] 으로 디스크 전체 재스캔."
+    )
+with _idx2:
+    if st.button("인덱스 재구축", key="rebuild_index_btn",
+                  width="stretch", help="모든 master.json 재스캔 — 수 초 소요"):
+        with st.spinner("인덱스 재구축 중…"):
+            _res = rebuild_index(_STORAGE_DIR)
+        st.success(f"{_res['inspections']}건 재구축 완료")
+        for _err in (_res.get("errors") or [])[:5]:
+            st.caption(f"[건너뜀] {_err}")
+        st.rerun()
+
+# ─────────────────────────────────────────
+# SMTP 메일 발송 연결 시험 (학교 담당자가 교육청에 메일 보낼 때 사용)
+# ─────────────────────────────────────────
+st.markdown("---")
+from modules.mailer import smtp_configured, test_smtp_connection
+_sm1, _sm2 = st.columns([3, 1])
+with _sm1:
+    if smtp_configured():
+        st.markdown(
+            "**SMTP 메일 발송**: 설정됨. 통합 발송 시 교육청 이메일로 "
+            "PDF·Excel·JSON 자동 첨부 발송 가능."
+        )
+    else:
+        st.markdown(
+            "**SMTP 메일 발송**: 미설정. `.env` 에 `SMTP_USER` (Gmail 주소) + "
+            "`SMTP_PASS` (Gmail 앱 비밀번호) 를 등록하면 통합 발송 시 교육청에 "
+            "메일이 함께 발송됩니다."
+        )
+        st.caption(
+            "Gmail 앱 비밀번호: Google 계정 → 보안 → 2단계 인증 활성화 → "
+            "앱 비밀번호 → '기타 (SafeLoop)' → 16자리 복사."
+        )
+with _sm2:
+    if st.button("SMTP 연결 시험", key="test_smtp",
+                  disabled=not smtp_configured(), width="stretch",
+                  help="실제 메일은 보내지 않고 서버 연결·로그인만 시험."):
+        with st.spinner("SMTP 서버 연결 중…"):
+            _res = test_smtp_connection()
+        if _res.get("ok"):
+            st.success(f"연결 성공 — {_res.get('host')}")
+        else:
+            st.error(f"연결 실패 — {_res.get('error')}")
+
 # 역할 변경 — 3택 (실 / 학교 / 교육청)
 _ROLE_LABELS = {
     "실": "실 담당자",

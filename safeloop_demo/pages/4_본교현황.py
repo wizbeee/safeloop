@@ -314,4 +314,29 @@ section("04", "전체 점검 이력")
 table = df[["timestamp", "space_type", "space_nickname", "score", "grade", "session_id"]].copy()
 table.columns = ["점검일시", "공간 유형", "별칭", "점수", "등급", "세션 ID"]
 table = table.sort_values("점검일시", ascending=False)
+# PC 는 dataframe — 한눈에 다 보이고 정렬·복사 편함.
+st.markdown("<div class='sl-table-pc'>", unsafe_allow_html=True)
 st.dataframe(table, width="stretch", hide_index=True, height=320)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# 모바일은 카드 리스트로 자동 분기 (CSS 미디어쿼리). 표보다 가독성 ↑.
+_card_rows = []
+for _, _r in table.head(50).iterrows():
+    _score_v = _r["점수"]
+    _score_disp = f"{_score_v}" if _score_v is not None else "-"
+    _nick = _r["별칭"] or "별칭 없음"
+    _card_rows.append(
+        f"<div class='sl-hist-card'>"
+        f"<div class='sl-hist-head'>"
+        f"<b>{_r['공간 유형']}</b>"
+        f"<span class='sl-hist-score'>{_score_disp}점 · {_r['등급']}</span>"
+        f"</div>"
+        f"<div class='sl-hist-meta'>{_nick} · {str(_r['점검일시'])[:16]}</div>"
+        f"</div>"
+    )
+st.markdown(
+    "<div class='sl-table-mobile'>"
+    + "".join(_card_rows)
+    + "</div>",
+    unsafe_allow_html=True,
+)
