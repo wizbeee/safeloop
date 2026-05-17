@@ -16,6 +16,10 @@
 
 > 🆕 **다른 컴퓨터에서 시작?** [`NEW_PC_START.md`](NEW_PC_START.md) → 5단계 / 약 15분
 
+> 🔗 **관련 저장소**: [`wizbeee/safeloop-dashboard`](https://github.com/wizbeee/safeloop-dashboard) (Public · Stage 1 공공데이터 시각화)
+> 본 점검 프로그램의 **공공 환원 export** 결과는 위 대시보드에서 자동 합산되어 표시됩니다.
+> 환원 데이터 형식은 [`docs/opendata_schema.md`](docs/opendata_schema.md) 참고.
+
 > ★ **작업 폴더는 [`safeloop_demo/`](safeloop_demo/)** — 운영 코드는 모두 여기에 있습니다.
 > 루트의 [`_archive_v8_contest/`](_archive_v8_contest/) 는 공모전 출품 시점(2026-04) 보관 자료 — 작업 대상 아닙니다.
 
