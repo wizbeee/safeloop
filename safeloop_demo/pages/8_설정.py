@@ -52,9 +52,6 @@ if _in_demo:
     if st.button("시연 종료 (실 사용으로 전환)", key="end_demo_mode",
                   width="stretch"):
         st.session_state["demo_mode"] = False
-        # 홈에서 시연 시작 카드를 숨기기 위한 플래그.
-        # 다시 [시연 시작] 누르면 app.py 가 이 플래그를 제거함.
-        st.session_state["_demo_terminated"] = True
         if _cleanup_demo:
             try:
                 from modules.storage import cleanup_demo_artifacts
@@ -72,10 +69,24 @@ if _in_demo:
             st.toast("시연 종료 — 이제 실 사용 모드입니다", icon=None)
         st.rerun()
 else:
-    st.caption(
-        "현재 실 사용 모드입니다. 시연을 다시 시작하려면 홈의 "
-        "**시연 시작** 버튼을 누르세요."
+    st.markdown(
+        "<div style='padding:10px 14px;background:#FAFAFA;border:1px solid #E5E5E8;"
+        "border-radius:6px;font-size:13px;color:#0A0A0B;line-height:1.6;'>"
+        "현재 <b>실 사용 모드</b>입니다. 시연 자료(더미 이미지·합성 응답)는 "
+        "표시되지 않습니다."
+        "</div>",
+        unsafe_allow_html=True,
     )
+    # 시연 진입점은 [설정] 에 일원화 — demo_mode=True 로 토글하면 홈에서
+    # 시연 시작 카드와 자동재생 흐름이 활성화됨.
+    if st.button("시연 모드 시작 (체험·발표용)", key="start_demo_mode",
+                  width="stretch"):
+        st.session_state["demo_mode"] = True
+        st.toast(
+            "시연 모드 시작 — 홈으로 가서 [시연 시작] 버튼을 누르세요.",
+            icon=None,
+        )
+        st.switch_page("app.py")
 
 # 역할 변경 — 3택 (실 / 학교 / 교육청)
 _ROLE_LABELS = {
@@ -338,7 +349,13 @@ else:
         )
 
     # ── 현재 명부 ──
-    _all_managers = list_managers(_mgr_school_code, include_inactive=True)
+    # 시연 매니저(_demo:True)는 시연 모드가 켜져 있을 때만 명부에 노출.
+    # 실 사용 모드에선 시연 흔적이 보이지 않도록 필터.
+    _all_managers_raw = list_managers(_mgr_school_code, include_inactive=True)
+    if st.session_state.get("demo_mode"):
+        _all_managers = _all_managers_raw
+    else:
+        _all_managers = [m for m in _all_managers_raw if not m.get("_demo")]
     _actives = [m for m in _all_managers if m.get("active", True)]
     _inactives = [m for m in _all_managers if not m.get("active", True)]
 

@@ -458,6 +458,10 @@ if (_role == "실" and st.session_state.get("school")
             pass
 
     managers = list_managers(school_code)
+    # 시연 모드 OFF 일 때 시연 매니저(_demo:True) 는 selectbox 에서 숨김.
+    # 실 사용 시 시연 흔적이 보이지 않도록 일관 처리.
+    if not st.session_state.get("demo_mode"):
+        managers = [m for m in managers if not m.get("_demo")]
 
     # ── 셀프 가입 직후 발급된 PIN 1회 표시 (다음 로그인용) ──
     _self_issued = st.session_state.pop("_self_issued_pin", None)
