@@ -35,8 +35,8 @@ from modules.storage import (
     toggle_edu_inbox_star,
 )
 from modules.ui import (
-    apply_theme, divider, empty_state, hero, mobile_pc_hint,
-    render_sidebar, section,
+    apply_theme, divider, empty_state, hero, mask_school_name,
+    mask_sido, mobile_pc_hint, render_sidebar, section,
 )
 
 st.set_page_config(page_title="교육청 수신함 · SafeLoop", page_icon="static/icon-192.png",
@@ -401,8 +401,8 @@ df = pd.DataFrame([
         "유형": _type_label(x),
         "그룹": _time_bucket(x.get("received_at", "")),
         "수신일시": (x.get("received_at", "") or "")[:16].replace("T", " "),
-        "시도": x.get("sido", ""),
-        "학교명": x.get("school", ""),
+        "시도": mask_sido(x.get("sido", "")),
+        "학교명": mask_school_name(x.get("school", "")),
         "공간": (x.get("space_type", "") or "") +
                 (f" ({x['space_nickname']})" if x.get("space_nickname") else ""),
         "점수": x.get("score", "-"),
@@ -549,10 +549,11 @@ else:
             f"<div style='padding:14px 18px;border:1px solid #E5E5E8;"
             f"border-left:4px solid #D50000;border-radius:6px;background:#FFF;'>"
             f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:4px;'>"
-            f"{star_icon} {school.get('name','-')}</div>"
+            f"{star_icon} {mask_school_name(school.get('name','-'))}</div>"
             f"<div style='font-size:13px;color:#6B6B70;line-height:1.7;'>"
             f"코드 <code>{school.get('code','-')}</code> · "
-            f"{school.get('sido','-')} · {school.get('region','-')}<br>"
+            f"{mask_sido(school.get('sido','-'))} · "
+            f"{(school.get('region','-') if not st.session_state.get('demo_mode') else '○○')}<br>"
             f"공간: <b>{space.get('type','-')}</b> "
             f"({space.get('nickname') or '-'})<br>"
             f"종합 점수: <b style='color:#D50000'>{data.get('safety_score','-')}점</b> · "
@@ -690,8 +691,8 @@ section("04", "필터 결과 내보내기", "현재 필터 적용된 결과를 C
 export_df = pd.DataFrame([
     {
         "수신일시": (x.get("received_at", "") or "")[:16].replace("T", " "),
-        "시도": x.get("sido", ""),
-        "학교명": x.get("school", ""),
+        "시도": mask_sido(x.get("sido", "")),
+        "학교명": mask_school_name(x.get("school", "")),
         "학교코드": x.get("school_code", ""),
         "공간": x.get("space_type", ""),
         "점수": x.get("score", ""),

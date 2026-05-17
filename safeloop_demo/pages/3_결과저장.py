@@ -29,7 +29,7 @@ from modules.storage import (
     clear_draft,
     korean_font_available,
 )
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, hero, mask_school_name, render_sidebar, section
 
 st.set_page_config(page_title="결과 저장·발송 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="auto")
@@ -70,7 +70,7 @@ if _is_space_role:
     hero(
         "단계 3 — 학교 담당자에게 제출",
         "결과 제출",
-        f"{school['학교명']} · {active_space.get('type', '-')} "
+        f"{mask_school_name(school['학교명'])} · {active_space.get('type', '-')} "
         f"({active_space.get('nickname') or '-'}) "
         f"· 제출자: {_space_mgr.get('name', '실 담당자')}",
     )
@@ -82,7 +82,7 @@ else:
     hero(
         "단계 3 — 결과 저장",
         "결과 저장",
-        f"{school['학교명']} · {active_space.get('type', '-')} "
+        f"{mask_school_name(school['학교명'])} · {active_space.get('type', '-')} "
         f"({active_space.get('nickname') or '-'})",
     )
 

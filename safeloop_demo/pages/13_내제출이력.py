@@ -16,7 +16,7 @@ import streamlit as st
 
 from modules.session import ensure_state, require_school
 from modules.storage import list_school_submissions, load_master_record
-from modules.ui import apply_theme, divider, empty_state, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, empty_state, hero, mask_school_name, render_sidebar, section
 
 st.set_page_config(
     page_title="내 제출 이력 · SafeLoop",
@@ -81,7 +81,7 @@ if not _my_mid:
     st.stop()
 
 school_code = school.get("정보공시 학교코드") or ""
-school_name = school.get("학교명") or ""
+school_name = mask_school_name(school.get("학교명") or "")
 
 hero(
     "MY HISTORY · 실 담당자",

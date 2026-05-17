@@ -29,8 +29,8 @@ from modules.storage import (
     submit_to_edu_inbox_direct,
 )
 from modules.ui import (
-    apply_theme, divider, empty_state, hero, mobile_pc_hint,
-    render_sidebar, section,
+    apply_theme, divider, empty_state, hero, mask_school_name,
+    mobile_pc_hint, render_sidebar, section,
 )
 
 st.set_page_config(page_title="데이터 전송 · SafeLoop",
@@ -79,7 +79,7 @@ if not school:
     st.stop()
 
 school_code = school.get("정보공시 학교코드", "")
-school_name = school.get("학교명", "")
+school_name = mask_school_name(school.get("학교명", ""))
 school_sido = school.get("시도교육청", "")
 
 # 본교의 모든 저장 세션

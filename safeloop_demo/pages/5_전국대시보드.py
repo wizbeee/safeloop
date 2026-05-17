@@ -17,7 +17,7 @@ from modules.data_loader import (
     load_sido_summary,
 )
 from modules.session import ensure_state
-from modules.ui import apply_theme, divider, hero, render_sidebar, section
+from modules.ui import apply_theme, divider, hero, mask_school_name, mask_sido, render_sidebar, section
 
 st.set_page_config(page_title="전국 대시보드 · SafeLoop", page_icon="static/icon-192.png",
                    layout="wide", initial_sidebar_state="auto")
@@ -32,8 +32,8 @@ hero("DASHBOARD · 공공용",
 # 본교 정보 (있을 때만) — 본교 위치를 차트에 강조 표시하기 위함
 _my_school = st.session_state.get("school") or {}
 _my_school_code = _my_school.get("정보공시 학교코드", "")
-_my_school_name = _my_school.get("학교명", "")
-_my_school_sido = _my_school.get("시도교육청", "")
+_my_school_name = mask_school_name(_my_school.get("학교명", ""))
+_my_school_sido = mask_sido(_my_school.get("시도교육청", ""))
 if _my_school_code:
     st.success(
         f"**본교 인증됨** — `{_my_school_name}` ({_my_school_sido}) — "

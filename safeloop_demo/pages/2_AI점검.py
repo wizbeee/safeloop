@@ -22,8 +22,8 @@ from modules.recommend import recommend_from_scores
 from modules.score import calculate_safety_score
 from modules.session import ensure_state, require_school
 from modules.ui import (
-    apply_theme, divider, friendly_error, hero, render_sidebar, section,
-    confirm_button,
+    apply_theme, divider, friendly_error, hero, mask_school_name,
+    render_sidebar, section, confirm_button,
 )
 
 st.set_page_config(page_title="AI 점검 · SafeLoop", page_icon="static/icon-192.png",
@@ -50,7 +50,7 @@ if not space:
 hero(
     "단계 2 — AI 점검",
     "AI 점검",
-    f"{school['학교명']} · {space['type']}"
+    f"{mask_school_name(school['학교명'])} · {space['type']}"
     + (f" · {space.get('nickname')}" if space.get("nickname") else ""),
 )
 

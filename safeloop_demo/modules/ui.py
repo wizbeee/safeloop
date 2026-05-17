@@ -454,9 +454,11 @@ def render_sidebar(active_key: str = "") -> None:
                         "border-left:2px solid #D50000; border-radius:6px; " \
                         "padding:10px 12px; margin-bottom:14px;'>"
             if school:
+                # 시연 모드 마스킹 — 학교명 본문은 ○○ 로, 학교급은 유지.
+                _ctx_school_name = mask_school_name(school.get('학교명') or '-')
                 ctx_html += (
                     f"<div style='font-size:13px; font-weight:600; color:#0A0A0B; "
-                    f"line-height:1.3;'>{school.get('학교명','-')}</div>"
+                    f"line-height:1.3;'>{_ctx_school_name}</div>"
                     f"<div style='font-size:11px; color:#9A9A9F; margin-top:2px;'>"
                     f"{school.get('학교급','-')} · {school.get('설립구분','-')}</div>"
                 )
@@ -646,6 +648,79 @@ def render_sidebar(active_key: str = "") -> None:
 def desktop_columns(spec: list[float] | int = 2):
     """데스크톱에선 좌-우 분할, 모바일에선 자동 세로 스택."""
     return st.columns(spec)
+
+
+# ─────────────────────────────────────────
+# 시연 모드 마스킹 — 실 학교명·교육청명·지역명을 ○○ 로 가림.
+#
+# 발표·시연에서 충남삼성고 등 실 학교명이 그대로 노출되면 사용자가 시연 데이터를
+# 실 학교 데이터로 오해하거나, 프라이버시 우려가 생길 수 있다. 시연 모드 일 때만
+# 학교급 정보는 유지하면서(고/중/초) 학교명 본문을 가림.
+#
+# 사용 예:
+#   from modules.ui import mask_school_name, mask_sido, demo_masked_school
+#   name = mask_school_name(school.get("학교명"))  # "원촌중학교" → "○○ 중학교"
+#   sido = mask_sido(school.get("시도교육청"))      # "충청남도교육청" → "○○ 교육청"
+#   ms = demo_masked_school(school)                  # dict 전체 마스킹 사본
+#
+# 실 사용 모드(`demo_mode=False`) 에서는 원본 그대로 반환.
+# ─────────────────────────────────────────
+def _is_demo() -> bool:
+    try:
+        return bool(st.session_state.get("demo_mode"))
+    except Exception:
+        return False
+
+
+def mask_school_name(name: str | None) -> str:
+    """시연 모드 일 때 학교명을 '○○ 학교급' 으로. 실 모드는 원본."""
+    if not name:
+        return name or ""
+    if not _is_demo():
+        return name
+    # 학교급 어미 추출 — 마지막에 붙은 학교/중학교/고등학교/초등학교 등.
+    for suffix in ("고등학교", "중학교", "초등학교", "특수학교", "학교"):
+        if name.endswith(suffix):
+            return f"○○ {suffix}"
+    return "○○ 학교"
+
+
+def mask_sido(name: str | None) -> str:
+    """시연 모드 일 때 시도교육청명을 '○○ 교육청' 으로."""
+    if not name:
+        return name or ""
+    if not _is_demo():
+        return name
+    # "충청남도교육청" / "서울특별시교육청" 등 → "○○ 교육청"
+    if "교육청" in name:
+        return "○○ 교육청"
+    return f"○○ {name}"
+
+
+def mask_region(name: str | None) -> str:
+    """시연 모드 일 때 지역명을 '○○' 로."""
+    if not name:
+        return name or ""
+    if not _is_demo():
+        return name
+    return "○○"
+
+
+def demo_masked_school(school: dict | None) -> dict | None:
+    """학교 dict 전체를 시연 모드에 맞춰 마스킹한 사본 반환.
+
+    실 사용 모드에선 원본 그대로 (얕은 복사).
+    학교 코드는 그대로 유지 (시스템 내부 식별 용도).
+    """
+    if not school:
+        return school
+    if not _is_demo():
+        return school
+    masked = dict(school)
+    masked["학교명"] = mask_school_name(masked.get("학교명"))
+    masked["시도교육청"] = mask_sido(masked.get("시도교육청"))
+    masked["지역"] = mask_region(masked.get("지역"))
+    return masked
 
 
 def mobile_pc_hint(reason: str = "표가 많아 PC·태블릿 가로 화면에서 더 보기 편합니다") -> None:

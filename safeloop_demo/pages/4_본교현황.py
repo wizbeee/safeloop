@@ -14,8 +14,8 @@ import streamlit as st
 from modules.session import ensure_state
 from modules.storage import list_recent_sessions
 from modules.ui import (
-    apply_theme, divider, empty_state, hero, mobile_pc_hint,
-    render_sidebar, section,
+    apply_theme, divider, empty_state, hero, mask_school_name,
+    mobile_pc_hint, render_sidebar, section,
 )
 
 st.set_page_config(page_title="본교 현황 · SafeLoop", page_icon="static/icon-192.png",
@@ -56,7 +56,7 @@ if not school:
 
 hero("DASHBOARD · 내부용",
      "본교 현황",
-     f"{school['학교명']} — 저장 즉시 반영 · 식별 유지 (관리자·교육청용)")
+     f"{mask_school_name(school['학교명'])} — 저장 즉시 반영 · 식별 유지 (관리자·교육청용)")
 
 mobile_pc_hint("표·차트가 많아 PC·태블릿 가로 화면에서 더 정확히 읽힙니다")
 
@@ -65,7 +65,7 @@ sessions = [s for s in list_recent_sessions(limit=200)
 
 if not sessions:
     empty_state(
-        title=f"{school.get('학교명','이 학교')}에 저장된 점검이 없습니다",
+        title=f"{mask_school_name(school.get('학교명') or '이 학교')}에 저장된 점검이 없습니다",
         description=(
             "AI 점검 후 결과 저장을 누르면 이 화면에 누적·시각화됩니다.\n\n"
             "**처음이라 어떻게 해볼지 모르시겠다면** — 홈으로 돌아가 "

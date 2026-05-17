@@ -25,7 +25,8 @@ from modules.data_loader import (
 )
 from modules.session import ensure_state
 from modules.ui import (
-    apply_theme, divider, hero, numeric_input_patch, render_sidebar, section,
+    apply_theme, divider, hero, mask_school_name, mask_region, mask_sido,
+    numeric_input_patch, render_sidebar, section,
 )
 
 st.set_page_config(page_title="점검 시작 · SafeLoop", page_icon="static/icon-192.png",
@@ -77,7 +78,7 @@ if not st.session_state.get("school_auth_verified") and not st.session_state.get
                     st.session_state["eduline"] = profile["eduline"]
             except Exception:
                 pass
-            st.toast(f"자동 로그인 — {_school.get('학교명', '')}", icon=None)
+            st.toast(f"자동 로그인 — {mask_school_name(_school.get('학교명', ''))}", icon=None)
 
 # 실 담당자 자동 로그인 — 쿠키에서 (school_code, manager_id) 읽어 학교 자동 인식.
 # PIN 은 보안상 자동 입력하지 않고, 매니저 명단 selectbox 의 기본값으로만 사용.
@@ -94,7 +95,7 @@ if (st.session_state.get("role") == "실"
             st.session_state["school"] = _rem_school
             # 매니저 인증 단계 selectbox 기본 선택용
             st.session_state["_remembered_mgr_id"] = _rem_manager_id
-            st.toast(f"자동 인식 — {_rem_school.get('학교명', '')}", icon=None)
+            st.toast(f"자동 인식 — {mask_school_name(_rem_school.get('학교명', ''))}", icon=None)
 
 # 1-7 수정: 공간이 이미 선택된 경우 상단에 즉시 이동 가능한 바로가기 표시
 _active_sp = st.session_state.get("active_space")
@@ -128,8 +129,10 @@ if current:
     st.markdown(
         f"<div class='sl-card sl-card-accent'>"
         f"<div style='font-size:12px;color:#6B6B70;letter-spacing:0.1em;margin-bottom:4px;'>선택된 학교</div>"
-        f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:4px;'>{current.get('학교명')}</div>"
-        f"<div style='font-size:13px;color:#6B6B70;'>{current.get('시도교육청')} · {current.get('지역')} · "
+        f"<div style='font-size:18px;font-weight:700;color:#0A0A0B;margin-bottom:4px;'>"
+        f"{mask_school_name(current.get('학교명'))}</div>"
+        f"<div style='font-size:13px;color:#6B6B70;'>"
+        f"{mask_sido(current.get('시도교육청'))} · {mask_region(current.get('지역'))} · "
         f"{current.get('학교급')} · {current.get('설립구분')}</div>"
         f"</div>",
         unsafe_allow_html=True,
@@ -178,11 +181,11 @@ if not current:
                     c1, c2 = st.columns([5, 1])
                     with c1:
                         st.markdown(
-                            f"**{row['학교명']}** "
+                            f"**{mask_school_name(row['학교명'])}** "
                             f"<span class='sl-pill'>{row['학교급']}</span>"
                             f"<span class='sl-pill'>{row['설립구분']}</span> \n"
                             f"<span style='color:#6B6B70;font-size:12px'>"
-                            f"{row['시도교육청']} · {row['지역']}</span>",
+                            f"{mask_sido(row['시도교육청'])} · {mask_region(row['지역'])}</span>",
                             unsafe_allow_html=True,
                         )
                     with c2:
@@ -239,10 +242,11 @@ if not current:
                     c1, c2 = st.columns([5, 1])
                     with c1:
                         st.markdown(
-                            f"**{row['학교명']}** "
+                            f"**{mask_school_name(row['학교명'])}** "
                             f"<span class='sl-pill'>{row['학교급']}</span>"
                             f"<span class='sl-pill'>{row['설립구분']}</span> \n"
-                            f"<span style='color:#6B6B70;font-size:12px'>{row['지역']}</span>",
+                            f"<span style='color:#6B6B70;font-size:12px'>"
+                            f"{mask_region(row['지역'])}</span>",
                             unsafe_allow_html=True,
                         )
                     with c2:
