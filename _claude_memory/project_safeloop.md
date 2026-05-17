@@ -8,7 +8,7 @@ originSessionId: 4187d9f7-f1f7-4b01-8060-42f967de9990
 **위치**: `C:/Users/danie/Desktop/Claude Code/safeloop/` (정리 후 2026-05-12)
 **GitHub**: `https://github.com/wizbeee/safeloop` (Private) — main `2129561`
 **브랜치**: `main` (모든 작업 push 완료)
-**★ 작업 폴더**: `safeloop_demo/` (운영 앱). 루트 `_archive_v8_contest/` 는 출품 시점 보관용 — 수정 금지.
+**★ 작업 폴더**: `safeloop_app/` (운영 앱). 루트 `_archive_v8_contest/` 는 출품 시점 보관용 — 수정 금지.
 **기술 스택**: Streamlit + Plotly + Anthropic/Gemini/GPT API + Python 3.10+ + extra-streamlit-components + sqlite3 + smtplib
 
 **완성도**: 99.5점 (2026-05-17 확장 세션 기준) / 시연·콘테스트·1~5개 학교 베타 즉시 가능 / SMTP 설정만 추가하면 분산 운영도 가능 / 막힘 0건
@@ -126,7 +126,7 @@ originSessionId: 4187d9f7-f1f7-4b01-8060-42f967de9990
 - 이모지 (5/16 일괄 제거) — `★` 같은 유니코드 텍스트 기호는 허용 (별표 시각 표시)
 
 ## 스모크 테스트
-115건 통과 — `cd safeloop_demo && SAFELOOP_DEMO_MODE=1 python tests/smoke_test.py`
+115건 통과 — `cd safeloop_app && SAFELOOP_DEMO_MODE=1 python tests/smoke_test.py`
 
 ## 미해결 (다음 세션 검토)
 - 🔵 1_점검시작.py PEP8 들여쓰기

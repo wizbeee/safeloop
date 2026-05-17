@@ -1,6 +1,6 @@
 # SafeLoop 다음 세션 인계 — 2026-05-17 (확장 세션)
 
-> ⚠ **작업 폴더는 [`safeloop_demo/`](safeloop_demo/) 입니다.** 루트의 다른 폴더와 [`_archive_v8_contest/`](_archive_v8_contest/) 는 **보관용** — 수정하지 마세요.
+> ⚠ **작업 폴더는 [`safeloop_app/`](safeloop_app/) 입니다.** 루트의 다른 폴더와 [`_archive_v8_contest/`](_archive_v8_contest/) 는 **보관용** — 수정하지 마세요.
 
 ## 새 세션 진입 방법
 

@@ -20,7 +20,7 @@
 > 본 점검 프로그램의 **공공 환원 export** 결과는 위 대시보드에서 자동 합산되어 표시됩니다.
 > 환원 데이터 형식은 [`docs/opendata_schema.md`](docs/opendata_schema.md) 참고.
 
-> ★ **작업 폴더는 [`safeloop_demo/`](safeloop_demo/)** — 운영 코드는 모두 여기에 있습니다.
+> ★ **작업 폴더는 [`safeloop_app/`](safeloop_app/)** — 운영 코드는 모두 여기에 있습니다.
 > 루트의 [`_archive_v8_contest/`](_archive_v8_contest/) 는 공모전 출품 시점(2026-04) 보관 자료 — 작업 대상 아닙니다.
 
 제8회 교육 공공데이터 AI 활용대회 출품작 — 마감 2026-05-31
@@ -74,7 +74,7 @@
 git clone https://github.com/wizbeee/science-lab-application.git
 cd science-lab-application
 git checkout feat/safeloop-demo
-cd "SafeLoop_데모앱_이관세트/safeloop_demo"
+cd "SafeLoop_데모앱_이관세트/safeloop_app"
 pip install -r requirements.txt
 python setup.py unlock        # 암호 입력 → .env 자동 생성
 python -m streamlit run app.py
@@ -108,7 +108,7 @@ safeloop/
 ├── DEPLOY_TO_STREAMLIT_CLOUD.md
 ├── LICENSE
 ├── _claude_memory/                  Claude 세션 시드 (자동 인식)
-├── safeloop_demo/                   ★ 🚀 운영 앱 (작업 위치)
+├── safeloop_app/                   ★ 🚀 운영 앱 (작업 위치)
 │   ├── app.py                       홈
 │   ├── pages/                       12개 페이지
 │   │   ├── 1_점검시작.py

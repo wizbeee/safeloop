@@ -900,7 +900,7 @@ if _show_ai_run:
         st.warning(
             f"**AI 키가 감지되지 않았습니다** ({provider_id})\n\n"
             f"세 가지 방법 중 하나로 해결할 수 있습니다:\n"
-            f"- `safeloop_demo/.env` 에 `{env_var}=sk-...` 추가\n"
+            f"- `safeloop_app/.env` 에 `{env_var}=sk-...` 추가\n"
             f"- 사이드바 **설정 AI 공급자** 에서 키 입력\n"
             f"- 시연 모드: 샘플 사진을 한 번 분석해두면 다음부턴 캐시로 즉시 재현"
             + hint_cache

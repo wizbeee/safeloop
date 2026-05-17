@@ -52,7 +52,7 @@ except FileNotFoundError as e:
         "**해결 방법**\n"
         "1. `git pull` 로 최신 데이터 받기\n"
         "2. 또는 `SafeLoop_데모앱_이관세트/data/` 폴더의 CSV를 "
-        "`safeloop_demo/data/` 로 복사"
+        "`safeloop_app/data/` 로 복사"
     )
     st.stop()
 

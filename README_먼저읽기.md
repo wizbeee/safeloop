@@ -70,7 +70,7 @@ Claude Code 프롬프트에 다음 그대로 입력:
 >   - 샘플 사진 → sample_images/
 >   - .env → env_config/.env
 >   - 참고 점검표 → reference_pdfs/, validation/
-> - 본 폴더 안에 safeloop_demo/ 디렉토리를 만들고 그 안에 앱 구성
+> - 본 폴더 안에 safeloop_app/ 디렉토리를 만들고 그 안에 앱 구성
 > - 각 단계 완료 후 작동 확인 보고
 >
 > 함께 docs/SafeLoop_핵심서사_지침_2026-04-23.md도 참고하여
@@ -120,7 +120,7 @@ Claude Code 프롬프트에 다음 그대로 입력:
 
 명세서 §8-2 참조. 요약:
 
-1. `safeloop_demo/` 디렉토리를 GitHub 저장소에 push
+1. `safeloop_app/` 디렉토리를 GitHub 저장소에 push
 2. https://share.streamlit.io 접속 → New app
 3. GitHub 저장소 연결 → `app.py` 지정
 4. Settings → Secrets에 `ANTHROPIC_API_KEY` 추가

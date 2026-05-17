@@ -2,7 +2,7 @@
 SafeLoop 스모크 테스트 — 배포 전 빠른 무결성 확인.
 
 실행:
-    cd safeloop_demo
+    cd safeloop_app
     python tests/smoke_test.py
 또는:
     python -m tests.smoke_test

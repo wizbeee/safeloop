@@ -83,7 +83,7 @@ def encrypt_env() -> int:
     ENC_PATH.write_bytes(output)
     print(f"\n암호화 완료 {ENC_PATH.name} ({len(output)}B)")
     print("\n다음 단계:")
-    print(" 1) git add safeloop_demo/.env.enc")
+    print(" 1) git add safeloop_app/.env.enc")
     print(" 2) git commit -m \"chore: encrypt .env\"")
     print(" 3) git push")
     return 0

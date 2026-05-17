@@ -47,7 +47,7 @@ git log --oneline -5
 ## 3️⃣ Python 패키지 설치
 
 ```powershell
-cd safeloop_demo
+cd safeloop_app
 python -m pip install -r requirements.txt
 ```
 
@@ -71,7 +71,7 @@ python setup.py unlock
 2. "Create Key" → 복사
 3. 메모장으로 두 위치에 동일 내용 저장:
    - `safeloop\env_config\.env`
-   - `safeloop\safeloop_demo\.env`
+   - `safeloop\safeloop_app\.env`
    ```
    ANTHROPIC_API_KEY=sk-ant-여기에-새-키-붙여넣기
    ```
@@ -79,7 +79,7 @@ python setup.py unlock
 ### 옵션 C — 기존 PC 에서 USB 로 복사
 ```powershell
 # USB 에서 복사
-Copy-Item "X:\.env" "safeloop\safeloop_demo\.env"
+Copy-Item "X:\.env" "safeloop\safeloop_app\.env"
 Copy-Item "X:\.env" "safeloop\env_config\.env"
 ```
 
@@ -105,7 +105,7 @@ Copy-Item "_claude_memory\project_safeloop.md" $memDir -Force
 ## 🎬 실행
 
 ```powershell
-cd safeloop_demo
+cd safeloop_app
 $env:SAFELOOP_DEMO_MODE = "1"
 python -m streamlit run app.py
 ```
@@ -148,7 +148,7 @@ git pull
 ## ✅ 검증 (모두 OK 면 완성)
 
 ```powershell
-cd safeloop\safeloop_demo
+cd safeloop\safeloop_app
 $env:SAFELOOP_DEMO_MODE = "1"
 python tests\smoke_test.py
 ```
@@ -163,7 +163,7 @@ safeloop\                                 ← git clone 으로 받음
 ├── README.md
 ├── NEW_PC_START.md                       ← 이 파일
 ├── HANDOFF_NEXT.md                       ← 작업 인계
-├── safeloop_demo\
+├── safeloop_app\
 │   ├── app.py·modules\·pages\·tests\
 │   ├── PRESENTATION_SCRIPT.md            ← 발표 시나리오
 │   ├── PRESENTATION_KIT.md               ← 발표 자료 키트
@@ -198,4 +198,4 @@ safeloop\                                 ← git clone 으로 받음
 
 1. 현재 완성도: **93점** (시연·콘테스트 가능 · 베타 도입 가능)
 2. 사용자 손 검증 영역: 모바일 폰 직접 검증 (`HANDOFF_NEXT.md` 의 10개 체크리스트)
-3. 발표 자료 작업: `safeloop_demo/PRESENTATION_KIT.md`
+3. 발표 자료 작업: `safeloop_app/PRESENTATION_KIT.md`

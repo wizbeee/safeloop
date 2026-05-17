@@ -14,7 +14,7 @@ git checkout feat/safeloop-demo
 
 ## 2) 의존성 설치
 ```bash
-cd "SafeLoop_데모앱_이관세트/safeloop_demo"
+cd "SafeLoop_데모앱_이관세트/safeloop_app"
 
 # (권장) 가상환경
 python -m venv venv
@@ -32,14 +32,14 @@ pip install -r requirements.txt
 
 ### 경로 A — 암호로 복호화 (추천, 파일 이전 불필요)
 ```bash
-cd safeloop_demo
+cd safeloop_app
 python setup.py unlock
 # 프롬프트: 암호 입력 → .env 자동 생성
 ```
 암호는 현재 기기에서 `python setup.py lock` 으로 지정한 비밀번호입니다 (password manager에서 꺼내세요).
 
 ### 경로 B — 키를 직접 입력해 새 .env 생성
-`safeloop_demo/.env` 파일을 텍스트 에디터로 생성:
+`safeloop_app/.env` 파일을 텍스트 에디터로 생성:
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
 # 선택 (OpenAI 사용 시)
@@ -54,13 +54,13 @@ OPENAI_API_KEY=sk-...
 ### 📝 처음 설정한 컴퓨터에서 암호화하기 (lock 절차)
 새 기기용 저장소를 만들려면 현재 기기에서 다음을 한 번 실행:
 ```bash
-cd safeloop_demo
+cd safeloop_app
 # .env 에 ANTHROPIC_API_KEY=sk-ant-... 가 있는 상태에서
 python setup.py lock
 #   → 암호 입력·재입력 (10자 이상, password manager 저장)
 #   → .env.enc 생성
 
-git add safeloop_demo/.env.enc
+git add safeloop_app/.env.enc
 git commit -m "chore: encrypt .env with AES-256"
 git push
 ```
@@ -103,7 +103,7 @@ SafeLoop_데모앱_이관세트/
 ├── reference_pdfs/              ← 참고 점검표
 ├── validation/                  ← 검증 엑셀
 ├── env_config/                  ← 템플릿 (.env 는 미포함)
-└── safeloop_demo/               ← 🚀 실행 앱
+└── safeloop_app/               ← 🚀 실행 앱
     ├── app.py
     ├── modules/                 ← 공용 모듈 9개
     ├── pages/                   ← 9개 페이지
@@ -115,8 +115,8 @@ SafeLoop_데모앱_이관세트/
 
 ## 7) 커밋되지 않는 런타임 데이터
 보안·용량 이유로 아래는 `.gitignore` 처리:
-- `safeloop_demo/school_storage/` — 학교 클라우드 저장소 (점검 결과)
-- `safeloop_demo/mock_edu_receipt/` — 교육청 수신함 Mock
+- `safeloop_app/school_storage/` — 학교 클라우드 저장소 (점검 결과)
+- `safeloop_app/mock_edu_receipt/` — 교육청 수신함 Mock
 - `_ai_cache/` — AI 응답 캐시
 
 모든 폴더는 **앱 실행 시 자동 생성**됩니다.
