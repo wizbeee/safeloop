@@ -408,11 +408,9 @@ def render_sidebar(active_key: str = "") -> None:
                 "font-weight:700;color:#FFFFFF;background:#D50000;"
                 "border-radius:3px;vertical-align:middle;'>DEMO</span>"
             )
-            subtitle = (
-                "시연 모드 · 더미 데이터 · "
-                "<a href='/설정' style='color:#9A9A9F;text-decoration:underline;'>"
-                "종료</a>"
-            )
+            # a href 링크는 한글 페이지 라우팅 문제로 새 창이 떠 제거.
+            # 시연 종료는 아래 [설정] 메뉴에서 진행하도록 안내만.
+            subtitle = "시연 모드 · 더미 데이터 · 종료는 [설정]에서"
         else:
             demo_badge = ""
             subtitle = "학교 안전 순환 시스템"

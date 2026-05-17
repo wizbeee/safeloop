@@ -221,7 +221,13 @@ with col_c:
 # ─────────────────────────────────────────
 st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
 divider()
-if st.session_state.get("demo_mode", True):
+# 모드 상태 분기:
+# - 시연 중(demo_mode=True): 안내 caption + 시연 시작 카드 표시
+# - 시연 종료 후(_demo_terminated=True): 시연 관련 영역 모두 숨김
+# - 첫 방문(둘 다 unset): 시연 시작 카드 표시 (사용자가 시연 진입 가능)
+_demo_active = bool(st.session_state.get("demo_mode"))
+_demo_done = bool(st.session_state.get("_demo_terminated"))
+if _demo_active:
     st.caption(
         "현재 **시연 모드** 입니다 — 더미 이미지·자동 채움 허용. "
         "실 사용 시에는 설정 페이지에서 '시연 종료' 를 누르세요."
@@ -270,7 +276,24 @@ except Exception:
 # 튜토리얼은 아래 oc1 컬럼의 "튜토리얼 열기" 버튼으로 진입.
 
 # ─────────────────────────────────────────
-# 튜토리얼 + 시연 시작 (2컬럼)
+# 시연 종료 후 — 튜토리얼/시연 시작 카드 숨김 + "다시 시작" 작은 버튼만.
+# 사용자가 명시적으로 종료한 모드의 잔존 안내를 보이지 않도록.
+# ─────────────────────────────────────────
+if _demo_done and not _demo_active:
+    divider()
+    _restart_l, _restart_c, _restart_r = st.columns([1, 2, 1])
+    with _restart_c:
+        st.caption(
+            "시연을 종료했습니다. 다시 시연을 보려면 아래 버튼을 누르세요."
+        )
+        if st.button("시연 다시 시작", key="restart_demo",
+                      width="stretch"):
+            st.session_state.pop("_demo_terminated", None)
+            st.rerun()
+    st.stop()
+
+# ─────────────────────────────────────────
+# 튜토리얼 + 시연 시작 (2컬럼) — 시연 중 또는 첫 방문자
 # ─────────────────────────────────────────
 divider()
 oc1, oc2 = st.columns(2)
@@ -347,6 +370,8 @@ with oc2:
                 pass
         reset_inspection()
         st.session_state["demo_mode"] = True
+        # 시연 종료 플래그 제거 — 다시 시연 카드를 보이게.
+        st.session_state.pop("_demo_terminated", None)
 
         # 0-3 수정: 자동재생 학교를 결정적으로 선택
         # 1) 세션에 이미 사용된 데모 학교 코드가 있으면 그걸 재사용

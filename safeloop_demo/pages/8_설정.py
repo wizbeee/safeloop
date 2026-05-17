@@ -52,6 +52,9 @@ if _in_demo:
     if st.button("시연 종료 (실 사용으로 전환)", key="end_demo_mode",
                   width="stretch"):
         st.session_state["demo_mode"] = False
+        # 홈에서 시연 시작 카드를 숨기기 위한 플래그.
+        # 다시 [시연 시작] 누르면 app.py 가 이 플래그를 제거함.
+        st.session_state["_demo_terminated"] = True
         if _cleanup_demo:
             try:
                 from modules.storage import cleanup_demo_artifacts
