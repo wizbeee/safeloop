@@ -154,10 +154,19 @@ for _it in inbox:
 # 통계 KPI — 전체·신규·평균
 # ─────────────────────────────────────────
 def _to_dt(s: str | None):
+    """ISO 문자열 → naive datetime (offset-naive 와 비교 가능하도록 통일).
+
+    received_at 이 timezone 정보(+09:00 등)를 포함하면 aware 가 되어
+    `datetime.now()` (naive) 와 비교 시 TypeError 가 난다. 그래서 tzinfo
+    가 있으면 같은 시각의 naive 로 변환해 반환한다.
+    """
     if not s:
         return None
     try:
-        return datetime.datetime.fromisoformat(str(s).replace("Z", ""))
+        dt = datetime.datetime.fromisoformat(str(s).replace("Z", ""))
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
     except Exception:
         return None
 
