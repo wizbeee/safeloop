@@ -640,14 +640,39 @@ if st.session_state.get("demo_mode"):
             "실제 사진이 아니라 시연용 더미입니다 (저작권·프라이버시 우려 없음)."
         )
         if st.button("더미 이미지 7컷 채우기", width="stretch"):
+            # 방어 가드 — 시연 모드가 아니면 더미 채움 절대 금지 (UI 가드 + 이중화).
+            # 운영 모드에서는 실 사진만 허용 → 더미가 실 데이터로 오염되는 사고 방지.
+            if not st.session_state.get("demo_mode"):
+                st.error(
+                    "운영 모드에서는 더미 이미지를 사용할 수 없습니다. "
+                    "[설정]에서 시연 모드를 켠 후 진행하세요."
+                )
+                st.stop()
             from modules.demo_image import make_all_demo_shots
             new_shots = make_all_demo_shots(sample_choice)
             for s in SHOTS:
                 shots_state[s["key"]] = new_shots.get(s["key"], [])
             for k in ["stage1_result", "stage2_result", "stage2_confirmed", "stage3_result"]:
                 st.session_state[k] = None
+            # 더미 이미지 hash 기준 Stage 2/3 캐시를 자동 보장 — API 키 없어도
+            # 시연 모드에서 다음 단계(AI 분석)가 즉시 작동하도록.
+            try:
+                from modules.ai_vision import ensure_demo_cache_for_shots
+                ensure_demo_cache_for_shots(shots_state, sample_choice)
+            except Exception:
+                pass
             _persist_draft()
-            st.toast(f"{sample_choice} 더미 이미지 7컷 채움 완료", icon=None)
+            # 채움 결과 요약 — 필수 7컷 보장 메시지
+            _filled_n = sum(
+                1 for k in ("entrance_diag", "front_view", "center_window",
+                            "center_corridor", "center_front_door",
+                            "center_back_door", "ceiling")
+                if shots_state.get(k)
+            )
+            st.toast(
+                f"{sample_choice} 더미 이미지 채움 완료 — 필수 {_filled_n}/7컷",
+                icon=None,
+            )
             st.rerun()
 
 def _reset_all() -> None:
@@ -873,6 +898,7 @@ if _show_ai_run:
     )
 
     key_ok = api_key_available()
+    is_demo = bool(st.session_state.get("demo_mode"))
     # Stage 1 호출 제거 후 Stage 2 캐시(`{img_hash}_{space_type}`) 정확 매칭 검사
     _opt_all = (
         [analyze_and_optimize(b).optimized_bytes for b in all_photos]
@@ -880,14 +906,34 @@ if _show_ai_run:
     )
     _user_space = (space or {}).get("type")
     cache_match = samples_hit_cache(_opt_all, space_type=_user_space)
-    cached_demo = cache_match and st.session_state.get("demo_mode", True)
+    cached_demo = cache_match and is_demo
     cached_possible = (
         has_cached_demo_results()
-        and st.session_state.get("demo_mode", True)
+        and is_demo
         and not cache_match
     )
 
-    if not key_ok and not cached_demo:
+    # 시연 모드: API 키·캐시 무관하게 모든 기능 사용 가능 (즉석 합성 폴백 보장).
+    # 운영 모드: 원래대로 API 키 필수.
+    if is_demo:
+        if key_ok:
+            st.info(
+                "**시연 모드 + API 키 감지** — 실제 API 호출로 진행합니다. "
+                "키가 없어도 시연 모드는 합성 데이터로 끝까지 작동합니다."
+            )
+        elif cached_demo:
+            st.info(
+                "**시연 모드 — 캐시 폴백 활성화**\n\n"
+                "현재 업로드된 사진이 이전에 분석된 캐시와 일치합니다. "
+                "API 호출 없이 즉시 결과를 재현합니다."
+            )
+        else:
+            st.info(
+                "**시연 모드 — 합성 데이터로 진행**\n\n"
+                "API 키 없이 진행 가능합니다. AI 분석 시작 시 공간 유형에 맞는 "
+                "합성 응답이 즉시 생성되어 모든 단계를 끝까지 체험할 수 있습니다."
+            )
+    elif not key_ok and not cached_demo:
         provider_id = st.session_state.get("ai_provider") or "anthropic"
         env_var = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}.get(
             provider_id, "API_KEY"
@@ -899,19 +945,14 @@ if _show_ai_run:
         )
         st.warning(
             f"**AI 키가 감지되지 않았습니다** ({provider_id})\n\n"
-            f"세 가지 방법 중 하나로 해결할 수 있습니다:\n"
+            f"두 가지 방법 중 하나로 해결할 수 있습니다:\n"
             f"- `safeloop_app/.env` 에 `{env_var}=sk-...` 추가\n"
-            f"- 사이드바 **설정 AI 공급자** 에서 키 입력\n"
-            f"- 시연 모드: 샘플 사진을 한 번 분석해두면 다음부턴 캐시로 즉시 재현"
+            f"- 사이드바 **설정 AI 공급자** 에서 키 입력"
             + hint_cache
+            + "\n\n(또는 [설정]에서 **시연 모드**를 켜면 API 없이 전체 흐름 체험 가능)"
         )
-    elif not key_ok and cached_demo:
-        st.info(
-            "**시연 모드 — 캐시 폴백 활성화**\n\n"
-            "현재 업로드된 사진이 이전에 분석된 캐시와 일치합니다. "
-            "API 호출 없이 즉시 결과를 재현합니다."
-        )
-    if key_ok or cached_demo:
+    # 시연 모드는 키·캐시 무관 항상 진행 가능. 운영 모드는 키 또는 캐시 일치 필요.
+    if key_ok or cached_demo or is_demo:
         col_a, col_b = st.columns([1, 3])
         with col_a:
             use_cache = st.checkbox("캐시 사용", value=True,
@@ -963,10 +1004,42 @@ if _show_ai_run:
                         if not classic_mode:
                             _go_to_step("supplement")
                         st.rerun()
+                    elif is_demo:
+                        # 시연 모드인데 캐시도 없으면 — 현장에서 즉석 합성.
+                        # 사용자가 어떤 사진(본인 사진/임의 사진)을 올려도 끝까지 작동.
+                        try:
+                            from modules.ai_vision import ensure_demo_cache_for_shots
+                            ok_sync = ensure_demo_cache_for_shots(
+                                shots_state, space["type"],
+                            )
+                            cached_pipeline2 = load_demo_pipeline_for_samples(
+                                [analyze_and_optimize(b).optimized_bytes for b in images],
+                                space_type=space["type"],
+                            )
+                        except Exception:
+                            ok_sync, cached_pipeline2 = False, None
+                        if cached_pipeline2:
+                            st.session_state["stage1_result"] = cached_pipeline2["stage1"]
+                            st.session_state["stage2_result"] = cached_pipeline2["stage2"]
+                            st.session_state["stage2_confirmed"] = None
+                            st.session_state["stage3_result"] = cached_pipeline2["stage3"]
+                            st.toast(
+                                f"시연 모드: {space['type']} 합성 응답으로 진행",
+                                icon=None,
+                            )
+                            if not classic_mode:
+                                _go_to_step("supplement")
+                            st.rerun()
+                        else:
+                            st.error(
+                                "시연 합성 응답 생성 실패 — 잠시 후 다시 시도하거나 "
+                                "[설정]에서 공간 유형을 변경해 보세요."
+                            )
+                            st.stop()
                     else:
                         st.error(
                             "이 사진은 캐시에 없습니다. API 키를 설정하거나 "
-                            "시연 모드 샘플 사진(화학실/물리실)을 사용하세요."
+                            "[설정]에서 **시연 모드**를 켜고 진행하세요."
                         )
                         st.stop()
 

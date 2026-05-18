@@ -157,7 +157,20 @@ def make_all_demo_shots(space_type: str) -> dict[str, list[dict]]:
             if files:
                 try:
                     from .sample_dispatch import dispatch_samples_to_shots
-                    return dispatch_samples_to_shots(files)
+                    dispatched = dispatch_samples_to_shots(files)
+                    # 실 사진이 키워드 매칭 실패로 비어 둔 필수 슬롯이 있으면
+                    # PIL 폴백으로 보충 — 항상 필수 7컷 모두 채워진 상태로 반환.
+                    for key in REQUIRED_KEYS:
+                        if not dispatched.get(key):
+                            dispatched[key] = [{
+                                "name": f"demo_{space_type}_{key}.jpg",
+                                "bytes": make_demo_image(space_type, key),
+                                "source": "demo_synth",
+                            }]
+                    # 선택 슬롯 키도 존재 보장
+                    for key in ("back_door_diag", "close_supplement"):
+                        dispatched.setdefault(key, [])
+                    return dispatched
                 except Exception:
                     pass  # 디스패치 실패 시 PIL 폴백
 

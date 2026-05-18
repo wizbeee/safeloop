@@ -52,6 +52,23 @@ if _in_demo:
     if st.button("시연 종료 (실 사용으로 전환)", key="end_demo_mode",
                   width="stretch"):
         st.session_state["demo_mode"] = False
+        # 세션의 더미 사진·AI 결과를 항상 비움 — 운영 모드에 시연 흔적이
+        # 잔존하지 않도록 (디스크 정리는 _cleanup_demo 체크박스로 선택).
+        try:
+            from modules.storage import clear_draft as _clear_draft
+            _sc = (st.session_state.get("school") or {}).get("정보공시 학교코드") or ""
+            _sp = (st.session_state.get("active_space") or {}).get("space_id") or ""
+            if _sc and _sp:
+                _clear_draft(_sc, _sp)
+        except Exception:
+            pass
+        for _k in ("shots", "stage1_result", "stage2_result",
+                    "stage2_confirmed", "stage3_result",
+                    "item_scores", "score_result", "recommendations"):
+            if _k in st.session_state:
+                st.session_state[_k] = (
+                    {} if _k in ("shots", "item_scores") else None
+                )
         if _cleanup_demo:
             try:
                 from modules.storage import cleanup_demo_artifacts
