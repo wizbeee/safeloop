@@ -207,8 +207,22 @@ def _persist_draft() -> None:
 
 
 empty_now = sum(len(v) for v in shots_state.values()) == 0
-has_stale_results = empty_now and any(
-    st.session_state.get(k) for k in ["stage1_result", "stage2_result", "stage3_result"]
+# 시연 합성 응답 보호 — _synth_demo 마커가 있으면 사진이 비어 보여도 정리하지 않음.
+# 시연 자동시작 경로에서 합성 응답을 먼저 set 한 후 페이지 진입 시 일시적으로 shots 가
+# 비어보일 수 있는데, 그때 정리되면 사용자가 점검표를 영영 못 봄.
+_s2_now = st.session_state.get("stage2_result") or {}
+_s3_now = st.session_state.get("stage3_result") or {}
+_is_synth_demo_result = bool(
+    (isinstance(_s2_now, dict) and _s2_now.get("_synth_demo"))
+    or (isinstance(_s3_now, dict) and _s3_now.get("_synth_demo"))
+)
+has_stale_results = (
+    empty_now
+    and not _is_synth_demo_result
+    and any(
+        st.session_state.get(k)
+        for k in ["stage1_result", "stage2_result", "stage3_result"]
+    )
 )
 if has_stale_results and not st.session_state.get("_draft_restored"):
     # 사진 없는데 이전 AI 결과만 남은 경우 확실히 초기화
@@ -216,7 +230,7 @@ if has_stale_results and not st.session_state.get("_draft_restored"):
                 "stage3_result", "item_scores",
                 "score_result", "recommendations"]:
         st.session_state[_k] = None
-    st.toast("이전 분석 결과를 정리했습니다 (사진이 비어있음)", icon="")
+    st.toast("이전 분석 결과를 정리했습니다 (사진이 비어있음)", icon=None)
 
 if empty_now and has_draft(school_code, space_id) and not st.session_state.get("_draft_restored"):
     summary = draft_summary(school_code, space_id) or {}
@@ -480,7 +494,7 @@ def _render_shot_card(s: dict) -> None:
             if rejected:
                 st.toast(
                     f"중복 사진 {rejected}장은 건너뜀 (같은 바이트)",
-                    icon="",
+                    icon=None,
                 )
             if added:
                 st.session_state[counter_key] += 1
@@ -639,7 +653,8 @@ if st.session_state.get("demo_mode"):
             "DEMO 라벨 + 공간/위치 텍스트가 박힌 가공 이미지 7장을 즉석 생성합니다. "
             "실제 사진이 아니라 시연용 더미입니다 (저작권·프라이버시 우려 없음)."
         )
-        if st.button("더미 이미지 7컷 채우기", width="stretch"):
+        if st.button("더미 이미지 7컷 채우기", width="stretch",
+                      key="demo_fill_shots_btn"):
             # 방어 가드 — 시연 모드가 아니면 더미 채움 절대 금지 (UI 가드 + 이중화).
             # 운영 모드에서는 실 사진만 허용 → 더미가 실 데이터로 오염되는 사고 방지.
             if not st.session_state.get("demo_mode"):
@@ -648,29 +663,59 @@ if st.session_state.get("demo_mode"):
                     "[설정]에서 시연 모드를 켠 후 진행하세요."
                 )
                 st.stop()
-            from modules.demo_image import make_all_demo_shots
-            new_shots = make_all_demo_shots(sample_choice)
-            for s in SHOTS:
-                shots_state[s["key"]] = new_shots.get(s["key"], [])
-            for k in ["stage1_result", "stage2_result", "stage2_confirmed", "stage3_result"]:
+            # 1) 더미 7컷 생성 — 실패 시 명시적 에러 (silent fail 금지)
+            try:
+                from modules.demo_image import make_all_demo_shots
+                new_shots = make_all_demo_shots(sample_choice)
+            except Exception as e:
+                st.error(
+                    f"더미 이미지 생성 실패 — {e.__class__.__name__}: {e}\n\n"
+                    "PIL 폰트 로드 또는 sample_images 폴더 접근 문제일 수 있습니다."
+                )
+                st.stop()
+            # 2) 세션 shots 직접 교체 (참조 + 본체 모두) — 마이그레이션 충돌 방지
+            _new_shots_full = {s["key"]: new_shots.get(s["key"], []) for s in SHOTS}
+            st.session_state["shots"] = _new_shots_full
+            # shots_state 참조도 갱신 (이후 같은 핸들러 내에서 사용 가능하도록)
+            shots_state.clear()
+            shots_state.update(_new_shots_full)
+            # 3) 이전 AI 결과 클리어 — 새 사진으로 새 분석 받도록
+            for k in ["stage1_result", "stage2_result", "stage2_confirmed",
+                       "stage3_result", "item_scores", "score_result",
+                       "recommendations"]:
                 st.session_state[k] = None
-            # 더미 이미지 hash 기준 Stage 2/3 캐시를 자동 보장 — API 키 없어도
-            # 시연 모드에서 다음 단계(AI 분석)가 즉시 작동하도록.
+            # 4) 더미 hash 기준 Stage 2/3 캐시 자동 보장 — 다음 단계 즉시 작동
             try:
                 from modules.ai_vision import ensure_demo_cache_for_shots
-                ensure_demo_cache_for_shots(shots_state, sample_choice)
+                ensure_demo_cache_for_shots(_new_shots_full, sample_choice)
+            except Exception as e:
+                # 캐시 보장 실패해도 즉석 합성 폴백이 있으므로 흐름 유지
+                st.toast(
+                    f"캐시 보장 경고 ({e.__class__.__name__}) — 즉석 합성으로 대체",
+                    icon=None,
+                )
+            # 5) draft 저장 — school/space 미인증이면 silent skip (시연 모드 가능)
+            try:
+                _persist_draft()
             except Exception:
                 pass
-            _persist_draft()
-            # 채움 결과 요약 — 필수 7컷 보장 메시지
+            # 6) 채움 결과 — 필수 7컷 확인 후 사용자에게 명확한 안내
             _filled_n = sum(
                 1 for k in ("entrance_diag", "front_view", "center_window",
                             "center_corridor", "center_front_door",
                             "center_back_door", "ceiling")
-                if shots_state.get(k)
+                if _new_shots_full.get(k)
             )
+            if _filled_n < 7:
+                st.warning(
+                    f"더미 채움 결과 필수 {_filled_n}/7컷 — "
+                    "코드 버그일 수 있습니다. 다른 공간 선택 후 재시도해 보세요."
+                )
+            # 7) 위저드 모드면 ai_run 으로 이동 — 사용자가 다음에 뭘 할지 명확
+            if not classic_mode:
+                st.session_state["wizard_step"] = "ai_run"
             st.toast(
-                f"{sample_choice} 더미 이미지 채움 완료 — 필수 {_filled_n}/7컷",
+                f"{sample_choice} 더미 이미지 채움 완료 ({_filled_n}/7컷)",
                 icon=None,
             )
             st.rerun()
@@ -991,51 +1036,48 @@ if _show_ai_run:
 
                 # 1) API 키 없을 때 시연 캐시 폴백 우선 시도
                 if not key_ok:
+                    # 시연 모드: 캐시가 있든 없든 합성 응답을 보장 (캐시 미스면 즉석 합성)
+                    # → API 호출 0건 + 점검표가 항상 끝까지 표시됨.
                     cached_pipeline = load_demo_pipeline_for_samples(
                         [analyze_and_optimize(b).optimized_bytes for b in images],
                         space_type=space["type"],
                     )
+                    if (not cached_pipeline) and is_demo:
+                        # 캐시 없으면 즉석 합성 후 재시도
+                        try:
+                            from modules.ai_vision import ensure_demo_cache_for_shots
+                            ensure_demo_cache_for_shots(
+                                shots_state, space["type"],
+                            )
+                            cached_pipeline = load_demo_pipeline_for_samples(
+                                [analyze_and_optimize(b).optimized_bytes for b in images],
+                                space_type=space["type"],
+                            )
+                        except Exception:
+                            cached_pipeline = None
+
                     if cached_pipeline:
                         st.session_state["stage1_result"] = cached_pipeline["stage1"]
                         st.session_state["stage2_result"] = cached_pipeline["stage2"]
                         st.session_state["stage2_confirmed"] = None
                         st.session_state["stage3_result"] = cached_pipeline["stage3"]
-                        st.toast("시연 모드: 캐시된 결과로 재현 완료", icon=None)
+                        # 시연 모드는 supplement 를 건너뛰고 점검표(review)로 직행
+                        # → 사용자가 핵심 결과물(맞춤 점검표)을 즉시 확인.
+                        # 운영 모드(키 없는데 캐시만 적중하는 드문 케이스)는 기존대로 supplement.
                         if not classic_mode:
-                            _go_to_step("supplement")
+                            _go_to_step("review" if is_demo else "supplement")
+                        st.toast(
+                            ("시연 모드: 합성 응답으로 점검표까지 진행"
+                             if is_demo else "캐시된 결과로 재현 완료"),
+                            icon=None,
+                        )
                         st.rerun()
                     elif is_demo:
-                        # 시연 모드인데 캐시도 없으면 — 현장에서 즉석 합성.
-                        # 사용자가 어떤 사진(본인 사진/임의 사진)을 올려도 끝까지 작동.
-                        try:
-                            from modules.ai_vision import ensure_demo_cache_for_shots
-                            ok_sync = ensure_demo_cache_for_shots(
-                                shots_state, space["type"],
-                            )
-                            cached_pipeline2 = load_demo_pipeline_for_samples(
-                                [analyze_and_optimize(b).optimized_bytes for b in images],
-                                space_type=space["type"],
-                            )
-                        except Exception:
-                            ok_sync, cached_pipeline2 = False, None
-                        if cached_pipeline2:
-                            st.session_state["stage1_result"] = cached_pipeline2["stage1"]
-                            st.session_state["stage2_result"] = cached_pipeline2["stage2"]
-                            st.session_state["stage2_confirmed"] = None
-                            st.session_state["stage3_result"] = cached_pipeline2["stage3"]
-                            st.toast(
-                                f"시연 모드: {space['type']} 합성 응답으로 진행",
-                                icon=None,
-                            )
-                            if not classic_mode:
-                                _go_to_step("supplement")
-                            st.rerun()
-                        else:
-                            st.error(
-                                "시연 합성 응답 생성 실패 — 잠시 후 다시 시도하거나 "
-                                "[설정]에서 공간 유형을 변경해 보세요."
-                            )
-                            st.stop()
+                        st.error(
+                            "시연 합성 응답 생성 실패 — 잠시 후 다시 시도하거나 "
+                            "[설정]에서 공간 유형을 변경해 보세요."
+                        )
+                        st.stop()
                     else:
                         st.error(
                             "이 사진은 캐시에 없습니다. API 키를 설정하거나 "
@@ -1116,9 +1158,11 @@ if _show_ai_run:
                         hint = "잠시 후 다시 시도하세요. 반복되면 사진을 줄이거나 공급자를 교체해 보세요."
                     friendly_error("AI 점검표 생성", e, hint=hint)
 
-                # try 바깥에서 페이지 이동 (rerun이 except 블록을 막지 않도록)
+                # try 바깥에서 페이지 이동 (rerun이 except 블록을 막지 않도록).
+                # 시연 모드는 supplement 를 건너뛰고 review 로 직행 → 점검표 즉시 표시.
+                # 운영 모드는 기존대로 supplement 에서 정정 후 사용자가 review 진입.
                 if pipeline_ok and not classic_mode:
-                    _go_to_step("supplement")
+                    _go_to_step("review" if is_demo else "supplement")
 
 # 결과 데이터 참조 (모든 스텝에서 필요)
 s1 = st.session_state.get("stage1_result")
@@ -1178,6 +1222,28 @@ if s1 and _show_stage1:
 
 # (C) 단계 2 결과 사용자 확정 — 카드 + "반영하기" 일괄 적용 패턴
 if s2 and _show_stage2_confirm:
+    # supplement 단계 상단 큐 — 사용자가 점검표가 어디 있는지 즉시 알 수 있도록.
+    # supplement 만 보고 끝나서 점검표를 못 찾는 사용자 혼동 차단.
+    if step == "supplement" and s3:
+        _cue_l, _cue_r = st.columns([3, 1])
+        with _cue_l:
+            st.markdown(
+                "<div style='padding:12px 16px;background:#F0F7FF;"
+                "border:1px solid #B3D4FF;border-left:4px solid #1976D2;"
+                "border-radius:6px;font-size:13px;color:#0A0A0B;line-height:1.6;'>"
+                "<b style='color:#1976D2;'>맞춤 점검표 준비 완료</b><br>"
+                "AI 가 탐지한 설비를 아래에서 검토·정정한 뒤 <b>[반영하기]</b> 를 누르면 "
+                "점검표가 표시됩니다. 정정 없이 바로 점검표를 보고 싶으면 오른쪽 "
+                "<b>[점검표 바로 보기]</b> 를 누르세요."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        with _cue_r:
+            if st.button("점검표 바로 보기", type="primary",
+                          width="stretch", key="cue_to_review_top"):
+                _go_to_step("review")
+        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
     st.markdown("<div class='sl-num' style='margin-top:18px;'>결과 02</div>"
                 "<div class='sl-h'>설비 탐지 · 사용자 확정</div>"
                 "<div class='sl-h-sub'>AI 결과를 확인하고 표시한 뒤 <b>'반영하기'</b> 를 눌러 점검표에 적용하세요. "

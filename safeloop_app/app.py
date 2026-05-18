@@ -450,9 +450,10 @@ with oc2:
 
             st.session_state["_autoplay"] = True
             # 합성 응답을 이미 주입했으므로 AI 페이지에서 추가 호출 안 함.
-            # supplement 스텝으로 직접 점프 — 분석 결과 카드 + 보완 안내 표시.
+            # 시연이므로 supplement 를 건너뛰고 review 로 직행 → 사용자가 핵심 결과물인
+            # 맞춤 점검표를 즉시 확인 가능 (supplement 의 설비 정정 단계 생략).
             st.session_state["_autoplay_run_ai"] = False
-            st.session_state["wizard_step"] = "supplement"
+            st.session_state["wizard_step"] = "review"
             st.session_state["_autoplay_consumed"] = True
             st.toast(
                 f"{autoplay_space} 시연 시작 — 더미 이미지로 흐름 진행",
