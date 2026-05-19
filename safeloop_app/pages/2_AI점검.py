@@ -1600,8 +1600,11 @@ if s2 and _show_stage2_confirm:
                 # 명확한 시각 피드백 — 단순 toast 가 아닌 큰 success 박스
                 st.session_state["_stage2_just_applied"] = {
                     "count": 0,
-                    "msg": "AI 결과를 그대로 적용했습니다. 아래 [현장 점검 입력] 으로 이동하세요.",
+                    "msg": "AI 결과를 그대로 적용했습니다. 점검표가 아래에 표시됩니다.",
                 }
+                # 반영 후 자동으로 review 진입 → 점검표 즉시 표시 (위저드 모드만)
+                if not classic_mode:
+                    _go_to_step("review")
                 st.rerun()
                 # 아래 변경 적용 블록은 실행되지 않음 (rerun 으로 종료)
             # ── 변경 있는 경우: 기존 적용 로직 ──
@@ -1691,9 +1694,13 @@ if s2 and _show_stage2_confirm:
                     f"사용자 수정 {len(user_corrections)}건 반영 완료{_delta_msg}. "
                     f"점검표가 사용자 확정 설비에 맞게 재구성되고, "
                     f"라디오에 양호/부재가 자동 채워졌습니다. "
-                    f"아래 [현장 점검 입력] 으로 이동하세요."
+                    f"아래에 점검표가 표시됩니다."
                 ),
             }
+            # 반영 후 자동으로 review 진입 → 점검표 즉시 표시 (위저드 모드만)
+            # 다시 정정하고 싶으면 페이지 상단 '이전 (재분석)' 또는 위저드 nav 사용
+            if not classic_mode:
+                _go_to_step("review")
             st.rerun()
 
 # ─────────────────────────────────────────
