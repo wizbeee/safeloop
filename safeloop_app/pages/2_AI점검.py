@@ -595,6 +595,96 @@ def _prefill_item_scores_from_stage2(stage2_confirmed: dict,
     return new_scores
 
 
+def _rebuild_checklist_from_confirmed(stage3_result: dict | None,
+                                       stage2_confirmed: dict | None,
+                                       space_type: str = "") -> dict | None:
+    """사용자 정정 결과(stage2_confirmed.detected_equipment) 와 1:1로 점검표 재구성.
+
+    SafeLoop 핵심 원칙 구현:
+      "사진에 보이는 설비(사용자 확정) 만 점검표에 포함"
+
+    동작:
+      - 기존 점검표 항목 중 설비명이 확정 detected 에 있는 것만 유지
+      - 사용자가 새로 추가한 detected (absent→실제있음, ambig→존재함)는
+        LAW_BASIS 메타 기반으로 새 점검 항목 자동 생성 후 추가
+      - absent 는 점검표에서 완전히 배제 (사진에 없으면 점검 안 함)
+      - 모든 항목 item_type='상태점검' (사진 기반이므로 '설치권고' 사용 금지)
+      - 번호는 1부터 재부여
+
+    Returns:
+      재구성된 stage3 dict, 또는 입력이 빈약하면 None
+    """
+    if not stage3_result or not stage2_confirmed:
+        return stage3_result
+    try:
+        from modules.laws import LAW_BASIS
+    except Exception:
+        return stage3_result
+
+    confirmed_detected = stage2_confirmed.get("detected_equipment") or []
+    # 확정 detected 의 설비명 → 카테고리 매핑 (순서 유지)
+    confirmed_names: list[str] = []
+    name_to_cat: dict[str, str] = {}
+    seen = set()
+    for d in confirmed_detected:
+        if not isinstance(d, dict):
+            continue
+        name = (d.get("name") or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        confirmed_names.append(name)
+        name_to_cat[name] = d.get("category") or "기타"
+
+    existing_items = list((stage3_result or {}).get("items") or [])
+    sp = space_type or stage3_result.get("space_type") or ""
+
+    # 1) 기존 점검표 항목 중 확정 detected 에 있는 것만 유지
+    kept_items: list[dict] = []
+    kept_names: set[str] = set()
+    for item in existing_items:
+        title = item.get("title", "")
+        for name in confirmed_names:
+            if name and name in title and name not in kept_names:
+                kept_items.append(dict(item))
+                kept_names.add(name)
+                break
+
+    # 2) 확정 detected 중 점검표에 없는 항목 → 새 점검 항목 자동 생성
+    new_items: list[dict] = []
+    for name in confirmed_names:
+        if name in kept_names:
+            continue
+        meta = LAW_BASIS.get(name, {})
+        cat = name_to_cat.get(name, "기타")
+        new_items.append({
+            "no": 0,  # 아래 재번호
+            "category": cat,
+            "title": f"{name} 상태 및 정상 동작 확인",
+            "method": f"{name} 의 위치·표지·작동 상태 육안 점검",
+            "criterion": "설치 기준 부합 + 손상·결함 없음 + 가시 위치에 부착",
+            "basis": f"{meta.get('law', '학교안전법')} {meta.get('article', '')}".strip(),
+            "item_type": "상태점검",
+            "priority": ("상" if meta.get("weight", 5) >= 8 else
+                         "중" if meta.get("weight", 5) >= 6 else "하"),
+            "location": f"{sp} 내 {name} 설치 위치" if sp else f"{name} 설치 위치",
+            "_added_by_user_correction": True,
+        })
+
+    final_items = kept_items + new_items
+    # 항상 '상태점검' 으로 통일 + 번호 재부여
+    for i, it in enumerate(final_items, start=1):
+        it["no"] = i
+        it["item_type"] = "상태점검"
+
+    return {
+        **stage3_result,
+        "items": final_items,
+        "_rebuilt_from_confirmed": True,
+        "_rebuilt_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 def _render_wizard_nav(prev_step: str | None, next_step: str | None,
                         next_label: str = "다음", next_disabled: bool = False,
                         next_type: str = "primary") -> None:
@@ -821,7 +911,8 @@ else:
             "<div class='sl-shot-title'>사진 확인 및 AI 분석</div>"
             "</div>"
             "<div class='sl-shot-guide'>"
-            "아래 7~8장을 AI가 분석해 공간 유형 판정 + 안전 설비 위치까지 한 번에 식별합니다. "
+            "아래 사진(필수 5컷 이상 · 권장 7컷 · 선택 09 기타 다중)을 AI가 분석해 "
+            "공간 유형 판정 + 안전 설비 위치까지 한 번에 식별합니다. "
             "사진을 다시 찍으려면 ‘이전’으로 돌아가세요."
             "</div></div>",
             unsafe_allow_html=True,
@@ -1039,7 +1130,8 @@ if _show_ai_run:
             st.warning(
                 f"**필수 컷 {len(missing_required)}건 누락** — {missing_titles}\n\n"
                 f"필수 사진은 안전 점검의 정확도를 보장하기 위해 권장됩니다. "
-                f"가능한 한 7컷 모두 촬영해주세요."
+                f"권장 7컷 + 선택 8(뒷문)·9(기타 다중) 까지 촬영하시면 "
+                f"맞춤 점검표가 더 정확해집니다."
             )
         with col_b:
             run_disabled = not analysis_ready
@@ -1479,6 +1571,16 @@ if s2 and _show_stage2_confirm:
                     ],
                     "user_corrections": [],
                 }
+                # 정정 없음 — 점검표는 기존 detected 와 이미 정합. 재구성으로
+                # absent/설치권고 잔여 항목이 있으면 정리 (사진 기반 원칙 보장).
+                _sp = (space or {}).get("type") or ""
+                _rebuilt = _rebuild_checklist_from_confirmed(
+                    st.session_state.get("stage3_result"),
+                    st.session_state["stage2_confirmed"],
+                    space_type=_sp,
+                )
+                if _rebuilt:
+                    st.session_state["stage3_result"] = _rebuilt
                 # 점검표 라디오 자동 prefill (detected 양호 / absent 부재)
                 _s3_items = (
                     (st.session_state.get("stage3_result") or {}).get("items")
@@ -1540,6 +1642,24 @@ if s2 and _show_stage2_confirm:
                 "ambiguous_resolutions": resolved,
                 "user_corrections": user_corrections,
             }
+            # 사용자 정정 결과를 기반으로 점검표 항목 자동 재구성 —
+            # 오탐 제거된 항목은 점검표에서도 빠지고, 새 detected 항목은
+            # LAW_BASIS 메타로 점검 항목 자동 생성되어 추가됨.
+            _sp = (space or {}).get("type") or ""
+            _items_before = len(
+                (st.session_state.get("stage3_result") or {}).get("items") or []
+            )
+            _rebuilt = _rebuild_checklist_from_confirmed(
+                st.session_state.get("stage3_result"),
+                st.session_state["stage2_confirmed"],
+                space_type=_sp,
+            )
+            if _rebuilt:
+                st.session_state["stage3_result"] = _rebuilt
+            _items_after = len(
+                (st.session_state.get("stage3_result") or {}).get("items") or []
+            )
+            _delta = _items_after - _items_before
             # 점검표 라디오 자동 prefill — 사용자 정정이 점검표에 즉시 반영됨
             _s3_items = (
                 (st.session_state.get("stage3_result") or {}).get("items")
@@ -1558,11 +1678,19 @@ if s2 and _show_stage2_confirm:
                     st.session_state.get("_radio_counter", 0) + 1
                 )
             # 명확한 시각 피드백 — rerun 후 큰 success 박스로 표시
+            _delta_msg = (
+                f" · 점검표 {_items_before} → {_items_after}개 ("
+                + (f"+{_delta}" if _delta > 0 else f"{_delta}" if _delta < 0
+                   else "변동 없음") + ")"
+                if _items_before != _items_after
+                else f" · 점검표 {_items_after}개"
+            )
             st.session_state["_stage2_just_applied"] = {
                 "count": len(user_corrections),
                 "msg": (
-                    f"사용자 수정 {len(user_corrections)}건 반영 완료. "
-                    f"점검표 라디오에 양호/부재가 자동 채워졌습니다. "
+                    f"사용자 수정 {len(user_corrections)}건 반영 완료{_delta_msg}. "
+                    f"점검표가 사용자 확정 설비에 맞게 재구성되고, "
+                    f"라디오에 양호/부재가 자동 채워졌습니다. "
                     f"아래 [현장 점검 입력] 으로 이동하세요."
                 ),
             }
@@ -1631,15 +1759,19 @@ if s3 and _show_checklist_and_score:
         if _removed:
             _bullets.append(
                 f"- **AI 오탐 정정** ({len(_removed)}건): "
-                f"{', '.join(_removed)} 관련 점검 항목은 무시해도 됩니다"
+                f"{', '.join(_removed)} → **점검표에서 자동 제거됨** "
+                f"(사진에 없는 것은 점검 안 함)"
             )
         if _added:
             _bullets.append(
                 f"- **AI 누락 정정** ({len(_added)}건): "
-                f"{', '.join(_added)} 점검표에서 '사진 기반' 배지로 표시됩니다"
+                f"{', '.join(_added)} → **점검표에 자동 추가됨**"
             )
         if _ambig:
-            _bullets.append(f"- **모호 항목 판정** ({len(_ambig)}건)")
+            _bullets.append(
+                f"- **모호 항목 판정** ({len(_ambig)}건) — "
+                f"'존재함' 판정한 항목은 점검표에 추가, '없음' 판정은 제외됨"
+            )
         st.success(
             "**사용자 정정 사항이 점검표에 반영되었습니다**\n\n"
             + "\n".join(_bullets)
