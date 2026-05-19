@@ -1218,19 +1218,55 @@ if _show_ai_run:
                         )
                         st.stop()
 
-                # Stage 1 (공간 유형 식별) 은 호출하지 않음 — 담당자가 1_점검시작 페이지에서
-                # 드롭다운으로 명시 선택했으므로 그 정보를 그대로 사용 (AI 비용·시간 절감).
+                # 공간 유형 — 담당자가 점검 시작 페이지에서 명시 선택한 값을 메인으로 사용
+                # (Stage 2/3 에 전달되는 space_type 은 항상 사용자 선택).
+                # Stage 1 (AI 공간 인식) 은 [설정] '공간 검증' 토글이 ON 이면 호출하여
+                # 사용자 선택과 비교 — 결과는 s1._verification 에 기록 (메인 흐름 영향 없음).
                 space_type = space["type"]
+                _verify_space = st.session_state.get(
+                    "verify_space_type", True
+                )  # 기본 ON
+                _is_demo_now = bool(st.session_state.get("demo_mode"))
+                _do_verify = (_verify_space and key_ok
+                              and not _is_demo_now and len(images) >= 3)
+
+                _verification: dict | None = None
+                if _do_verify:
+                    try:
+                        s1_ai = run_stage1(images, use_cache=use_cache,
+                                            image_labels=labels)
+                        ai_predicted = (s1_ai.get("space_type_primary") or "").strip()
+                        ai_confidence = float(s1_ai.get("confidence") or 0)
+                        _verification = {
+                            "ai_predicted": ai_predicted,
+                            "ai_confidence": ai_confidence,
+                            "ai_evidence": s1_ai.get("evidence") or [],
+                            "ai_secondary": s1_ai.get("secondary_hypothesis"),
+                            "ai_notes": s1_ai.get("notes"),
+                            "match": bool(ai_predicted) and ai_predicted == space_type,
+                            "low_confidence": ai_confidence < 0.5,
+                            "_elapsed_sec": s1_ai.get("_elapsed_sec"),
+                            "_cached": s1_ai.get("_cached", False),
+                        }
+                    except Exception as _e:
+                        # Stage 1 호출 실패해도 메인 흐름은 계속 — 검증만 스킵
+                        _verification = {
+                            "error": f"{_e.__class__.__name__}: {_e}",
+                        }
+
                 s1 = {
                     "space_type_primary": space_type,
                     "confidence": 1.0,
                     "evidence": ["담당자가 점검 시작 페이지에서 명시 선택"],
                     "secondary_hypothesis": None,
-                    "notes": "사용자 등록 정보 (Stage 1 AI 식별 생략 — 신뢰도 100%)",
-                    "_elapsed_sec": 0.0,
-                    "_provider": "user-input",
+                    "notes": "사용자 등록 정보 (메인은 사용자 선택, AI는 검증용)"
+                              if _verification
+                              else "사용자 등록 정보 (Stage 1 AI 식별 생략 — 신뢰도 100%)",
+                    "_elapsed_sec": (_verification or {}).get("_elapsed_sec", 0.0),
+                    "_provider": "user-input + ai-verify" if _verification else "user-input",
                     "_cached": False,
-                    "_skipped": True,
+                    "_skipped": not bool(_verification),
+                    "_verification": _verification,
                 }
                 st.session_state["stage1_result"] = s1
 
@@ -1331,6 +1367,60 @@ if s1 and _show_stage1:
         with st.expander("판단 근거"):
             for ev in s1["evidence"]:
                 st.markdown(f"- {ev}")
+
+    # ─── AI 공간 검증 결과 (사용자 선택과 AI 추정 비교) ───
+    _v = s1.get("_verification") or {}
+    if _v and not _v.get("error"):
+        _ai_pred = _v.get("ai_predicted", "")
+        _ai_conf = _v.get("ai_confidence", 0)
+        _user_pick = s1.get("space_type_primary", "")
+        if _v.get("match"):
+            # 일치 — 작은 녹색 배지
+            st.markdown(
+                f"<div style='margin-top:10px;padding:8px 14px;background:#F0FDF4;"
+                f"border:1px solid #BBF7D0;border-left:3px solid #10B981;"
+                f"border-radius:6px;font-size:12.5px;color:#0A0A0B;line-height:1.6;'>"
+                f"<b style='color:#10B981;'>AI 공간 검증 OK</b> — "
+                f"AI 도 <b>{_ai_pred}</b> 으로 식별 (신뢰도 {_ai_conf*100:.0f}%)"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        elif _v.get("low_confidence"):
+            # 저신뢰 — 노란 안내
+            st.markdown(
+                f"<div style='margin-top:10px;padding:10px 14px;background:#FFFBEB;"
+                f"border:1px solid #FCD34D;border-left:3px solid #F59E0B;"
+                f"border-radius:6px;font-size:13px;color:#0A0A0B;line-height:1.7;'>"
+                f"<b style='color:#B45309;'>AI 검증 신뢰도 낮음</b> ({_ai_conf*100:.0f}%) — "
+                f"사진이 부족하거나 공간 특성이 불분명할 수 있습니다. "
+                f"공간 자체는 사용자 선택(<b>{_user_pick}</b>)을 기준으로 진행합니다."
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            # 불일치 — 빨간 경고
+            _sec = _v.get("ai_secondary") or ""
+            st.warning(
+                f"**AI 공간 검증 — 불일치 주의**  \n\n"
+                f"사용자 선택: **{_user_pick}** / AI 추정: **{_ai_pred}** "
+                f"(신뢰도 {_ai_conf*100:.0f}%)"
+                + (f" · 차순위: {_sec}" if _sec else "")
+                + "  \n\n"
+                f"가능한 원인:\n"
+                f"- 점검 시작에서 공간을 잘못 선택했을 수 있음 (다른 실 사진 업로드)\n"
+                f"- 사진이 공간 특징을 충분히 담지 못함 (보완 촬영 권장)\n"
+                f"- 다목적실 등 AI 가 정확히 분류하기 어려운 공간\n\n"
+                f"**Stage 2/3 는 사용자 선택({_user_pick})을 기준으로 진행**됩니다. "
+                f"공간 선택이 잘못된 경우 [홈]에서 공간을 다시 선택해 주세요."
+            )
+        if _v.get("ai_evidence"):
+            with st.expander("AI 검증 판단 근거"):
+                for ev in _v["ai_evidence"]:
+                    st.markdown(f"- {ev}")
+    elif _v and _v.get("error"):
+        st.caption(
+            f"AI 공간 검증 호출 실패 ({_v['error']}) — 메인 흐름에는 영향 없음."
+        )
 
 # (C) 단계 2 결과 사용자 확정 — 카드 + "반영하기" 일괄 적용 패턴
 if s2 and _show_stage2_confirm:

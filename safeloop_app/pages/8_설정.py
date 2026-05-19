@@ -891,6 +891,15 @@ img_check = st.toggle(
 )
 st.session_state["image_quality_check"] = img_check
 
+verify_space = st.toggle(
+    "AI 공간 유형 검증 (사용자 선택과 비교)",
+    value=st.session_state.get("verify_space_type", True),
+    help="AI 가 사진을 분석해 공간 유형을 추정하고, 점검 시작에서 선택한 "
+         "공간과 다르면 경고합니다. 메인 분석은 항상 사용자 선택을 기준으로 진행. "
+         "OFF 시 Stage 1 호출 생략 (비용·시간 절감 약 5~10초·$0.015/회).",
+)
+st.session_state["verify_space_type"] = verify_space
+
 divider()
 section("04", "AI 시스템 상태")
 if api_key_available():

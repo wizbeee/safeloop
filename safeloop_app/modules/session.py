@@ -85,6 +85,7 @@ DEFAULT_STATE = {
     "api_key_anthropic": "",
     "api_key_openai": "",
     "image_quality_check": True,
+    "verify_space_type": True,  # Stage 1 AI 공간 검증 (사용자 선택과 비교) — 기본 ON
 
     # UX
     "_auth_prefill": "", # 인증번호 자동 입력 버퍼
