@@ -32,7 +32,7 @@ TARGET_ORDER: list[str] = [
 ]
 
 # 선택 슬롯 (분배 대상은 아니지만 빈 dict 키로 함께 반환)
-OPTIONAL_KEYS: list[str] = ["back_door_diag", "close_supplement"]
+OPTIONAL_KEYS: list[str] = ["back_door_diag", "etc_misc", "close_supplement"]
 
 
 def dispatch_samples_to_shots(paths: list[Path]) -> dict[str, list[dict]]:

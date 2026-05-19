@@ -28,7 +28,8 @@ SHOT_LABELS: dict[str, str] = {
     "center_back_door": "06 — 중앙 뒷문",
     "ceiling": "07 — 천장",
     "back_door_diag": "08 — 뒷문 대각선",
-    "close_supplement": "09 — 보완 촬영",
+    "etc_misc": "09 — 기타 (자유 추가)",
+    "close_supplement": "10 — 보완 촬영",
 }
 
 REQUIRED_KEYS: list[str] = [
@@ -176,7 +177,7 @@ def make_all_demo_shots(space_type: str) -> dict[str, list[dict]]:
 
     # PIL 합성 카드 (실 사진 없는 공간 또는 로드/디스패치 실패)
     result: dict[str, list[dict]] = {
-        k: [] for k in REQUIRED_KEYS + ["back_door_diag", "close_supplement"]
+        k: [] for k in REQUIRED_KEYS + ["back_door_diag", "etc_misc", "close_supplement"]
     }
     for key in REQUIRED_KEYS:
         result[key].append({

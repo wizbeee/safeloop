@@ -144,8 +144,17 @@ SHOTS: list[dict] = [
         "required": False,
     },
     {
-        "key": "close_supplement",
+        "key": "etc_misc",
         "no": "09",
+        "title": "기타 (자유 추가 · 다중 허용)",
+        "guide": "위 8컷에 담기지 않은 **특이 설비·위험 요소**를 자유롭게 추가 촬영하세요. "
+                 "여러 장 가능 · AI 분석에도 함께 활용됩니다. "
+                 "예: 가스배관·비상등·실외기실·옥상 출입구·공사 잔해·노출 배선 등.",
+        "required": False,
+    },
+    {
+        "key": "close_supplement",
+        "no": "10",
         "title": "보완 촬영 · 모호 판정 항목만 (선택)",
         "guide": "AI가 **모호** 또는 **부재 의심** 으로 판정한 설비만 가까이 추가 촬영하세요. "
                  "예: 가려진 캐비닛 뒤·사각지대.",
@@ -279,6 +288,7 @@ WIZARD_STEPS = [
     ("shoot_6", "06 뒷문쪽", "center_back_door"),
     ("shoot_7", "07 천장", "ceiling"),
     ("shoot_8", "08 뒷문 대각선", "back_door_diag"), # 선택
+    ("shoot_9", "09 기타", "etc_misc"), # 선택 · 다중
     ("ai_run", "AI 분석", None),
     ("supplement", "보완", "close_supplement"),
     ("review", "결과", None),
@@ -752,7 +762,7 @@ if classic_mode:
 else:
     # ─── 위저드: 스텝별 한 화면 ───
     SHOOT_STEPS = ("shoot_1", "shoot_2", "shoot_3", "shoot_4",
-                    "shoot_5", "shoot_6", "shoot_7", "shoot_8")
+                    "shoot_5", "shoot_6", "shoot_7", "shoot_8", "shoot_9")
 
     if step in SHOOT_STEPS:
         shot = _SHOT_BY_KEY[_SHOT_OF_STEP[step]]
@@ -765,15 +775,17 @@ else:
         # 마지막 촬영 단계 다음은 ai_run
         next_step = SHOOT_STEPS[idx + 1] if idx < len(SHOOT_STEPS) - 1 else "ai_run"
 
-        is_last_required = (step == "shoot_7") # 7번까지 필수, 8번(뒷문 대각선) 은 선택
-        next_label = (
-            "다음 구도" if step != "shoot_8" else
-            "AI 분석 단계로"
-        )
-        # 8번 (뒷문 대각선) 은 선택이므로 미촬영이어도 진행 허용
-        if step == "shoot_8":
+        # 7번까지 필수, 8번(뒷문 대각선)·9번(기타) 은 선택.
+        # 마지막 촬영 단계(09 기타)는 ai_run 으로 직접 이동.
+        is_last_required = (step == "shoot_7")
+        if step == "shoot_9":
             next_step = "ai_run"
             next_label = "AI 분석 단계로"
+        elif step == "shoot_8":
+            # 8번도 선택이므로 미촬영이어도 다음(09 기타) 진행 가능
+            next_label = "다음 (09 기타)"
+        else:
+            next_label = "다음 구도"
 
         _render_wizard_nav(
             prev_step=prev_step,
@@ -785,10 +797,18 @@ else:
         if step == "shoot_7" and shot_done:
             st.caption(
                 "**뒷문이 있다면** 다음 단계(08 뒷문 대각선)에서 한 장 더 찍어주세요. "
-                "뒷문이 없으면 바로 'AI 분석 단계로' 진행하셔도 됩니다."
+                "뒷문이 없으면 09 기타·AI 분석으로 진행하셔도 됩니다."
             )
         elif step == "shoot_8":
-            st.caption("뒷문이 없으면 건너뛰고 바로 AI 분석으로 진행하세요.")
+            st.caption(
+                "뒷문이 없으면 건너뛰고 다음(09 기타)으로 진행하세요. "
+                "기타 단계도 선택사항이므로 바로 AI 분석까지 가실 수 있습니다."
+            )
+        elif step == "shoot_9":
+            st.caption(
+                "특이 설비·위험 요소를 자유롭게 추가하세요 (여러 장 가능). "
+                "추가 안 해도 'AI 분석 단계로' 진행 가능합니다."
+            )
         elif not shot_done:
             st.caption("이 구도를 최소 한 장 촬영하면 다음으로 진행할 수 있어요.")
 
