@@ -27,6 +27,11 @@ from typing import Any
 from .laws import LAW_BASIS
 
 
+# 합성 응답 버전 — 로직 변경 시 +1 하여 디스크 캐시 자동 무효화 트리거.
+# v2 (2026-05): synth_stage3 의 카테고리당 1개·8개 제한 제거 → 모든 detected 매핑
+SYNTH_VERSION = "v2"
+
+
 # 공간별 설비 상태 분포 — Stage 2 프롬프트 스키마(존재확인/상태양호/상태불량) 준수.
 # absent/ambig 분류는 synth_stage2_for_space 가 결정적으로 보장 (아래 forced_* 참고).
 # 가중치(weight) 기준: 높은 설비는 거의 양호, 낮은 설비는 일부 불량.
@@ -167,19 +172,20 @@ def synth_stage2_for_space(space_type: str) -> dict[str, Any]:
 def synth_stage3_for_space(space_type: str, stage2: dict[str, Any]) -> dict[str, Any]:
     """공간별 점검표 자동 생성 — Stage 2 detected_equipment 를 기반으로 항목 합성.
 
-    카테고리별 대표 항목을 추려서 5~8개 점검 항목 생성.
+    탐지된 모든 설비를 점검 항목으로 매핑 (설비명 중복만 제거).
+    실 API 호출 시 27 표준 항목 + 추가 항목까지 생성되는 풍부도를 시연에서도 재현.
     """
-    # 카테고리별 첫 번째 설비를 점검 항목으로
-    seen_cat: set[str] = set()
+    # 설비명 중복만 제거 (같은 흄후드 여러 대 등) — 카테고리 제한·개수 제한 없음
+    seen_name: set[str] = set()
     items: list[dict[str, Any]] = []
     no = 0
     for det in stage2.get("detected_equipment", []):
-        cat = det.get("category", "기타")
-        if cat in seen_cat:
+        name = det.get("name", "").strip()
+        if not name or name in seen_name:
             continue
-        seen_cat.add(cat)
+        seen_name.add(name)
         no += 1
-        name = det.get("name", "설비")
+        cat = det.get("category", "기타")
         meta = LAW_BASIS.get(name, {})
         items.append({
             "no": no,
@@ -192,12 +198,11 @@ def synth_stage3_for_space(space_type: str, stage2: dict[str, Any]) -> dict[str,
             "priority": "상" if meta.get("weight", 5) >= 8 else ("중" if meta.get("weight", 5) >= 6 else "하"),
             "location": f"{space_type} 내 {name} 설치 위치",
         })
-        if no >= 8:
-            break
 
     return {
         "space_type": space_type,
         "checklist_name": f"{space_type} 맞춤형 안전 점검표 (시연용 합성)",
         "items": items,
         "_synth_demo": True,
+        "_synth_version": SYNTH_VERSION,
     }

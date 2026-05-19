@@ -433,7 +433,22 @@ def ensure_demo_cache_for_shots(shots: dict, space_type: str,
                           ensure_ascii=False, sort_keys=True)
     s3_key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
     s3_path = CACHE_DIR / f"stage3_{provider_id}_{s3_key}.json"
-    if not s3_path.exists():
+    # 캐시 재생성 판정 — 합성 응답 버전이 다르면(또는 미존재) 새로 생성.
+    # 실 API 응답은 _synth_demo 마커가 없으므로 그대로 보존됨.
+    need_regen = True
+    if s3_path.exists():
+        try:
+            from .demo_responses import SYNTH_VERSION as _SYNTH_VER
+            cached = json.loads(s3_path.read_text(encoding="utf-8"))
+            if not cached.get("_synth_demo"):
+                # 실 API 응답 → 그대로 사용
+                need_regen = False
+            elif cached.get("_synth_version") == _SYNTH_VER:
+                # 같은 버전의 합성 응답 → 그대로 사용
+                need_regen = False
+        except Exception:
+            need_regen = True
+    if need_regen:
         try:
             s3 = synth_stage3_for_space(space_type, s2)
             s3_path.write_text(

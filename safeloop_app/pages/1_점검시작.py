@@ -743,6 +743,27 @@ if (_role != "실" and st.session_state.get("school")
             st.error("인증번호가 일치하지 않습니다.")
 
 # ─────────────────────────────────────────
+# 2-C) 인증 통과 후 — 02 섹션 자리에 "인증 완료" 카드 표시
+# UI 번호 점프(01→03) 방지 + 사용자가 누구로 인증됐는지 확인 가능
+# ─────────────────────────────────────────
+if (_role != "실" and st.session_state.get("school")
+        and st.session_state.get("school_auth_verified")):
+    divider()
+    section("02", "담당자 인증",
+            f"{_role} 담당자 인증 완료 · 변경하려면 [홈]에서 학교를 다시 선택하세요.")
+    st.markdown(
+        "<div style='padding:14px 18px;background:#F0FDF4;"
+        "border:1px solid #BBF7D0;border-left:4px solid #10B981;"
+        "border-radius:6px;font-size:13px;color:#0A0A0B;line-height:1.7;'>"
+        f"<b style='color:#10B981;'>인증 완료</b> — {_role} 담당자로 접속 중<br>"
+        "<span style='font-size:12px;color:#6B7280;'>"
+        "아래 03에서 점검할 공간을 선택하세요."
+        "</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+# ─────────────────────────────────────────
 # 3) 공간 선택 / 등록
 # role="실" : 본인 assigned_space_ids 와 매칭되는 공간만 표시, 새 공간 등록 불가
 # 그 외 : 학교의 모든 등록 공간 + 새 공간 등록 가능
