@@ -1273,8 +1273,11 @@ if _show_ai_run:
                 prog = st.progress(0, text="① 안전 설비 탐지 중…")
                 pipeline_ok = False
                 try:
+                    # Stage 1 검증 결과를 Stage 2 에 전달 — 인식률 개선
+                    # (일치=적극 탐지, 불일치=두 공간 모두 탐지, 저신뢰=보수적)
                     s2 = run_stage2(images, space_type, use_cache=use_cache,
-                                    image_labels=labels)
+                                    image_labels=labels,
+                                    verification=_verification)
                     st.session_state["stage2_result"] = s2
                     st.session_state["stage2_confirmed"] = None
                     # B5: 재분석 시 detected/absent 항목 수가 변할 수 있어

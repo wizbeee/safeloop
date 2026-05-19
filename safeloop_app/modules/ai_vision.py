@@ -177,11 +177,25 @@ def run_stage1(images: list[bytes], use_cache: bool = True,
 
 
 def run_stage2(images: list[bytes], space_type: str, use_cache: bool = True,
-               image_labels: Optional[list[str]] = None) -> dict:
-    """단계 2 — 안전 설비 탐지."""
+               image_labels: Optional[list[str]] = None,
+               verification: Optional[dict] = None) -> dict:
+    """단계 2 — 안전 설비 탐지.
+
+    verification: Stage 1 AI 검증 결과 (선택). 일치/불일치/저신뢰에 따라
+                   탐지 전략을 조정 (인식률 개선). 캐시 키에도 영향.
+    """
     images = _optimize_batch(images)
     provider = get_provider()
-    cache_key = f"{_hash_images(images)}_{space_type}"
+    # 캐시 키 — 검증 결과 유형이 다르면 프롬프트도 달라지므로 분리.
+    _v_tag = ""
+    if verification and not verification.get("error"):
+        if verification.get("match"):
+            _v_tag = "_vmatch"
+        elif verification.get("low_confidence"):
+            _v_tag = "_vlow"
+        else:
+            _v_tag = "_vmis"
+    cache_key = f"{_hash_images(images)}_{space_type}{_v_tag}"
     if use_cache:
         cached = _read_cache("stage2", cache_key, provider.id)
         if cached:
@@ -196,11 +210,13 @@ def run_stage2(images: list[bytes], space_type: str, use_cache: bool = True,
         )
 
     text = (
-        f"이 공간은 '{space_type}'으로 식별되었습니다. 해당 공간 유형에서 필요한 안전설비와 그 위치를 탐지해주세요."
+        f"이 공간은 사용자가 '{space_type}' 으로 명시 선택했습니다. "
+        f"해당 공간 유형에서 필요한 안전설비와 그 위치를 탐지해주세요. "
+        f"위 시스템 프롬프트의 '{space_type} 표준 안전 설비' 목록을 우선 확인하세요."
         + labels_hint
     )
-    # 공간 유형별 카테고리 우선순위가 반영된 시스템 프롬프트 사용
-    sys_prompt = stage2_system_for(space_type)
+    # 공간 유형별 카테고리 + 표준 설비 목록 + 검증 결과 반영된 시스템 프롬프트
+    sys_prompt = stage2_system_for(space_type, verification=verification)
     t0 = time.time()
     raw = provider.call(sys_prompt, text, images, tier="vision")
     elapsed = time.time() - t0

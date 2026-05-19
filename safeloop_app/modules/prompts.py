@@ -109,13 +109,70 @@ _CATEGORY_HINTS_BY_SPACE: dict[str, str] = {
 }
 
 
-def stage2_system_for(space_type: str | None = None) -> str:
+def stage2_system_for(space_type: str | None = None,
+                       verification: dict | None = None) -> str:
     """공간 유형에 맞춘 Stage 2 시스템 프롬프트.
 
-    space_type 이 주어지면 해당 공간의 핵심 탐지 카테고리를 우선 안내한다.
+    space_type: 사용자가 점검 시작에서 선택한 공간 유형 (메인 기준).
+    verification: Stage 1 AI 검증 결과 — 일치/불일치/저신뢰에 따라 탐지
+                   전략을 조정. None 이면 검증 정보 없이 사용자 선택만 활용.
+
+    효과:
+    - 공간별 표준 설비 목록(LAW_BASIS)을 프롬프트에 임베드해 인식률 개선
+    - 검증 결과 일치 시 적극 탐지, 불일치/저신뢰 시 보수적 탐지로 전환
+
     location 필드는 항상 포함 (어느 사진의 어느 영역에서 보였는지).
     """
     hint = _CATEGORY_HINTS_BY_SPACE.get(space_type, "")
+
+    # 공간별 표준 설비 목록 — LAW_BASIS 의 applicable_spaces 메타로 필터링
+    standard_equipment_block = ""
+    if space_type:
+        try:
+            from .laws import items_for_space
+            std_items = items_for_space(space_type)
+            if std_items:
+                standard_equipment_block = (
+                    f"\n**'{space_type}' 표준 안전 설비 (법령 기준 — 우선 확인 대상):**\n"
+                    + ", ".join(std_items)
+                    + "\n위 설비 중 사진에 보이는 것을 모두 탐지하고, "
+                    + "보이지 않는 것은 likely_absent_equipment 로 분류하세요. "
+                    + "단 다른 공간의 설비도 사진에 보이면 함께 탐지하세요.\n"
+                )
+        except Exception:
+            pass
+
+    # Stage 1 AI 검증 결과를 탐지 전략에 반영
+    verification_block = ""
+    if verification and not verification.get("error"):
+        ai_pred = verification.get("ai_predicted") or "?"
+        ai_conf = verification.get("ai_confidence") or 0
+        if verification.get("match"):
+            verification_block = (
+                f"\n**공간 유형 검증 — 일치 (높은 신뢰):**\n"
+                f"사용자 선택 = '{space_type}', AI 추정 = '{ai_pred}' "
+                f"(신뢰도 {ai_conf*100:.0f}%). "
+                f"→ '{space_type}' 표준 설비를 **적극 탐지**하세요. "
+                f"의심되는 항목도 status='존재확인'으로 포함 (false negative 최소화).\n"
+            )
+        elif verification.get("low_confidence"):
+            verification_block = (
+                f"\n**공간 유형 검증 — 저신뢰:**\n"
+                f"AI 가 공간을 명확히 분류하지 못했습니다 (신뢰도 {ai_conf*100:.0f}%). "
+                f"사용자 선택 '{space_type}' 을 기준으로 진행하되, "
+                f"명확히 식별되는 설비만 탐지 (status='상태양호/상태불량'). "
+                f"불확실한 항목은 ambiguous_items 로 분류하세요.\n"
+            )
+        else:
+            verification_block = (
+                f"\n**공간 유형 검증 — 불일치 주의:**\n"
+                f"사용자 선택 = '{space_type}', AI 추정 = '{ai_pred}' "
+                f"(신뢰도 {ai_conf*100:.0f}%). 두 공간 중 어느 쪽이든 사진에 "
+                f"보이는 설비는 모두 탐지하세요. "
+                f"사용자 선택 공간({space_type})의 표준 설비를 우선 확인하되, "
+                f"AI 추정 공간({ai_pred})의 특이 설비도 사진에 보이면 함께 탐지.\n"
+            )
+
     base = """당신은 학교 안전 설비 탐지·위치 매핑 전문가입니다.
 주어진 공간 사진들에서 **시각적으로 식별 가능한** 안전 설비와 그 **위치**를 모두 나열하세요.
 
@@ -136,6 +193,9 @@ def stage2_system_for(space_type: str | None = None) -> str:
 """
     if hint:
         base += "\n공간별 우선 탐지 가이드:\n" + hint + "\n"
+
+    # 공간별 표준 설비 + 검증 결과 블록을 카테고리 가이드 뒤에 추가
+    base += standard_equipment_block + verification_block
 
     base += """
 출력 JSON 형식:
