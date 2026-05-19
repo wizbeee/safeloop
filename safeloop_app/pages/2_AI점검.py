@@ -1362,15 +1362,49 @@ if s2 and _show_stage2_confirm:
                     unsafe_allow_html=True,
                 )
 
+    def _ambig_label(item) -> str:
+        """모호 항목을 사람이 읽을 수 있는 한 줄 텍스트로 정규화.
+        합성 응답·실 API 응답 모두 dict 형식이고, 일부 구버전은 str 일 수 있음.
+        반환 형식 예: '비상대응 포스터 (안내·표지)'."""
+        if isinstance(item, dict):
+            name = item.get("name", "?")
+            cat = item.get("category", "")
+            return f"{name} ({cat})" if cat else str(name)
+        return str(item)
+
     with tab_m:
         st.caption(
             "AI 가 확신하지 못한 항목입니다. 각 항목별로 판정한 뒤 '반영하기' 클릭."
         )
-        for i, item_text in enumerate(ambiguous):
-            st.markdown(
-                f"<div style='padding:6px 8px;font-size:13.5px;'>{item_text}</div>",
-                unsafe_allow_html=True,
-            )
+
+        for i, item in enumerate(ambiguous):
+            if isinstance(item, dict):
+                name = item.get("name", "?")
+                cat = item.get("category", "")
+                reason = item.get("reason", "")
+                img_ref = item.get("image_ref", "")
+                meta_parts = []
+                if cat:
+                    meta_parts.append(cat)
+                if img_ref:
+                    meta_parts.append(f"이미지 {img_ref}")
+                meta_str = " · ".join(meta_parts)
+                st.markdown(
+                    f"<div style='padding:8px 10px;font-size:13.5px;'>"
+                    f"<b>{name}</b>"
+                    + (f" <span style='font-size:11px;color:#6B6B70;'>· {meta_str}</span>"
+                       if meta_str else "")
+                    + (f"<div style='font-size:11.5px;color:#6B6B70;margin-top:3px;"
+                       f"line-height:1.5;'>AI 판정 이유: {reason}</div>"
+                       if reason else "")
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    f"<div style='padding:8px 10px;font-size:13.5px;'>{item}</div>",
+                    unsafe_allow_html=True,
+                )
             marks["ambig_decision"][i] = st.radio(
                 f"판정 #{i+1}",
                 ["판단 유보", "존재함 (탐지)", "없음 (부재)"],
@@ -1440,7 +1474,8 @@ if s2 and _show_stage2_confirm:
                     "likely_absent_equipment": list(absent),
                     "ambiguous_items": list(ambiguous),
                     "ambiguous_resolutions": [
-                        {"text": t, "decision": "판단 유보"} for t in ambiguous
+                        {"text": _ambig_label(t), "decision": "판단 유보"}
+                        for t in ambiguous
                     ],
                     "user_corrections": [],
                 }
@@ -1489,13 +1524,14 @@ if s2 and _show_stage2_confirm:
                 else:
                     new_absent.append(dict(item))
             resolved = []
-            for i, item_text in enumerate(ambiguous):
+            for i, item in enumerate(ambiguous):
                 d = marks["ambig_decision"].get(i, "판단 유보")
-                resolved.append({"text": item_text, "decision": d})
+                label = _ambig_label(item)
+                resolved.append({"text": label, "decision": d})
                 if d != "판단 유보":
                     user_corrections.append({
                         "type": f"ambig_resolved_{d}",
-                        "item": item_text,
+                        "item": label,
                     })
             st.session_state["stage2_confirmed"] = {
                 "detected_equipment": new_detected,
