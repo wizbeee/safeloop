@@ -21,6 +21,7 @@ API 키 없이도 80% 이상 통과해야 정상.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -369,12 +370,14 @@ try:
                   (_ for _ in ()).throw(AssertionError("auth 매니저 함수 부적합")))
 
     # 12-18. ensure_demo_manager — 시연 헬퍼 (멱등성·DEMO_PIN 검증)
+    # 운영 모드 가드 우회 — 테스트에서는 SAFELOOP_DEMO_MODE 임시 설정
     from modules.managers import ensure_demo_manager, DEMO_PIN, is_demo_manager
     TEST_DEMO_SCHOOL = "SMOKE_TEST_DEMO_SCHOOL"
     demo_test_path = mgr_mod._managers_path(TEST_DEMO_SCHOOL).parent
     if demo_test_path.exists():
         shutil.rmtree(demo_test_path, ignore_errors=True)
 
+    os.environ["SAFELOOP_DEMO_MODE"] = "1"
     demo1 = ensure_demo_manager(TEST_DEMO_SCHOOL, assigned_space_ids=["sp1", "sp2"])
     check("managers/ensure_demo_first",
           lambda: f"manager_id={demo1['manager_id']}, _demo={is_demo_manager(demo1)}"

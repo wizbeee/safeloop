@@ -331,10 +331,30 @@ def ensure_demo_manager(
     - 없으면 새로 추가하되 PIN 을 DEMO_PIN("000000") 으로 고정 (시연 편의)
       사용자가 화면에서 PIN 입력 시 헷갈리지 않도록
 
+    운영 보안: 시연 모드(SAFELOOP_DEMO_MODE=1 또는 session.demo_mode=True) 가
+    아닌 환경에서 호출되면 RuntimeError 를 발생시켜 운영 데이터에 알려진
+    데모 PIN(000000) 매니저가 생성되는 사고를 방지.
+
     Returns: 공개 사본 dict (pin_hash 미포함)
     """
     if not school_code:
         raise ValueError("school_code 가 필요합니다")
+
+    # 운영 모드 방어 가드 — 데모 PIN 매니저가 운영 데이터에 섞이는 사고 차단
+    import os as _os
+    _demo_env = _os.environ.get("SAFELOOP_DEMO_MODE") == "1"
+    _demo_session = False
+    try:
+        import streamlit as _st
+        _demo_session = bool(_st.session_state.get("demo_mode"))
+    except Exception:
+        pass
+    if not (_demo_env or _demo_session):
+        raise RuntimeError(
+            "ensure_demo_manager 는 시연 모드에서만 호출 가능합니다 "
+            "(SAFELOOP_DEMO_MODE=1 또는 session demo_mode=True). "
+            "운영 환경에서 데모 PIN(000000) 매니저 생성 차단."
+        )
     spaces = list(assigned_space_ids or [])
 
     data = _load_raw(school_code)

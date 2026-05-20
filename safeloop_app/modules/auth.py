@@ -39,28 +39,47 @@ _DEMO_EDU_PIN = "EDU2026"
 _pin_warning_emitted = False
 
 
+def _is_demo_active() -> bool:
+    """시연 모드 활성 여부 — 환경변수 또는 세션 state."""
+    if os.environ.get("SAFELOOP_DEMO_MODE") == "1":
+        return True
+    try:
+        return bool(st.session_state.get("demo_mode"))
+    except Exception:
+        return False
+
+
 def _resolve_edu_pin() -> str:
     """현재 교육청 담당자 PIN 결정.
 
-    1. SAFELOOP_EDU_PIN 환경변수가 4자리 이상이면 그걸 사용
-    2. 그 외에는 시연 PIN (`EDU2026`) + 1회 경고
+    1. SAFELOOP_EDU_PIN 환경변수가 4자리 이상이면 그걸 사용 (운영)
+    2. 시연 모드(SAFELOOP_DEMO_MODE=1 또는 demo_mode=True) 면 데모 PIN
+    3. 둘 다 아니면 빈 문자열 반환 → 인증 자체가 거부됨 (운영 보안)
+
+    운영 환경 보안: SAFELOOP_EDU_PIN 미설정 + 시연 모드 OFF 면 알려진
+    데모 PIN(EDU2026) 으로 우회 불가능. 인증 시도 자체가 실패함.
     """
     global _pin_warning_emitted
     env_pin = os.environ.get("SAFELOOP_EDU_PIN", "").strip()
     if env_pin and len(env_pin) >= 4:
         return env_pin
-    if not _pin_warning_emitted and os.environ.get("SAFELOOP_DEMO_MODE") != "1":
+    if _is_demo_active():
+        return _DEMO_EDU_PIN
+    # 운영 모드 + PIN 미설정 → 인증 거부 신호 (빈 문자열)
+    if not _pin_warning_emitted:
         _pin_warning_emitted = True
         try:
-            st.warning(
-                "SAFELOOP_EDU_PIN 환경변수 미설정 — 시연 기본 PIN 사용. "
-                "운영 환경에서는 반드시 SAFELOOP_EDU_PIN 을 설정하세요."
+            st.error(
+                "**교육청 인증 비활성** — SAFELOOP_EDU_PIN 환경변수가 "
+                "설정되지 않아 운영 모드에서 교육청 인증을 사용할 수 없습니다. "
+                "시연용으로 진행하려면 [설정]에서 시연 모드를 켜거나 "
+                "환경변수 `SAFELOOP_DEMO_MODE=1` 을 설정하세요."
             )
         except Exception:
             import sys
-            print("[SafeLoop auth] SAFELOOP_EDU_PIN 미설정 — 시연 기본 PIN 사용",
-                  file=sys.stderr)
-    return _DEMO_EDU_PIN
+            print("[SafeLoop auth] 운영 모드 + SAFELOOP_EDU_PIN 미설정 — "
+                  "교육청 인증 비활성", file=sys.stderr)
+    return ""
 
 
 # 동적 PIN 조회 — 매 호출마다 환경변수 확인 (테스트·핫리로드 호환)
@@ -116,8 +135,14 @@ def verify_pin(role_key: str, pin: str) -> bool:
 
     PIN 은 환경변수 우선 — 매 호출 시 _pin_codes() 로 재조회하므로
     런타임 환경변수 변경에도 즉시 반영된다.
+
+    운영 보안: 운영 모드 + SAFELOOP_EDU_PIN 미설정 시 expected="" 가
+    반환되므로, 빈 입력이든 데모 PIN 입력이든 모두 거부됨.
     """
     expected = _pin_codes().get(role_key, "")
+    if not expected:
+        # 운영 모드 + PIN 미설정 — 인증 자체 거부 (어떤 입력도 통과 안 됨)
+        return False
     return bool(pin) and pin.strip() == expected
 
 
