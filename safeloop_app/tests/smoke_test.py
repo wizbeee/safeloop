@@ -25,6 +25,9 @@ import os
 import sys
 from pathlib import Path
 
+# 스모크 테스트는 시연 모드 가드를 우회해서 실행 (운영 가드는 별도 테스트)
+os.environ.setdefault("SAFELOOP_DEMO_MODE", "1")
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -370,14 +373,13 @@ try:
                   (_ for _ in ()).throw(AssertionError("auth 매니저 함수 부적합")))
 
     # 12-18. ensure_demo_manager — 시연 헬퍼 (멱등성·DEMO_PIN 검증)
-    # 운영 모드 가드 우회 — 테스트에서는 SAFELOOP_DEMO_MODE 임시 설정
+    # 운영 모드 가드는 파일 상단에서 SAFELOOP_DEMO_MODE=1 로 우회
     from modules.managers import ensure_demo_manager, DEMO_PIN, is_demo_manager
     TEST_DEMO_SCHOOL = "SMOKE_TEST_DEMO_SCHOOL"
     demo_test_path = mgr_mod._managers_path(TEST_DEMO_SCHOOL).parent
     if demo_test_path.exists():
         shutil.rmtree(demo_test_path, ignore_errors=True)
 
-    os.environ["SAFELOOP_DEMO_MODE"] = "1"
     demo1 = ensure_demo_manager(TEST_DEMO_SCHOOL, assigned_space_ids=["sp1", "sp2"])
     check("managers/ensure_demo_first",
           lambda: f"manager_id={demo1['manager_id']}, _demo={is_demo_manager(demo1)}"
