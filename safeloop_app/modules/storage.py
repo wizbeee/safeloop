@@ -44,6 +44,42 @@ EDU_RECEIPT_DIR.mkdir(exist_ok=True)
 
 
 # ─────────────────────────────────────────
+# 경로 보안 헬퍼 — path traversal·임의 파일 접근 방어
+# ─────────────────────────────────────────
+import re as _re_path
+_SAFE_PATH_CHARS = _re_path.compile(r"[^0-9a-zA-Z가-힣_\-. ]+")
+
+
+def _sanitize_path_segment(value: str, fallback: str = "_") -> str:
+    """폴더·파일 이름 한 조각을 안전한 문자만으로 정제.
+
+    허용: 0-9, a-z, A-Z, 한글, '_', '-', '.', 공백
+    그 외 문자(`/`, `\\`, `..`, `:`, null 등)는 fallback 문자로 치환.
+    선행 점(.) 도 제거 (숨김 파일·상위 경로 탈출 방지).
+    """
+    s = str(value or "").strip()
+    if not s:
+        return fallback
+    s = _SAFE_PATH_CHARS.sub(fallback, s)
+    s = s.lstrip(".") or fallback
+    return s[:200]  # 과도하게 긴 이름 차단
+
+
+def _within_base(target: Path, base: Path) -> bool:
+    """target 경로가 base 디렉토리 내부인지 검증 (resolve 후 비교).
+
+    심볼릭 링크·상대 경로·`..` 모두 정규화 후 확인.
+    True 면 안전, False 면 경로 이탈 시도.
+    """
+    try:
+        target_resolved = target.resolve(strict=False)
+        base_resolved = base.resolve(strict=False)
+        return base_resolved in target_resolved.parents or target_resolved == base_resolved
+    except Exception:
+        return False
+
+
+# ─────────────────────────────────────────
 # 한글 폰트 등록 (ReportLab)
 # ─────────────────────────────────────────
 _FONT_REGISTERED = False
@@ -630,14 +666,20 @@ def save_uploaded_edu_inbox(file_bytes: bytes, file_name: str) -> dict:
         return {"ok": False, "reason": f"파일 읽기 실패: {e}"}
 
     school = data.get("school_identified") or data.get("school") or {}
-    sido = school.get("sido") or "미상"
+    # 경로 sanitize — JSON 내부 값이 폴더명에 쓰이므로 path traversal 방어
+    sido_raw = school.get("sido") or "미상"
+    sido = _sanitize_path_segment(sido_raw, fallback="미상")
     school_code = school.get("code") or school.get("정보공시 학교코드") or "UNKNOWN"
 
     target_dir = EDU_RECEIPT_DIR / sido
+    # 최종 경로가 EDU_RECEIPT_DIR 안에 있는지 강제 검증
+    if not _within_base(target_dir, EDU_RECEIPT_DIR):
+        return {"ok": False, "reason": f"잘못된 sido 값 (경로 이탈 차단): {sido_raw!r}"}
     target_dir.mkdir(parents=True, exist_ok=True)
     ts = _now().strftime("%Y%m%d-%H%M%S")
     # 확장자를 .json 으로 통일 — 수신함은 복호화된 평문 보관 (빠른 검색·필터)
-    base = file_name.replace("/", "_").replace("\\", "_")
+    # 파일명 sanitize — 외부 파일명도 위험 문자 제거
+    base = _sanitize_path_segment(file_name, fallback="upload")
     if base.endswith(".safeloop"):
         base = base[:-len(".safeloop")] + ".json"
     elif not base.endswith(".json"):
@@ -819,9 +861,22 @@ def ensure_demo_edu_inbox() -> int:
 
 
 def delete_edu_inbox_item(sido: str, file_name: str) -> bool:
-    """교육청 수신함 개별 파일 삭제. 성공 시 True."""
+    """교육청 수신함 개별 파일 삭제. 성공 시 True.
+
+    보안: sido/file_name 모두 sanitize + resolve 검증으로 path traversal 방어.
+    EDU_RECEIPT_DIR 밖의 파일은 절대 삭제할 수 없음.
+    """
     try:
-        target = EDU_RECEIPT_DIR / sido / file_name
+        # 1) 입력값 sanitize
+        safe_sido = _sanitize_path_segment(sido, fallback="")
+        safe_name = _sanitize_path_segment(file_name, fallback="")
+        if not safe_sido or not safe_name:
+            return False
+        # 2) 경로 조합 + 기준 폴더 내부 검증
+        target = EDU_RECEIPT_DIR / safe_sido / safe_name
+        if not _within_base(target, EDU_RECEIPT_DIR):
+            return False  # 경로 이탈 시도 차단
+        # 3) 실제 파일이고 존재하면 삭제
         if target.exists() and target.is_file():
             target.unlink()
             return True

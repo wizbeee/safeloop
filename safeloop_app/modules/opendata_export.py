@@ -134,12 +134,25 @@ def export_opendata_csv(
         "exported_at": iso str,
     }
     """
-    output_dir = Path(output_dir).expanduser()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    # output_dir 검증 — 사용자 입력이므로 안전성 확인
+    try:
+        output_dir = Path(output_dir).expanduser().resolve(strict=False)
+    except Exception as e:
+        return {"ok": False, "error": f"잘못된 output_dir: {e}"}
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        return {"ok": False, "error": f"output_dir 생성 실패: {e}"}
+    # 파일명은 시스템이 생성한 stamp 만 사용 — 외부 입력 직접 사용 안 함
     stamp = _stamp_for_filename()
     file_name = f"opendata_{stamp}.csv"
     file_path = output_dir / file_name
+    # 최종 경로가 output_dir 내부인지 재확인 (스탬프는 안전하지만 방어적)
+    try:
+        if output_dir not in file_path.resolve(strict=False).parents:
+            return {"ok": False, "error": "잘못된 파일 경로 (경로 이탈 차단)"}
+    except Exception:
+        pass
 
     rows: list[dict] = []
     sido_dist: dict[str, int] = {}
