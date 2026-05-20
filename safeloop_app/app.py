@@ -324,12 +324,26 @@ with oc2:
         "일반교실", "화학실", "물리실", "생명과학실", "지구과학실",
         "기술실", "가정실", "음악실", "미술실", "디자인실",
     ]
+    # 90초 시연 모드 (?demo=quick&space=화학실) — URL 파라미터로 자동 선택
+    _quick_space = st.session_state.get("_quick_demo_space")
+    _default_idx = 1  # 기본 화학실
+    if _quick_space in DEMO_SPACES:
+        _default_idx = DEMO_SPACES.index(_quick_space)
     autoplay_space = st.selectbox(
         "데모 공간",
         options=DEMO_SPACES,
-        index=1, # 기본 화학실 (가장 풍부한 점검표)
+        index=_default_idx,
         key="autoplay_space_choice",
     )
+
+    # ?demo=quick 진입 시 자동 트리거 안내 (사용자가 따로 버튼 안 눌러도 1회 실행)
+    if st.session_state.get("_quick_demo") and not st.session_state.get("_quick_demo_fired"):
+        st.session_state["_quick_demo_fired"] = True
+        st.info(
+            f"**90초 시연 모드** — `?demo=quick&space={autoplay_space}` 로 진입했습니다. "
+            "아래 '시연 시작' 버튼을 자동 클릭한 효과로 진행됩니다. "
+            "(점검 시작 페이지 → AI 분석 → 점검표까지 자동)"
+        )
 
     has_existing = bool(st.session_state.get("school")) or bool(st.session_state.get("active_space"))
     if has_existing:

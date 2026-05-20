@@ -99,19 +99,35 @@ def ensure_state() -> None:
             st.session_state[k] = v if not isinstance(v, (list, dict)) else type(v)(v)
     # demo_mode 결정 — 환경변수 / URL 파라미터로 활성화
     # 1. SAFELOOP_DEMO_MODE=1 (콘테스트·시연 환경)
-    # 2. URL ?demo=1 (사용자가 의도적으로 시연 진입)
+    # 2. URL ?demo=1 또는 ?demo=quick (사용자가 의도적으로 시연 진입)
     # 둘 중 하나면 True 로 강제. 명시적 활성화 외엔 실 사용 모드(False).
+    #
+    # 90초 시연 모드: ?demo=quick&space=화학실
+    #   - demo_mode=True 자동 설정
+    #   - 점검 시작 페이지 진입 시 해당 공간 자동 선택
+    #   - 발표 시 URL 한 줄로 시연 즉시 시작 가능
     import os
     if not st.session_state.get("_demo_mode_resolved"):
         env_demo = os.environ.get("SAFELOOP_DEMO_MODE") == "1"
         url_demo = False
+        quick_demo = False
+        quick_space = None
         try:
             qp = st.query_params
-            url_demo = str(qp.get("demo", "0")) in ("1", "true", "True")
+            demo_val = str(qp.get("demo", "0"))
+            url_demo = demo_val in ("1", "true", "True", "quick")
+            if demo_val == "quick":
+                quick_demo = True
+                quick_space = qp.get("space")
         except Exception:
             pass
         if env_demo or url_demo:
             st.session_state["demo_mode"] = True
+        if quick_demo:
+            # 90초 시연 모드 마커 — app.py 가 이걸 보고 자동 진입 트리거
+            st.session_state["_quick_demo"] = True
+            if quick_space:
+                st.session_state["_quick_demo_space"] = quick_space
         st.session_state["_demo_mode_resolved"] = True
 
     # 자동 로그인 1회 시도 — 어느 페이지에 직진입해도 학교·매니저 컨텍스트가
