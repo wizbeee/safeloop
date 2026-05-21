@@ -1270,14 +1270,31 @@ if _show_ai_run:
                 }
                 st.session_state["stage1_result"] = s1
 
+                # 사용자 시각 피드백 — 큰 컨테이너 + spinner + 단계별 안내
+                # 버튼 클릭 후 작동 중인지 명확히 보이도록 (이전엔 progress bar 만)
+                _feedback_box = st.container()
+                with _feedback_box:
+                    st.markdown(
+                        "<div style='padding:14px 18px;background:#F0F7FF;"
+                        "border:1px solid #B3D4FF;border-left:4px solid #1976D2;"
+                        "border-radius:6px;font-size:14px;color:#0A0A0B;"
+                        "line-height:1.6;margin-bottom:10px;'>"
+                        "<b style='color:#1976D2;'>AI 분석 진행 중</b> — "
+                        f"{n_imgs}장 사진을 분석합니다. 잠시만 기다려 주세요.<br>"
+                        "<span style='font-size:12px;color:#6B7280;'>"
+                        "캐시 적중 시 1초 이내 · 신규 분석 시 약 8~15초"
+                        "</span></div>",
+                        unsafe_allow_html=True,
+                    )
                 prog = st.progress(0, text="① 안전 설비 탐지 중…")
                 pipeline_ok = False
                 try:
                     # Stage 1 검증 결과를 Stage 2 에 전달 — 인식률 개선
                     # (일치=적극 탐지, 불일치=두 공간 모두 탐지, 저신뢰=보수적)
-                    s2 = run_stage2(images, space_type, use_cache=use_cache,
-                                    image_labels=labels,
-                                    verification=_verification)
+                    with st.spinner("AI 가 사진에서 안전 설비를 찾고 있습니다..."):
+                        s2 = run_stage2(images, space_type, use_cache=use_cache,
+                                        image_labels=labels,
+                                        verification=_verification)
                     st.session_state["stage2_result"] = s2
                     st.session_state["stage2_confirmed"] = None
                     # B5: 재분석 시 detected/absent 항목 수가 변할 수 있어
@@ -1288,12 +1305,26 @@ if _show_ai_run:
                     st.session_state["_radio_counter"] = (
                         st.session_state.get("_radio_counter", 0) + 1
                     )
-                    prog.progress(50, text=f"① 안전 설비 탐지 완료 · {s2.get('_elapsed_sec','?')}초")
+                    _det_n = len(s2.get("detected_equipment", []) or [])
+                    prog.progress(50,
+                        text=f"① 안전 설비 탐지 완료 — {_det_n}개 설비 발견 · "
+                             f"{s2.get('_elapsed_sec','?')}초")
 
                     prog.progress(60, text="② 맞춤 점검표 생성 중…")
-                    s3 = run_stage3(s1, s2, use_cache=use_cache)
+                    with st.spinner(f"{_det_n}개 설비에 맞는 점검 항목을 생성합니다..."):
+                        s3 = run_stage3(s1, s2, use_cache=use_cache)
                     st.session_state["stage3_result"] = s3
-                    prog.progress(100, text=f"② 맞춤 점검표 생성 완료 · {s3.get('_elapsed_sec','?')}초")
+                    _item_n = len(s3.get("items", []) or [])
+                    prog.progress(100,
+                        text=f"② 맞춤 점검표 생성 완료 — {_item_n}개 항목 · "
+                             f"{s3.get('_elapsed_sec','?')}초 (총 "
+                             f"{(s2.get('_elapsed_sec', 0) or 0) + (s3.get('_elapsed_sec', 0) or 0):.1f}초)")
+                    # 큰 success 피드백 — 사용자가 결과 표시 전에 명확히 인지
+                    _feedback_box.empty()  # 진행 박스 제거
+                    st.success(
+                        f"**AI 분석 완료** — 안전 설비 {_det_n}개 탐지, "
+                        f"맞춤 점검표 {_item_n}개 항목 생성 완료. 아래에서 결과 확인 가능."
+                    )
                     pipeline_ok = True
                 except Exception as e:
                     err_msg = str(e).lower()

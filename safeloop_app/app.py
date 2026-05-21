@@ -428,46 +428,29 @@ with oc2:
                        "recommendations"]:
                 st.session_state[_k] = None
 
-            # 시연용 풍부한 응답을 세션에 직접 주입 — API 호출 우회.
-            # API 키가 있어도 더미 이미지에 실 API 를 호출하면 "부재 N" 결과가
-            # 나오므로, 시연 의도(풍부한 응답 표시)에 맞춰 합성 응답을 미리 세팅.
-            # 실패 시 silent pass 하면 빈 결과로 supplement 점프해 사용자 혼란 명시 에러.
+            # 시연용 캐시만 디스크에 보장 — 세션에 stage 결과를 미리 주입하지 않음.
+            # 이전엔 stage1/2/3 결과를 세션에 미리 set 했지만, 그러면 사용자가
+            # ai_run 단계 진입 시 'AI 분석 시작' 누르기 전부터 결과 카드가 보임.
+            # 캐시만 보장하면 사용자가 버튼 누를 때 캐시에서 즉시 결과 표시 (1초 이내).
             try:
-                from modules.demo_responses import (
-                    synth_stage2_for_space, synth_stage3_for_space,
-                )
-                _s2 = synth_stage2_for_space(autoplay_space)
-                _s3 = synth_stage3_for_space(autoplay_space, _s2)
-                st.session_state["stage1_result"] = {
-                    "space_type_primary": autoplay_space,
-                    "confidence": 1.0,
-                    "evidence": ["담당자 등록 정보"],
-                    "secondary_hypothesis": None,
-                    "notes": "시연 — 사용자 등록 정보 (Stage 1 생략)",
-                    "_provider": "demo-synth",
-                    "_cached": True,
-                    "_skipped": True,
-                }
-                st.session_state["stage2_result"] = _s2
-                st.session_state["stage3_result"] = _s3
-                # 디스크 캐시도 함께 보장 (재진입·반복 시 hash 적중)
                 from modules.ai_vision import ensure_demo_cache_for_shots
                 ensure_demo_cache_for_shots(shots, autoplay_space)
             except Exception as e:
                 st.error(
-                    f"시연 합성 응답 준비 실패 — {e.__class__.__name__}: {e}\n\n"
-                    f"다시 시도하거나 다른 공간을 선택하세요. 문제가 반복되면 "
-                    f"`modules/demo_responses.py` 또는 `modules/ai_vision.py` "
-                    f"확인 필요."
+                    f"시연 캐시 준비 실패 — {e.__class__.__name__}: {e}\n\n"
+                    f"다시 시도하거나 다른 공간을 선택하세요."
                 )
                 st.stop()
 
             st.session_state["_autoplay"] = True
-            # 합성 응답을 이미 주입했으므로 AI 페이지에서 추가 호출 안 함.
-            # 시연이므로 supplement 를 건너뛰고 review 로 직행 → 사용자가 핵심 결과물인
-            # 맞춤 점검표를 즉시 확인 가능 (supplement 의 설비 정정 단계 생략).
+            # 합성 응답을 이미 주입했지만, 사용자가 '사진 → AI 분석 → 결과' 흐름을
+            # 자연스럽게 체험할 수 있도록 'ai_run' 단계에서 시작.
+            # (이전엔 review 로 직행 → 사용자가 사진 단계를 못 봐서 결과 카드가
+            # 갑자기 나타나는 인상. 사진 7컷이 채워진 ai_run 화면에서 시작해
+            # 사용자가 'AI 분석 시작' 버튼을 직접 누르면 캐시된 합성 결과로
+            # 즉시 review 진입 — 진행감 + 1초 이내 결과.)
             st.session_state["_autoplay_run_ai"] = False
-            st.session_state["wizard_step"] = "review"
+            st.session_state["wizard_step"] = "ai_run"
             st.session_state["_autoplay_consumed"] = True
             st.toast(
                 f"{autoplay_space} 시연 시작 — 더미 이미지로 흐름 진행",

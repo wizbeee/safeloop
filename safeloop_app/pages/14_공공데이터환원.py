@@ -179,7 +179,7 @@ run_disabled = (not inbox_items) or len(selected_items) == 0
 if run_disabled:
     st.caption("⓵ 환원할 항목을 한 개 이상 선택해야 활성화됩니다.")
 
-if st.button("📤 공공 환원 실행", type="primary",
+if st.button("공공 환원 실행", type="primary",
               disabled=run_disabled, key="opendata_run"):
     with st.spinner(f"{len(selected_items)}개 학교 데이터를 익명화·집계 중..."):
         result = export_opendata_csv(selected_items, output_dir_str)

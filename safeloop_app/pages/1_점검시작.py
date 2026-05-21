@@ -147,6 +147,60 @@ if current:
         st.rerun()
 
 if not current:
+    # 시연 모드 + 학교 미선택 시 — 데모 학교 빠른 진입 카드
+    # 학교 담당자가 데모 학교를 일일이 검색하지 않아도 즉시 진입 가능
+    if st.session_state.get("demo_mode"):
+        _demo_school = None
+        try:
+            from modules.data_loader import (
+                get_school_by_code as _get_sch,
+                search_schools_by_name as _search_sch,
+            )
+            _cached_code = st.session_state.get("_demo_school_code")
+            if _cached_code:
+                _demo_school = _get_sch(_cached_code)
+            if not _demo_school:
+                _df = _search_sch("중학교", limit=20)
+                if not _df.empty:
+                    _df = _df.sort_values("학교명").reset_index(drop=True)
+                    _picked = _df.iloc[0]["정보공시 학교코드"]
+                    _demo_school = _get_sch(_picked)
+                    if _demo_school:
+                        st.session_state["_demo_school_code"] = _picked
+        except Exception:
+            _demo_school = None
+
+        if _demo_school:
+            _demo_card_l, _demo_card_r = st.columns([3, 1])
+            with _demo_card_l:
+                st.markdown(
+                    f"<div style='padding:14px 18px;background:#FFF6F6;"
+                    f"border:1px solid #F8D0D0;border-left:4px solid #D50000;"
+                    f"border-radius:6px;font-size:13.5px;color:#0A0A0B;"
+                    f"line-height:1.7;'>"
+                    f"<div style='font-size:11px;letter-spacing:0.16em;"
+                    f"color:#D50000;font-weight:700;'>시연 모드 — 빠른 진입</div>"
+                    f"<div style='font-size:15px;font-weight:700;margin-top:4px;'>"
+                    f"{mask_school_name(_demo_school.get('학교명',''))}</div>"
+                    f"<div style='font-size:12px;color:#6B6B70;margin-top:2px;'>"
+                    f"{mask_sido(_demo_school.get('시도교육청',''))} · "
+                    f"{_demo_school.get('학교급','')} · "
+                    f"{_demo_school.get('설립구분','')} · "
+                    f"시연용 가상 학교 데이터</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            with _demo_card_r:
+                if st.button("이 학교로 시작",
+                              type="primary",
+                              width="stretch",
+                              key="_demo_school_quick_pick"):
+                    st.session_state["school"] = _demo_school
+                    st.session_state["school_auth_verified"] = True
+                    st.rerun()
+            st.caption("아래 검색으로 다른 학교를 선택할 수도 있습니다.")
+            st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
+
     tab_name, tab_region, tab_gps = st.tabs([
         "학교명으로", "지역으로", "GPS (참고용)"
     ])
