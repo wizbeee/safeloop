@@ -79,6 +79,33 @@ def _within_base(target: Path, base: Path) -> bool:
         return False
 
 
+def _safe_school_path(school_code: str, *parts: str) -> Path:
+    """STORAGE_DIR/{학교코드}/[추가 경로] — 모든 세그먼트 sanitize + base 검증.
+
+    경로 이탈 시도(`../`, `\\\\`, null 등) 또는 외부 base 탈출 시 ValueError.
+    """
+    safe_code = _sanitize_path_segment(str(school_code or "_unknown"),
+                                        fallback="_unknown")
+    safe_parts = [_sanitize_path_segment(str(p), fallback="_") for p in parts if str(p).strip()]
+    target = STORAGE_DIR.joinpath(safe_code, *safe_parts)
+    if not _within_base(target, STORAGE_DIR):
+        raise ValueError(f"학교 저장 경로 이탈 차단: {school_code!r}, {parts!r}")
+    return target
+
+
+def _safe_edu_path(sido: str, *parts: str) -> Path:
+    """EDU_RECEIPT_DIR/{sido}/[추가 경로] — sanitize + base 검증.
+
+    경로 이탈 시도 시 ValueError.
+    """
+    safe_sido = _sanitize_path_segment(str(sido or "미상"), fallback="미상")
+    safe_parts = [_sanitize_path_segment(str(p), fallback="_") for p in parts if str(p).strip()]
+    target = EDU_RECEIPT_DIR.joinpath(safe_sido, *safe_parts)
+    if not _within_base(target, EDU_RECEIPT_DIR):
+        raise ValueError(f"교육청 수신함 경로 이탈 차단: {sido!r}, {parts!r}")
+    return target
+
+
 # ─────────────────────────────────────────
 # 한글 폰트 등록 (ReportLab)
 # ─────────────────────────────────────────
@@ -704,7 +731,14 @@ def list_edu_inbox(sido: str | None = None) -> list[dict]:
     items = []
     if not EDU_RECEIPT_DIR.exists():
         return items
-    roots = [EDU_RECEIPT_DIR / sido] if sido else list(EDU_RECEIPT_DIR.iterdir())
+    # sido 가 외부 인자 — sanitize 후 사용
+    if sido:
+        try:
+            roots = [_safe_edu_path(sido)]
+        except ValueError:
+            return items  # 경로 이탈 시도 차단
+    else:
+        roots = list(EDU_RECEIPT_DIR.iterdir())
     for root in roots:
         if not root.exists() or not root.is_dir():
             continue
@@ -865,6 +899,7 @@ def delete_edu_inbox_item(sido: str, file_name: str) -> bool:
 
     보안: sido/file_name 모두 sanitize + resolve 검증으로 path traversal 방어.
     EDU_RECEIPT_DIR 밖의 파일은 절대 삭제할 수 없음.
+    감사 로그 자동 기록 (action=edu.inbox.delete).
     """
     try:
         # 1) 입력값 sanitize
@@ -876,9 +911,16 @@ def delete_edu_inbox_item(sido: str, file_name: str) -> bool:
         target = EDU_RECEIPT_DIR / safe_sido / safe_name
         if not _within_base(target, EDU_RECEIPT_DIR):
             return False  # 경로 이탈 시도 차단
-        # 3) 실제 파일이고 존재하면 삭제
+        # 3) 실제 파일이고 존재하면 삭제 + 감사 로그
         if target.exists() and target.is_file():
             target.unlink()
+            try:
+                from modules.audit import log as _audit
+                _audit("edu.inbox.delete",
+                       actor_role="교육청",
+                       target=f"{safe_sido}/{safe_name}")
+            except Exception:
+                pass
             return True
     except Exception:
         pass
@@ -916,7 +958,10 @@ def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
     sido = school.get("sido") or "미상"
     school_code = school.get("code") or "UNKNOWN"
     record_type = edu_pkg.get("record_type", "safeloop_single_submission")
-    target_dir = EDU_RECEIPT_DIR / sido
+    try:
+        target_dir = _safe_edu_path(sido)
+    except ValueError as e:
+        return {"ok": False, "reason": str(e)}
     target_dir.mkdir(parents=True, exist_ok=True)
 
     ts = _now().strftime("%Y%m%d-%H%M%S")
@@ -928,7 +973,7 @@ def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
                       encoding="utf-8")
 
     # 학교 측 발송함 기록 — 통합본은 space_type 대신 spaces_count 사용.
-    outbox_dir = STORAGE_DIR / str(school_code) / "_outbox"
+    outbox_dir = _safe_school_path(school_code, "_outbox")
     outbox_dir.mkdir(parents=True, exist_ok=True)
     submit_id = uuid.uuid4().hex[:10]
     if record_type == "safeloop_consolidated_submission":
@@ -959,10 +1004,11 @@ def submit_to_edu_inbox_direct(edu_pkg: dict) -> dict:
 
 
 def _read_marker_path(sido: str, file_name: str) -> Path:
-    """교육청 열람 확인 마커 경로."""
-    p = EDU_RECEIPT_DIR / sido / "_read"
+    """교육청 열람 확인 마커 경로 — sanitize + base 검증."""
+    p = _safe_edu_path(sido, "_read")
     p.mkdir(parents=True, exist_ok=True)
-    return p / f"{file_name}.read.json"
+    safe_name = _sanitize_path_segment(file_name, fallback="unknown")
+    return p / f"{safe_name}.read.json"
 
 
 def mark_edu_inbox_read(sido: str, file_name: str) -> bool:
@@ -1004,9 +1050,10 @@ def is_edu_inbox_read(sido: str, file_name: str) -> str | None:
 
 
 def _starred_marker_path(sido: str, file_name: str) -> Path:
-    p = EDU_RECEIPT_DIR / sido / "_starred"
+    p = _safe_edu_path(sido, "_starred")
     p.mkdir(parents=True, exist_ok=True)
-    return p / f"{file_name}.star"
+    safe_name = _sanitize_path_segment(file_name, fallback="unknown")
+    return p / f"{safe_name}.star"
 
 
 def is_edu_inbox_starred(sido: str, file_name: str) -> bool:
@@ -1069,7 +1116,7 @@ def get_school_outbox(school_code: str) -> list[dict]:
     """
     if not school_code:
         return []
-    outbox_dir = STORAGE_DIR / str(school_code) / "_outbox"
+    outbox_dir = _safe_school_path(school_code, "_outbox")
     if not outbox_dir.exists():
         return []
     items: list[dict] = []
@@ -1090,12 +1137,12 @@ def get_school_outbox(school_code: str) -> list[dict]:
 # 드래프트(촬영 진행 중) — 새로고침 복구용
 # ─────────────────────────────────────────
 def _draft_dir(school_code: str, space_id: str = "") -> Path:
-    """드래프트 폴더 경로. space_id 가 있으면 공간별, 없으면 학교 공통 (이전 호환)."""
-    base = STORAGE_DIR / str(school_code or "_unknown") / "_drafts"
+    """드래프트 폴더 경로. space_id 가 있으면 공간별, 없으면 학교 공통.
+    school_code·space_id 는 _safe_school_path 로 sanitize + base 검증."""
     if space_id:
-        p = base / str(space_id)
+        p = _safe_school_path(school_code, "_drafts", space_id)
     else:
-        p = base
+        p = _safe_school_path(school_code, "_drafts")
     p.mkdir(parents=True, exist_ok=True)
     return p
 
@@ -1203,7 +1250,7 @@ def clear_draft(school_code: str, space_id: str = "") -> None:
 # 학교별 영구 프로필 (결재라인·기본 설정)
 # ─────────────────────────────────────────
 def _profile_path(school_code: str) -> Path:
-    p = STORAGE_DIR / str(school_code or "_unknown")
+    p = _safe_school_path(school_code)
     p.mkdir(parents=True, exist_ok=True)
     return p / "_profile.json"
 
@@ -1454,6 +1501,107 @@ def cleanup_demo_artifacts() -> dict[str, int]:
                 continue
 
     return counts
+
+
+def scan_demo_markers() -> dict:
+    """디스크 전체에 시연 마커가 남아 있는지 스캔 (cleanup 검증용).
+
+    cleanup_demo_artifacts 실행 후 모든 마커가 제거됐는지 확인하거나,
+    운영 모드 전환 후 시연 잔존물이 없는지 검증할 때 사용.
+
+    Returns: {
+        "demo_managers": int,       # _demo:True 매니저
+        "synth_inbox": int,         # _synth_demo:True 또는 DEMO- 수신함
+        "synth_cache": int,         # _synth_demo:True AI 캐시
+        "demo_drafts": int,         # _drafts 폴더 (시연 진행 중 흔적)
+        "total": int,
+        "is_clean": bool,           # 모든 카운트가 0 이면 True
+        "details": [...],           # 각 잔여 파일 경로 (디버깅용, 최대 20건)
+    }
+    """
+    counts = {
+        "demo_managers": 0,
+        "synth_inbox": 0,
+        "synth_cache": 0,
+        "demo_drafts": 0,
+    }
+    details: list[str] = []
+
+    # 1) _demo 매니저 스캔
+    if STORAGE_DIR.exists():
+        for school_dir in STORAGE_DIR.iterdir():
+            if school_dir.name.startswith("_") or not school_dir.is_dir():
+                continue
+            mgr_file = school_dir / "_managers.json"
+            if not mgr_file.exists():
+                continue
+            try:
+                mgrs = json.loads(mgr_file.read_text(encoding="utf-8"))
+                if isinstance(mgrs, list):
+                    n_demo = sum(1 for m in mgrs if m.get("_demo"))
+                    if n_demo:
+                        counts["demo_managers"] += n_demo
+                        if len(details) < 20:
+                            details.append(f"managers: {mgr_file.name} ({n_demo}건)")
+            except Exception:
+                continue
+
+    # 2) 수신함 시연 마커 스캔
+    if EDU_RECEIPT_DIR.exists():
+        for sido_dir in EDU_RECEIPT_DIR.iterdir():
+            if not sido_dir.is_dir():
+                continue
+            for f in sido_dir.glob("*.json"):
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                is_demo = (
+                    data.get("_synth_demo") is True
+                    or (data.get("ai_pipeline", {})
+                        .get("stage2", {}).get("_synth_demo") is True)
+                    or f.name.startswith("DEMO-")
+                )
+                if is_demo:
+                    counts["synth_inbox"] += 1
+                    if len(details) < 20:
+                        details.append(f"inbox: {f.relative_to(EDU_RECEIPT_DIR)}")
+
+    # 3) AI 캐시 _synth_demo 스캔
+    cache_dir = STORAGE_DIR / "_ai_cache"
+    if cache_dir.exists():
+        for f in cache_dir.glob("stage*_*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if data.get("_synth_demo") is True:
+                    counts["synth_cache"] += 1
+                    if len(details) < 20:
+                        details.append(f"cache: {f.name}")
+            except Exception:
+                continue
+
+    # 4) drafts (시연 진행 중 흔적)
+    if STORAGE_DIR.exists():
+        for school_dir in STORAGE_DIR.iterdir():
+            if school_dir.name.startswith("_") or not school_dir.is_dir():
+                continue
+            drafts = school_dir / "_drafts"
+            if drafts.exists() and drafts.is_dir():
+                n_drafts = sum(1 for _ in drafts.iterdir() if _.is_dir())
+                if n_drafts:
+                    counts["demo_drafts"] += n_drafts
+                    if len(details) < 20:
+                        details.append(
+                            f"drafts: {school_dir.name}/_drafts ({n_drafts}건)"
+                        )
+
+    total = sum(counts.values())
+    return {
+        **counts,
+        "total": total,
+        "is_clean": total == 0,
+        "details": details,
+    }
 
 
 def list_recent_sessions(limit: int = 20) -> list[dict]:

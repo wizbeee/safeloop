@@ -201,6 +201,17 @@ def export_opendata_csv(
         encoding="utf-8",
     )
 
+    # 감사 로그 — 환원은 민감 행위 (외부 공개 데이터 생성)
+    try:
+        from modules.audit import log as _audit
+        _audit("opendata.export",
+               actor_role="교육청",
+               target=file_name,
+               meta={"count": len(rows),
+                     "sido_distribution": sido_dist})
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "file_path": str(file_path),
@@ -307,6 +318,14 @@ def rollback_export(file_path: Path | str) -> dict:
         meta_path = file_path.with_suffix(file_path.suffix + ".meta.json")
         if meta_path.exists():
             meta_path.rename(rb_dir / meta_path.name)
+        # 감사 로그 — 롤백도 민감 행위
+        try:
+            from modules.audit import log as _audit
+            _audit("opendata.rollback",
+                   actor_role="교육청",
+                   target=file_path.name)
+        except Exception:
+            pass
         return {"ok": True, "new_path": str(new_path),
                 "message": "롤백 완료 — 대시보드 새로고침 시 반영에서 제외됩니다."}
     except Exception as e:
